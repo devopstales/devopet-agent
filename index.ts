@@ -29,7 +29,7 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { Container, type SelectItem, SelectList, Text } from "@mariozechner/pi-tui";
 import { MemoryStorage } from "./storage.js";
-import { SECTIONS, appendToSection, type SectionName } from "./template.js";
+import { appendToSection, type SectionName } from "./template.js";
 import { DEFAULT_CONFIG, type MemoryConfig } from "./types.js";
 import {
   type ExtractionTriggerState,
@@ -79,6 +79,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    sessionActive = false;
+
     // If extraction is already in flight, wait for it
     if (activeExtractionPromise) {
       let timeoutId: NodeJS.Timeout | null = null;
@@ -419,7 +421,11 @@ export default function (pi: ExtensionAPI) {
       case "fork": {
         const newName = await ctx.ui.input("New mind name:");
         if (!newName?.trim()) return;
-        const sanitized = newName.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const sanitized = newName.trim().replace(/[^a-zA-Z0-9_-]/g, "-").replace(/^[^a-zA-Z0-9]+/, "");
+        if (!sanitized) {
+          ctx.ui.notify("Name must contain at least one alphanumeric character", "error");
+          return;
+        }
         if (mindManager.mindExists(sanitized)) {
           ctx.ui.notify(`Mind "${sanitized}" already exists`, "error");
           return;
@@ -627,7 +633,11 @@ export default function (pi: ExtensionAPI) {
       if (selected === "__create__") {
         const name = await ctx.ui.input("Mind name:");
         if (!name?.trim()) return;
-        const sanitized = name.trim().replace(/[^a-zA-Z0-9_-]/g, "-");
+        const sanitized = name.trim().replace(/[^a-zA-Z0-9_-]/g, "-").replace(/^[^a-zA-Z0-9]+/, "");
+        if (!sanitized) {
+          ctx.ui.notify("Name must contain at least one alphanumeric character", "error");
+          return;
+        }
         if (mindManager.mindExists(sanitized)) {
           ctx.ui.notify(`Mind "${sanitized}" already exists`, "error");
           return;

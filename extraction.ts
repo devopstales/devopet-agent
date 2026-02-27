@@ -137,9 +137,10 @@ export async function runExtraction(
       stderr += d.toString();
     });
 
+    let escalationTimer: ReturnType<typeof setTimeout> | null = null;
     const timeout = setTimeout(() => {
       proc.kill("SIGTERM");
-      setTimeout(() => {
+      escalationTimer = setTimeout(() => {
         if (!proc.killed) proc.kill("SIGKILL");
       }, 5000);
       reject(new Error("Extraction timed out"));
@@ -147,6 +148,7 @@ export async function runExtraction(
 
     proc.on("close", (code) => {
       clearTimeout(timeout);
+      if (escalationTimer) clearTimeout(escalationTimer);
       activeExtractionProc = null;
       const output = stdout.trim();
       if (code === 0 && output) {

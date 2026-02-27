@@ -174,6 +174,37 @@ describe("MindManager", () => {
       assert.equal(minds[0].name, "to-keep");
     });
 
+    it("delete clears active mind when deleting the active mind", () => {
+      manager.create("doomed", "Doomed");
+      manager.setActiveMind("doomed");
+      assert.equal(manager.getActiveMindName(), "doomed");
+
+      manager.delete("doomed");
+      assert.equal(manager.getActiveMindName(), null, "active mind should be null after deleting it");
+
+      // Verify active.json is clean (not referencing deleted mind)
+      const stateFile = path.join(baseMemoryDir, "minds", "active.json");
+      const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+      assert.equal(state.activeMind, null);
+    });
+
+    it("delete does not clear active mind when deleting a different mind", () => {
+      manager.create("keep", "Keep");
+      manager.create("remove", "Remove");
+      manager.setActiveMind("keep");
+
+      manager.delete("remove");
+      assert.equal(manager.getActiveMindName(), "keep", "active mind should be unchanged");
+    });
+
+    it("readMeta returns null for malformed meta.json", () => {
+      manager.create("bad-meta", "desc");
+      // Overwrite meta.json with invalid shape
+      const metaPath = path.join(baseMemoryDir, "minds", "bad-meta", "meta.json");
+      fs.writeFileSync(metaPath, JSON.stringify({ foo: "bar" }), "utf8");
+      assert.equal(manager.readMeta("bad-meta"), null);
+    });
+
     it("list sorts active before retired", () => {
       manager.create("mind-a", "Mind A");
       manager.create("mind-b", "Mind B");

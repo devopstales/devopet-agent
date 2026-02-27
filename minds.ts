@@ -56,7 +56,7 @@ export class MindManager {
   init(): void {
     fs.mkdirSync(this.mindsDir, { recursive: true });
 
-    // Ensure .pi/memory is gitignored in project repos
+    // Write .pi/.gitignore to exclude memory/ from version control
     const gitignorePath = path.join(this.baseMemoryDir, "..", ".gitignore");
     try {
       const existing = fs.existsSync(gitignorePath)
@@ -184,7 +184,12 @@ export class MindManager {
   readMeta(name: string): MindMeta | null {
     try {
       const metaPath = path.join(this.getMindDir(name), "meta.json");
-      return JSON.parse(fs.readFileSync(metaPath, "utf8"));
+      const raw = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+      // Basic shape validation — reject malformed meta
+      if (typeof raw.name !== "string" || typeof raw.status !== "string") {
+        return null;
+      }
+      return raw as MindMeta;
     } catch {
       return null;
     }
@@ -277,11 +282,12 @@ export class MindManager {
 
   /** Delete a mind entirely */
   delete(name: string): void {
+    // Check active state BEFORE deleting — mindExists() would return false after rmSync
+    const wasActive = this.getActiveMindName() === name;
     const dir = this.getMindDir(name);
     fs.rmSync(dir, { recursive: true, force: true });
 
-    // If this was the active mind, reset to default
-    if (this.getActiveMindName() === name) {
+    if (wasActive) {
       this.setActiveMind(null);
     }
   }

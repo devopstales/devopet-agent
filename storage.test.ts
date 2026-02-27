@@ -5,7 +5,7 @@
  * Run with: npx tsx --test storage.test.ts
  */
 
-import { describe, it, before, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -224,6 +224,25 @@ describe("MemoryStorage", () => {
 
       const { factsArchived } = storage.writeExtractionResult(result);
       assert.equal(factsArchived, 3);
+    });
+
+    it("handles multiple ARCHIVE_SEPARATOR occurrences (all archived content preserved)", () => {
+      storage.init();
+      const result = `## Architecture\n- Active\n${ARCHIVE_SEPARATOR}\n- Archived 1\n${ARCHIVE_SEPARATOR}\n- Archived 2\n`;
+
+      const { factsArchived } = storage.writeExtractionResult(result);
+
+      // Both archived lines should be counted and written
+      assert.equal(factsArchived, 3); // "- Archived 1", separator line text, "- Archived 2"
+      const memory = storage.readMemory();
+      assert.ok(!memory.includes("Archived"), "active memory should not contain archived content");
+
+      const archiveDir = storage.getArchiveDir();
+      const archiveFiles = fs.readdirSync(archiveDir).filter((f) => f.endsWith(".md"));
+      assert.ok(archiveFiles.length > 0);
+      const archiveContent = fs.readFileSync(path.join(archiveDir, archiveFiles[0]), "utf8");
+      assert.ok(archiveContent.includes("Archived 1"), "first archived fact preserved");
+      assert.ok(archiveContent.includes("Archived 2"), "second archived fact preserved");
     });
 
     it("appends to existing archive file on second call", () => {

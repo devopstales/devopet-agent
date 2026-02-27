@@ -71,14 +71,15 @@ export class MemoryStorage {
    * write active memory, append archived facts to monthly archive file.
    */
   writeExtractionResult(result: string): { linesWritten: number; factsArchived: number } {
-    const parts = result.split(ARCHIVE_SEPARATOR);
-    const activeMemory = parts[0].trim();
+    const sepIdx = result.indexOf(ARCHIVE_SEPARATOR);
+    const activeMemory = (sepIdx === -1 ? result : result.slice(0, sepIdx)).trim();
+    const archivedRaw = sepIdx === -1 ? "" : result.slice(sepIdx + ARCHIVE_SEPARATOR.length);
 
     this.writeMemory(activeMemory + "\n");
 
     let factsArchived = 0;
-    if (parts[1]?.trim()) {
-      const archived = parts[1].trim();
+    if (archivedRaw.trim()) {
+      const archived = archivedRaw.trim();
       factsArchived = archived.split("\n").filter((l) => l.trim() !== "").length;
       this.appendToArchive(archived);
     }
@@ -127,7 +128,8 @@ export class MemoryStorage {
     for (const file of files) {
       const content = fs.readFileSync(path.join(this.archiveDir, file), "utf8");
       const matches = content.split("\n").filter((line) => {
-        if (line.trim() === "" || line.startsWith("<!--")) return false;
+        const trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("<!--")) return false;
         const lower = line.toLowerCase();
         return terms.every((t) => lower.includes(t));
       });
