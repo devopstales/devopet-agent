@@ -50,6 +50,9 @@ export default function (pi: ExtensionAPI) {
   let activeExtractionPromise: Promise<void> | null = null;
   let sessionActive = false;
 
+  /** Track consecutive extraction failures for backoff */
+  let consecutiveExtractionFailures = 0;
+
   /** Rebuild storage to point at the currently active mind */
   function rebuildStorage(cwd: string): void {
     if (!mindManager) return;
@@ -64,6 +67,12 @@ export default function (pi: ExtensionAPI) {
     storage.init();
   }
 
+  /** Get the display label for the current memory target */
+  function activeLabel(): string {
+    const activeMind = mindManager?.getActiveMindName();
+    return activeMind ?? "default";
+  }
+
   // --- Lifecycle ---
 
   pi.on("session_start", async (_event, ctx) => {
@@ -75,6 +84,7 @@ export default function (pi: ExtensionAPI) {
     firstTurn = true;
     activeExtractionPromise = null;
     sessionActive = true;
+    consecutiveExtractionFailures = 0;
     updateStatus(ctx);
   });
 
@@ -83,6 +93,9 @@ export default function (pi: ExtensionAPI) {
 
     // If extraction is already in flight, wait for it
     if (activeExtractionPromise) {
+      if (ctx.hasUI) {
+        ctx.ui.setStatus("memory", ctx.ui.theme.fg("dim", "saving memory…"));
+      }
       let timeoutId: NodeJS.Timeout | null = null;
       const timeout = new Promise<void>((resolve) => {
         timeoutId = setTimeout(resolve, config.shutdownExtractionTimeout);
@@ -94,7 +107,7 @@ export default function (pi: ExtensionAPI) {
 
     // Otherwise, if there's been meaningful activity since last extraction,
     // run a final one with the shorter shutdown timeout
-    if (!storage || !sessionActive) return;
+    if (!storage) return;
     const usage = ctx.getContextUsage();
     if (!usage) return;
 
@@ -102,6 +115,10 @@ export default function (pi: ExtensionAPI) {
       (usage.tokens - triggerState.lastExtractedTokens) >= config.minimumTokensBetweenUpdate;
 
     if (!hasActivity) return;
+
+    if (ctx.hasUI) {
+      ctx.ui.setStatus("memory", ctx.ui.theme.fg("dim", "saving memory…"));
+    }
 
     const shutdownConfig = { ...config, extractionTimeout: config.shutdownExtractionTimeout };
     const targetStorage = storage;
@@ -143,10 +160,24 @@ export default function (pi: ExtensionAPI) {
     postCompaction = false;
 
     const lineCount = storage.countLines();
-    if (lineCount <= 10) return;
-
     const activeMind = mindManager?.getActiveMindName();
     const mindLabel = activeMind ? ` (mind: ${activeMind})` : "";
+
+    // Always inject — even on empty memory, so the LLM knows tools exist
+    if (lineCount <= 10) {
+      return {
+        message: {
+          customType: "project-memory",
+          content: [
+            `Project memory initialized${mindLabel} (empty — no facts stored yet).`,
+            "Use **memory_store** to persist important discoveries as you work",
+            "(architecture decisions, constraints, patterns, known issues).",
+            "Facts persist across sessions and will be available next time.",
+          ].join(" "),
+          display: false,
+        },
+      };
+    }
 
     return {
       message: {
@@ -176,7 +207,7 @@ export default function (pi: ExtensionAPI) {
     const usage = ctx.getContextUsage();
     if (!usage) return;
 
-    if (shouldExtract(triggerState, usage.tokens, config)) {
+    if (shouldExtract(triggerState, usage.tokens, config, consecutiveExtractionFailures)) {
       activeExtractionPromise = runBackgroundExtraction(ctx)
         .catch(() => {})
         .finally(() => { activeExtractionPromise = null; });
@@ -209,6 +240,9 @@ export default function (pi: ExtensionAPI) {
       triggerState.toolCallsSinceExtract = 0;
       triggerState.manualStoresSinceExtract = 0;
       triggerState.isInitialized = true;
+      consecutiveExtractionFailures = 0;
+    } catch {
+      consecutiveExtractionFailures++;
     } finally {
       triggerState.isRunning = false;
     }
@@ -350,9 +384,24 @@ export default function (pi: ExtensionAPI) {
     // Action entries
     items.push({ value: "__create__", label: "  + Create new mind", description: "Start a fresh memory store" });
     items.push({ value: "__edit__", label: "  ✎ Edit current mind", description: "Open in editor" });
-    items.push({ value: "__refresh__", label: "  ↻ Refresh current mind", description: "Re-evaluate against codebase" });
+    items.push({ value: "__refresh__", label: "  ↻ Refresh current mind", description: "Prune and consolidate memory" });
 
     return items;
+  }
+
+  /** Notify the LLM that the memory context has changed (queued for next turn) */
+  function notifyMindSwitch(newLabel: string, lineCount: number): void {
+    pi.sendMessage({
+      customType: "project-memory",
+      content: [
+        `Memory context switched to "${newLabel}" (${lineCount} lines).`,
+        "Your previous memory_query results are stale.",
+        "Use **memory_query** to read the current memory if you need project context.",
+      ].join(" "),
+      display: false,
+    }, {
+      deliverAs: "nextTurn",
+    });
   }
 
   async function showMindActions(ctx: ExtensionCommandContext, mindName: string): Promise<void> {
@@ -405,8 +454,9 @@ export default function (pi: ExtensionAPI) {
       case "switch": {
         mindManager.setActiveMind(mindName);
         rebuildStorage(ctx.cwd);
-        ctx.ui.notify(`Switched to mind: ${mindName}`, "success");
         updateStatus(ctx);
+        ctx.ui.notify(`Switched to mind: ${mindName}`, "success");
+        notifyMindSwitch(mindName, storage!.countLines());
         break;
       }
       case "edit": {
@@ -425,6 +475,9 @@ export default function (pi: ExtensionAPI) {
         if (!sanitized) {
           ctx.ui.notify("Name must contain at least one alphanumeric character", "error");
           return;
+        }
+        if (sanitized !== newName.trim()) {
+          ctx.ui.notify(`Name sanitized to: ${sanitized}`, "info");
         }
         if (mindManager.mindExists(sanitized)) {
           ctx.ui.notify(`Mind "${sanitized}" already exists`, "error");
@@ -457,20 +510,29 @@ export default function (pi: ExtensionAPI) {
         if (targetIdx === undefined) return;
         const targetEntry = targetEntries[targetIdx];
         const targetLabel = targetEntry.name === "__default__" ? "default" : targetEntry.name;
+
+        // Preview what will be ingested
+        const sourceContent = mindManager.readMindMemory(mindName);
+        const bulletCount = sourceContent.split("\n").filter((l) => l.trim().startsWith("- ")).length;
+
         const ok = await ctx.ui.confirm(
           "Ingest Mind",
-          `Merge all facts from "${mindName}" into "${targetLabel}" and retire "${mindName}"?`,
+          `Merge ${bulletCount} bullets from "${mindName}" into "${targetLabel}" (duplicates skipped) and retire "${mindName}"?`,
         );
         if (!ok) return;
 
         let result: { factsIngested: number };
         if (targetEntry.name === "__default__") {
-          // Ingest into default memory via a temporary MemoryStorage
           result = mindManager.ingestIntoDefault(mindName);
         } else {
           result = mindManager.ingest(mindName, targetEntry.name);
         }
-        ctx.ui.notify(`Ingested ${result.factsIngested} facts into "${targetLabel}". "${mindName}" retired.`, "success");
+        const skipped = bulletCount - result.factsIngested;
+        const skippedMsg = skipped > 0 ? ` (${skipped} duplicates skipped)` : "";
+        ctx.ui.notify(
+          `Ingested ${result.factsIngested} facts into "${targetLabel}"${skippedMsg}. "${mindName}" retired.`,
+          "success",
+        );
         const wasActive = mindManager.getActiveMindName() === mindName;
         if (wasActive) {
           if (targetEntry.name === "__default__") {
@@ -510,10 +572,11 @@ export default function (pi: ExtensionAPI) {
     if (!ctx.hasUI) return;
 
     const activeMind = mindManager?.getActiveMindName();
+    const lines = storage?.countLines() ?? 0;
     if (activeMind) {
-      ctx.ui.setStatus("memory", ctx.ui.theme.fg("dim", `mind:${activeMind}`));
+      ctx.ui.setStatus("memory", ctx.ui.theme.fg("dim", `🧠 ${activeMind} (${lines})`));
     } else {
-      ctx.ui.setStatus("memory", undefined);
+      ctx.ui.setStatus("memory", ctx.ui.theme.fg("dim", `🧠 ${lines}`));
     }
   }
 
@@ -549,23 +612,33 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "refresh": {
-          ctx.ui.notify("Refreshing memory against codebase...", "info");
-          try {
-            const currentMemory = storage.readMemory();
-            const result = await runExtraction(
-              ctx.cwd,
-              currentMemory,
-              `[Memory refresh requested. No new conversation context — just prune and consolidate existing memory.]`,
-              config,
-            );
-            const { linesWritten, factsArchived } = storage.writeExtractionResult(result);
-            ctx.ui.notify(
-              `Memory refreshed: ${linesWritten} lines active, ${factsArchived} facts archived`,
-              "success",
-            );
-          } catch (err: any) {
-            ctx.ui.notify(`Refresh failed: ${err.message}`, "error");
-          }
+          ctx.ui.notify("Pruning and consolidating memory (this takes 15–60s)…", "info");
+          const targetStorage = storage;
+
+          // Run as background extraction so the terminal isn't blocked
+          activeExtractionPromise = (async () => {
+            try {
+              triggerState.isRunning = true;
+              const currentMemory = targetStorage.readMemory();
+              const result = await runExtraction(
+                ctx.cwd,
+                currentMemory,
+                `[Memory refresh requested. No new conversation context — prune stale facts, consolidate near-duplicates, and tighten wording on existing entries.]`,
+                config,
+              );
+              const { linesWritten, factsArchived } = targetStorage.writeExtractionResult(result);
+              ctx.ui.notify(
+                `Memory refreshed: ${linesWritten} lines active, ${factsArchived} facts archived`,
+                "success",
+              );
+              updateStatus(ctx);
+            } catch (err: any) {
+              ctx.ui.notify(`Refresh failed: ${err.message}`, "error");
+            } finally {
+              triggerState.isRunning = false;
+            }
+          })();
+          activeExtractionPromise.finally(() => { activeExtractionPromise = null; });
           return;
         }
 
@@ -575,6 +648,7 @@ export default function (pi: ExtensionAPI) {
             const template = storage.loadTemplate();
             storage.writeMemory(template);
             ctx.ui.notify("Memory cleared", "success");
+            updateStatus(ctx);
           }
           return;
         }
@@ -600,10 +674,10 @@ export default function (pi: ExtensionAPI) {
         const container = new Container();
         container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
 
-        const activeLabel = activeName ?? "default";
+        const currentLabel = activeName ?? "default";
         container.addChild(new Text(
           theme.fg("accent", theme.bold(" Memory Minds ")) +
-          theme.fg("dim", `(active: ${activeLabel})`),
+          theme.fg("dim", `(active: ${currentLabel})`),
           1, 0,
         ));
 
@@ -638,6 +712,9 @@ export default function (pi: ExtensionAPI) {
           ctx.ui.notify("Name must contain at least one alphanumeric character", "error");
           return;
         }
+        if (sanitized !== name.trim()) {
+          ctx.ui.notify(`Name sanitized to: ${sanitized}`, "info");
+        }
         if (mindManager.mindExists(sanitized)) {
           ctx.ui.notify(`Mind "${sanitized}" already exists`, "error");
           return;
@@ -649,6 +726,7 @@ export default function (pi: ExtensionAPI) {
           mindManager.setActiveMind(sanitized);
           rebuildStorage(ctx.cwd);
           updateStatus(ctx);
+          notifyMindSwitch(sanitized, storage!.countLines());
         }
         ctx.ui.notify(`Created mind: ${sanitized}`, "success");
         return;
@@ -660,28 +738,38 @@ export default function (pi: ExtensionAPI) {
         if (edited !== undefined && edited !== memory) {
           storage.writeMemory(edited);
           ctx.ui.notify("Memory updated", "success");
+          updateStatus(ctx);
         }
         return;
       }
 
       if (selected === "__refresh__") {
-        ctx.ui.notify("Refreshing memory against codebase...", "info");
-        try {
-          const currentMemory = storage.readMemory();
-          const result = await runExtraction(
-            ctx.cwd,
-            currentMemory,
-            `[Memory refresh requested. No new conversation context — just prune and consolidate existing memory.]`,
-            config,
-          );
-          const { linesWritten, factsArchived } = storage.writeExtractionResult(result);
-          ctx.ui.notify(
-            `Memory refreshed: ${linesWritten} lines active, ${factsArchived} facts archived`,
-            "success",
-          );
-        } catch (err: any) {
-          ctx.ui.notify(`Refresh failed: ${err.message}`, "error");
-        }
+        // Delegate to the refresh subcommand handler
+        ctx.ui.notify("Pruning and consolidating memory (this takes 15–60s)…", "info");
+        const targetStorage = storage;
+        activeExtractionPromise = (async () => {
+          try {
+            triggerState.isRunning = true;
+            const currentMemory = targetStorage.readMemory();
+            const result = await runExtraction(
+              ctx.cwd,
+              currentMemory,
+              `[Memory refresh requested. No new conversation context — prune stale facts, consolidate near-duplicates, and tighten wording on existing entries.]`,
+              config,
+            );
+            const { linesWritten, factsArchived } = targetStorage.writeExtractionResult(result);
+            ctx.ui.notify(
+              `Memory refreshed: ${linesWritten} lines active, ${factsArchived} facts archived`,
+              "success",
+            );
+            updateStatus(ctx);
+          } catch (err: any) {
+            ctx.ui.notify(`Refresh failed: ${err.message}`, "error");
+          } finally {
+            triggerState.isRunning = false;
+          }
+        })();
+        activeExtractionPromise.finally(() => { activeExtractionPromise = null; });
         return;
       }
 
@@ -694,6 +782,7 @@ export default function (pi: ExtensionAPI) {
         rebuildStorage(ctx.cwd);
         updateStatus(ctx);
         ctx.ui.notify("Switched to default memory", "success");
+        notifyMindSwitch("default", storage!.countLines());
         return;
       }
 

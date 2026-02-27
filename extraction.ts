@@ -62,11 +62,29 @@ export function createTriggerState(): ExtractionTriggerState {
   };
 }
 
-export function shouldExtract(state: ExtractionTriggerState, currentTokens: number, config: MemoryConfig): boolean {
+export function shouldExtract(
+  state: ExtractionTriggerState,
+  currentTokens: number,
+  config: MemoryConfig,
+  consecutiveFailures: number = 0,
+): boolean {
   if (state.isRunning) return false;
 
-  // Skip if LLM is actively self-storing
-  if (state.manualStoresSinceExtract >= config.manualStoreThreshold) return false;
+  // Exponential backoff on consecutive failures: skip 2^n extraction opportunities
+  // (1 skip after 1 failure, 2 after 2, 4 after 3, cap at 16)
+  if (consecutiveFailures > 0) {
+    const backoffSlots = Math.min(1 << consecutiveFailures, 16);
+    // Use toolCallsSinceExtract as a rough proxy for "opportunities passed"
+    if (state.toolCallsSinceExtract % backoffSlots !== 0) return false;
+  }
+
+  // Only suppress for manual stores after first extraction has established baseline.
+  // Before initialization, we always want the first auto-extraction to run so the
+  // bootstrap deadlock (LLM doesn't know about memory → can't store → memory stays
+  // empty → injection suppressed) can break.
+  if (state.isInitialized && state.manualStoresSinceExtract >= config.manualStoreThreshold) {
+    return false;
+  }
 
   const tokenDelta = currentTokens - state.lastExtractedTokens;
 
