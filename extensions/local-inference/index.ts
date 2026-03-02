@@ -96,11 +96,16 @@ function stripThinkTokens(text: string): string {
     .trim();
 }
 
-async function chatCompletion(
+async function chatCompletionStreaming(
   baseUrl: string,
   model: string,
   messages: ChatMessage[],
-  opts: { maxTokens?: number; temperature?: number; signal?: AbortSignal }
+  opts: {
+    maxTokens?: number;
+    temperature?: number;
+    signal?: AbortSignal;
+    onToken?: (accumulated: string) => void;
+  }
 ): Promise<{ content: string; reasoning?: string; usage: ChatResponse["usage"] }> {
   const resp = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
@@ -110,6 +115,7 @@ async function chatCompletion(
       messages,
       max_tokens: opts.maxTokens || 2048,
       temperature: opts.temperature ?? 0.3,
+      stream: true,
     }),
     signal: opts.signal,
   });
@@ -119,14 +125,54 @@ async function chatCompletion(
     throw new Error(`Local inference failed (${resp.status}): ${body}`);
   }
 
-  const data: ChatResponse = await resp.json();
-  const choice = data.choices?.[0];
-  if (!choice) throw new Error("No response from local model");
+  if (!resp.body) throw new Error("No response body from local model");
+
+  let accumulated = "";
+  let reasoning = "";
+  let usage: ChatResponse["usage"] = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(payload);
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.content) {
+          accumulated += delta.content;
+          opts.onToken?.(accumulated);
+        }
+        if (delta?.reasoning) {
+          reasoning += delta.reasoning;
+        }
+        // Ollama sends usage in the final chunk
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
 
   return {
-    content: stripThinkTokens(choice.message.content || ""),
-    reasoning: choice.message.reasoning,
-    usage: data.usage,
+    content: stripThinkTokens(accumulated),
+    reasoning: reasoning || undefined,
+    usage,
   };
 }
 
@@ -201,7 +247,7 @@ export default function (pi: ExtensionAPI) {
         temperature?: number;
       },
       signal,
-      _onUpdate,
+      onUpdate,
       ctx
     ) => {
       const baseUrl = getBaseUrl();
@@ -257,10 +303,20 @@ export default function (pi: ExtensionAPI) {
       messages.push({ role: "user", content: params.prompt });
 
       try {
-        const result = await chatCompletion(baseUrl, modelId, messages, {
+        const result = await chatCompletionStreaming(baseUrl, modelId, messages, {
           maxTokens: params.max_tokens,
           temperature: params.temperature,
           signal: signal,
+          onToken: (accumulated) => {
+            onUpdate?.({
+              content: [
+                {
+                  type: "text" as const,
+                  text: `**Local model:** ${modelId} *(streaming...)*\n\n---\n\n${stripThinkTokens(accumulated)}`,
+                },
+              ],
+            });
+          },
         });
 
         const parts: Array<{ type: "text"; text: string }> = [];
@@ -295,7 +351,7 @@ export default function (pi: ExtensionAPI) {
     name: "list_local_models",
     label: "List Local Models",
     description:
-      "List all models currently available in the local inference server (LMStudio). " +
+      "List all models currently available in the local inference server (Ollama). " +
       "Use to check what's loaded before delegating work.",
     parameters: Type.Object({}),
     execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => {
