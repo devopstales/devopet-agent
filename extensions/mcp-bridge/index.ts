@@ -50,6 +50,31 @@ interface ConnectedServer {
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 
 // ---------------------------------------------------------------------------
+// Auth error detection
+// ---------------------------------------------------------------------------
+
+const AUTH_REMEDIATION =
+  "Your GitHub token may be expired or invalid.\n" +
+  "Run `gh auth login` to re-authenticate, then restart your pi session.";
+
+function isAuthError(err: any): boolean {
+  // StreamableHTTPError from connect/start phase
+  if (err?.code === 401 || err?.code === 403) return true;
+  // Generic Error from send() phase: "Error POSTing to endpoint (HTTP 401): ..."
+  const msg = err?.message ?? "";
+  if (/HTTP\s+40[13]\b/.test(msg)) return true;
+  if (/unauthorized|forbidden|invalid.*token|expired.*token|token.*expired/i.test(msg)) return true;
+  return false;
+}
+
+function formatError(err: any, serverName: string): string {
+  if (isAuthError(err)) {
+    return `[mcp-bridge] ${serverName}: authentication failed.\n${AUTH_REMEDIATION}`;
+  }
+  return `Error: ${err.message}`;
+}
+
+// ---------------------------------------------------------------------------
 // Extension
 // ---------------------------------------------------------------------------
 
@@ -219,6 +244,19 @@ export default function (pi: ExtensionAPI) {
               details: { server: server.name, tool: tool.name },
             };
           } catch (err: any) {
+            // Surface auth errors immediately — reconnecting won't help
+            if (isAuthError(err)) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: formatError(err, server.name),
+                  },
+                ],
+                details: { server: server.name, tool: tool.name, error: true, auth: true },
+              };
+            }
+
             // Attempt one reconnect on transport-level errors
             const isTransportError =
               err.message?.includes("not connected") ||
@@ -263,13 +301,16 @@ export default function (pi: ExtensionAPI) {
                     content: [
                       {
                         type: "text",
-                        text: `Error after reconnect: ${retryErr.message}`,
+                        text: isAuthError(retryErr)
+                          ? formatError(retryErr, server.name)
+                          : `Error after reconnect: ${retryErr.message}`,
                       },
                     ],
                     details: {
                       server: server.name,
                       tool: tool.name,
                       error: true,
+                      ...(isAuthError(retryErr) && { auth: true }),
                     },
                   };
                 }
@@ -313,8 +354,11 @@ export default function (pi: ExtensionAPI) {
       const result = results[i];
 
       if (result.status === "rejected") {
+        const reason = result.reason;
         ctx.ui.notify(
-          `[mcp-bridge] Failed: ${name} — ${result.reason?.message ?? result.reason}`,
+          isAuthError(reason)
+            ? `[mcp-bridge] ${name}: authentication failed.\n${AUTH_REMEDIATION}`
+            : `[mcp-bridge] Failed: ${name} — ${reason?.message ?? reason}`,
           "error"
         );
         continue;
