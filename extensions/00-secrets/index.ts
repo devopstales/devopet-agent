@@ -132,14 +132,6 @@ export function resolveSecret(name: string): string | undefined {
   return value;
 }
 
-/**
- * Get all currently resolved secret values (for redaction).
- * Returns values only, not names.
- */
-function getResolvedValues(): string[] {
-  return Array.from(resolvedCache.values()).filter((v) => v.length >= 8);
-}
-
 // ============================================================================
 // Layer 2: Output redaction
 // ============================================================================
@@ -148,16 +140,18 @@ function redactString(input: string, secrets: Array<{ name: string; value: strin
   let result = input;
   for (const { name, value } of secrets) {
     if (value.length < 8) continue; // Don't redact very short values (too many false positives)
-    // Replace full value
-    while (result.includes(value)) {
-      result = result.replace(value, `[REDACTED:${name}]`);
-    }
+
+    // Escape regex special characters in the secret value
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const marker = `[REDACTED:${name}]`;
+
+    // Replace all occurrences of the full value
+    result = result.replace(new RegExp(escaped, "g"), marker);
+
     // Also redact partial prefixes (first 20 chars) for long secrets that may be truncated
     if (value.length > 24) {
-      const partial = value.slice(0, 20);
-      while (result.includes(partial)) {
-        result = result.replace(partial, `[REDACTED:${name}]`);
-      }
+      const partialEscaped = value.slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      result = result.replace(new RegExp(partialEscaped, "g"), marker);
     }
   }
   return result;
@@ -206,8 +200,10 @@ const SECRET_ACCESS_PATTERNS = [
   /\bcat\b.*\b(secrets?|credentials?|\.env)\b/i,
   // AWS/GCP credential files
   /\bcat\b.*\.(aws|gcloud)\/credentials/i,
-  // Our own secrets file
-  /secrets\.json/i,
+  // Our own secrets file — match the specific path, not just any filename mention
+  /\.pi\/agent\/secrets\.json/i,
+  // Writing to secrets file (via tee, redirect, etc.)
+  />\s*.*\.pi\/agent\/secrets\.json/i,
 ];
 
 function isSecretAccessCommand(command: string): boolean {
@@ -241,15 +237,15 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  const resolvedCount = resolvedCache.size;
-  if (resolvedCount > 0) {
-    pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (_event, ctx) => {
+    const count = resolvedCache.size;
+    if (count > 0) {
       ctx.ui.notify(
-        `🔐 ${resolvedCount} secret${resolvedCount !== 1 ? "s" : ""} resolved (${Array.from(resolvedCache.keys()).join(", ")})`,
+        `🔐 ${count} secret${count !== 1 ? "s" : ""} resolved (${Array.from(resolvedCache.keys()).join(", ")})`,
         "info"
       );
-    });
-  }
+    }
+  });
 
   // ──────────────────────────────────────────────────────────────
   // Layer 2: Redact secrets from tool results
@@ -274,59 +270,64 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ──────────────────────────────────────────────────────────────
-  // Layer 3: Bash guard — confirm before secret-access commands
+  // Layer 3 + 5: Bash guard and local model scrub (single handler)
   // ──────────────────────────────────────────────────────────────
 
   pi.on("tool_call", async (event, ctx) => {
-    if (event.toolName !== "Bash" && event.toolName !== "bash") return undefined;
-
-    const command = (event.input as any).command as string;
-    if (!isSecretAccessCommand(command)) return undefined;
-
-    if (!ctx.hasUI) {
-      return {
-        block: true,
-        reason: "🔐 Blocked: command accesses secret store (no UI for confirmation)",
-      };
+    // Guard: block write/edit to secrets.json
+    if (event.toolName === "write" || event.toolName === "edit") {
+      const path = (event.input as any).path as string;
+      if (path && /\.pi\/agent\/secrets\.json/i.test(path)) {
+        return {
+          block: true,
+          reason: "🔐 Blocked: use /secrets configure to manage secret recipes, not direct file writes.",
+        };
+      }
     }
 
-    const choice = await ctx.ui.select(
-      `🔐 This command accesses a secret store:\n\n  ${command}\n\nAllow?`,
-      ["Yes, allow this time", "No, block it"]
-    );
+    // Layer 3: Bash guard — confirm before secret-access commands
+    if (event.toolName === "bash") {
+      const command = (event.input as any).command as string;
+      if (isSecretAccessCommand(command)) {
+        if (!ctx.hasUI) {
+          return {
+            block: true,
+            reason: "🔐 Blocked: command accesses secret store (no UI for confirmation)",
+          };
+        }
 
-    if (choice !== "Yes, allow this time") {
-      return { block: true, reason: "🔐 Blocked by user: secret store access" };
+        const choice = await ctx.ui.select(
+          `🔐 This command accesses a secret store:\n\n  ${command}\n\nAllow?`,
+          ["Yes, allow this time", "No, block it"]
+        );
+
+        if (choice !== "Yes, allow this time") {
+          return { block: true, reason: "🔐 Blocked by user: secret store access" };
+        }
+      }
+      return undefined;
     }
 
-    return undefined;
-  });
+    // Layer 5: Scrub secrets from local model prompts
+    if (event.toolName === "ask_local_model") {
+      const input = event.input as any;
+      if (!input.prompt || resolvedCache.size === 0) return undefined;
 
-  // ──────────────────────────────────────────────────────────────
-  // Layer 5: Scrub secrets from local model prompts
-  // ──────────────────────────────────────────────────────────────
+      const secrets = Array.from(resolvedCache.entries())
+        .filter(([_, v]) => v.length >= 8)
+        .map(([name, value]) => ({ name, value }));
 
-  pi.on("tool_call", async (event, _ctx) => {
-    if (event.toolName !== "ask_local_model") return undefined;
+      const cleanPrompt = redactString(input.prompt, secrets);
+      const cleanSystem = input.system ? redactString(input.system, secrets) : input.system;
 
-    const input = event.input as any;
-    if (!input.prompt || resolvedCache.size === 0) return undefined;
-
-    const secrets = Array.from(resolvedCache.entries())
-      .filter(([_, v]) => v.length >= 8)
-      .map(([name, value]) => ({ name, value }));
-
-    const cleanPrompt = redactString(input.prompt, secrets);
-    const cleanSystem = input.system ? redactString(input.system, secrets) : input.system;
-
-    if (cleanPrompt !== input.prompt || cleanSystem !== input.system) {
-      // We can't modify tool_call input directly — block and explain
-      return {
-        block: true,
-        reason:
-          "🔐 Blocked: prompt to local model contains secret values. " +
-          "Remove sensitive data before delegating to local inference.",
-      };
+      if (cleanPrompt !== input.prompt || cleanSystem !== input.system) {
+        return {
+          block: true,
+          reason:
+            "🔐 Blocked: prompt to local model contains secret values. " +
+            "Remove sensitive data before delegating to local inference.",
+        };
+      }
     }
 
     return undefined;
@@ -441,10 +442,11 @@ export default function (pi: ExtensionAPI) {
 
           saveRecipes(recipes);
 
-          // Try to resolve immediately
+          // Try to resolve immediately and inject into process.env
           resolvedCache.delete(secretName);
           const value = resolveSecret(secretName);
           if (value) {
+            process.env[secretName] = value;
             ctx.ui.notify(`✅ ${secretName} configured and resolved successfully`, "info");
           } else {
             ctx.ui.notify(

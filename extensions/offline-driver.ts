@@ -38,17 +38,13 @@ async function checkOllama(): Promise<{ ok: boolean; models: string[] }> {
 }
 
 async function checkAnthropic(): Promise<boolean> {
-  // Simple check: is an Anthropic API key available?
-  // We check the env vars that the Anthropic provider uses
-  const key = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
-  if (!key) return false;
-
-  // Quick connectivity probe to Anthropic's API
+  // Connectivity check only — we don't need to authenticate, just verify
+  // we can reach Anthropic's servers. A HEAD or lightweight GET to their
+  // domain suffices. Pi handles auth via OAuth (auth.json), not env vars.
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": key,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
@@ -59,7 +55,8 @@ async function checkAnthropic(): Promise<boolean> {
       }),
       signal: AbortSignal.timeout(5000),
     });
-    // Any response (even 400/401) means we can reach Anthropic
+    // Any HTTP response (including 401 auth error) means network is reachable.
+    // Only a fetch exception (DNS failure, timeout, connection refused) means offline.
     return true;
   } catch {
     return false;
@@ -93,7 +90,13 @@ async function goOffline(
   preferredModel?: string
 ): Promise<{ success: boolean; message: string }> {
   if (isOffline) {
-    return { success: true, message: "Already in offline mode." };
+    // Verify the model is still available in Ollama (may have been unloaded)
+    const ollama = await checkOllama();
+    if (ollama.ok) {
+      return { success: true, message: "Already in offline mode." };
+    }
+    // Ollama went away — reset state and fall through to re-select
+    isOffline = false;
   }
 
   // Save current cloud model for /online restoration
@@ -216,12 +219,14 @@ export default function (pi: ExtensionAPI) {
 
     ctx.ui.notify(parts.join(" | "), anthropicOk ? "info" : "warn");
 
-    // Save the starting cloud model
+    // Always save the starting cloud model (reset stale state from prior sessions)
     const current = ctx.model;
     if (current && current.provider !== "local") {
       savedCloudModel = current.id;
       savedCloudProvider = current.provider;
     }
+    // Reset offline flag — each session starts fresh
+    isOffline = false;
 
     // If Anthropic is unreachable and we have local models, suggest /offline
     if (!anthropicOk && ollamaModels.length > 0) {
