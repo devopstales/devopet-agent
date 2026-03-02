@@ -192,8 +192,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     await refreshModels();
     if (serverOnline) {
-      const modelNames = cachedModels.map((m) => m.id.split("/").pop()).join(", ");
-      ctx.ui.setStatus("local-inference", `🏠 ${cachedModels.length} local models`);
+      // Status shown via /local-status command, not status bar (to avoid clutter)
     }
   });
 

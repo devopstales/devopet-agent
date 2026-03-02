@@ -1,25 +1,60 @@
 /**
- * status-bar — Rich status bar with context window gauge
+ * status-bar — Consolidated status bar with session usage tracking
  *
- * Renders: ⎇ main • claude-opus-4-6 • ████████░░░░ 68%/200k • ✓ T3
+ * Renders: ↑12 ↓1.4k R249k W43k $0.43 (sub) │ ████████░░░░ 21%/200k │ 🧠 T9
  *
- * Green → tan → red context gauge shows how much of the model's
- * context window is consumed. Updates on every turn.
+ * Left:   Session token usage + estimated cost
+ * Center: Context window gauge (green → tan → red)
+ * Right:  Model tier icon + turn counter
+ *
+ * Also provides /usage command that runs claude-code-usage (ccu).
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
-export default function (pi: ExtensionAPI) {
-  let lastContextPercent: number | null = null;
-  let lastContextWindow = 0;
-  let turnCount = 0;
-  let currentBranch = "";
+interface SessionUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+}
 
-  // ANSI 256-color — raw codes so the bar is consistent regardless of theme
+const TIER_ICONS: Record<string, string> = {
+  "claude-opus-4-6": "🧠",
+  "claude-sonnet-4-6": "⚡",
+  "claude-haiku-4-5": "💨",
+};
+
+export default function (pi: ExtensionAPI) {
+  let turnCount = 0;
+  let currentState: "working" | "idle" = "idle";
+
+  const session: SessionUsage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+  };
+
+  // ANSI 256-color for the context gauge
   const ansi = (code: number, text: string) => `\x1b[38;5;${code}m${text}\x1b[0m`;
 
-  function contextBar(theme: ExtensionContext["ui"]["theme"], percent: number | null): string {
-    const BAR_WIDTH = 16;
+  function formatTokens(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return n.toString();
+  }
+
+  function formatCost(n: number): string {
+    if (n >= 100) return `$${Math.round(n)}`;
+    if (n >= 10) return `$${n.toFixed(1)}`;
+    return `$${n.toFixed(3)}`;
+  }
+
+  function contextBar(theme: ExtensionContext["ui"]["theme"], percent: number | null, contextWindow: number): string {
+    const BAR_WIDTH = 14;
     const FILLED = "█";
     const EMPTY = "░";
 
@@ -31,66 +66,55 @@ export default function (pi: ExtensionAPI) {
     const filled = Math.round((clamped / 100) * BAR_WIDTH);
     const empty = BAR_WIDTH - filled;
 
-    // Per-block color: green → tan → red
-    //   0-40%:  green (34)
-    //   40-60%: tan/gold (180)
-    //   60%+:   red (196)
     let filledStr = "";
     for (let i = 0; i < filled; i++) {
-      const blockPercent = ((i + 0.5) / BAR_WIDTH) * 100;
-      let color: number;
-      if (blockPercent <= 40) {
-        color = 34;  // green
-      } else if (blockPercent <= 60) {
-        color = 180; // tan/gold
-      } else {
-        color = 196; // red
-      }
+      const blockPct = ((i + 0.5) / BAR_WIDTH) * 100;
+      const color = blockPct <= 40 ? 34 : blockPct <= 60 ? 180 : 196;
       filledStr += ansi(color, FILLED);
     }
 
-    return filledStr + theme.fg("dim", EMPTY.repeat(empty));
+    const pctStr = `${Math.round(clamped)}%`;
+    const winStr = contextWindow > 0 ? `/${formatTokens(contextWindow)}` : "";
+
+    return `${filledStr}${theme.fg("dim", EMPTY.repeat(empty))} ${theme.fg("dim", pctStr + winStr)}`;
   }
 
-  function formatTokenWindow(tokens: number): string {
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-    if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`;
-    return tokens.toString();
-  }
-
-  function updateStatusBar(ctx: ExtensionContext, state?: "working" | "idle") {
+  function render(ctx: ExtensionContext) {
     if (!ctx.hasUI) return;
 
     try {
       const theme = ctx.ui.theme;
-      const sep = theme.fg("dim", " • ");
+      const dim = (s: string) => theme.fg("dim", s);
+      const sep = dim(" │ ");
       const parts: string[] = [];
 
-      // Git branch
-      if (currentBranch) {
-        parts.push(theme.fg("accent", `⎇ ${currentBranch}`));
+      // — Session usage —
+      const usageParts: string[] = [];
+      if (session.input > 0 || session.output > 0) {
+        usageParts.push(dim("↑") + formatTokens(session.input));
+        usageParts.push(dim("↓") + formatTokens(session.output));
+        if (session.cacheRead > 0) usageParts.push(dim("R") + formatTokens(session.cacheRead));
+        if (session.cacheWrite > 0) usageParts.push(dim("W") + formatTokens(session.cacheWrite));
+        usageParts.push(theme.fg("accent", formatCost(session.cost)));
+      }
+      if (usageParts.length > 0) {
+        parts.push(usageParts.join(" "));
       }
 
-      // Model name
-      const modelName = ctx.model?.name || ctx.model?.id || "";
-      if (modelName) {
-        parts.push(theme.fg("muted", modelName));
-      }
-
-      // Context bar
+      // — Context gauge —
       const usage = ctx.getContextUsage();
-      const pct = lastContextPercent ?? usage?.percent ?? null;
-      const win = lastContextWindow || usage?.contextWindow || ctx.model?.contextWindow || 0;
-      const bar = contextBar(theme, pct);
-      const pctStr = pct !== null ? `${Math.round(pct)}%` : "?%";
-      const windowStr = win > 0 ? `/${formatTokenWindow(win)}` : "";
-      parts.push(`${bar} ${theme.fg("dim", pctStr + windowStr)}`);
+      const pct = usage?.percent ?? null;
+      const win = usage?.contextWindow || ctx.model?.contextWindow || 0;
+      parts.push(contextBar(theme, pct, win));
 
-      // Turn counter
-      if (turnCount > 0) {
-        const icon = state === "working" ? theme.fg("warning", "●") : theme.fg("success", "✓");
-        parts.push(`${icon} ${theme.fg("dim", `T${turnCount}`)}`);
-      }
+      // — Tier icon + turn counter —
+      const modelId = ctx.model?.id || "";
+      const icon = TIER_ICONS[modelId] || "●";
+      const stateIcon = currentState === "working"
+        ? theme.fg("warning", icon)
+        : theme.fg("success", icon);
+      const turnStr = turnCount > 0 ? ` ${dim(`T${turnCount}`)}` : "";
+      parts.push(`${stateIcon}${turnStr}`);
 
       ctx.ui.setStatus("status-bar", parts.join(sep));
     } catch {
@@ -98,45 +122,83 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // Detect git branch on startup
+  // — Events —
+
   pi.on("session_start", async (_event, ctx) => {
     turnCount = 0;
-    lastContextPercent = null;
-    lastContextWindow = 0;
-
-    try {
-      const result = await pi.exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { timeout: 3000 });
-      if (result.code === 0) {
-        currentBranch = (result.stdout || "").trim();
-      }
-    } catch {
-      // Not a git repo
-    }
-
-    updateStatusBar(ctx, "idle");
+    session.input = 0;
+    session.output = 0;
+    session.cacheRead = 0;
+    session.cacheWrite = 0;
+    session.cost = 0;
+    currentState = "idle";
+    render(ctx);
   });
 
   pi.on("turn_start", async (_event, ctx) => {
     turnCount++;
-    updateStatusBar(ctx, "working");
+    currentState = "working";
+    render(ctx);
   });
 
   pi.on("turn_end", async (_event, ctx) => {
-    const usage = ctx.getContextUsage();
-    if (usage) {
-      lastContextPercent = usage.percent;
-      lastContextWindow = usage.contextWindow;
-    }
-    updateStatusBar(ctx, "idle");
+    currentState = "idle";
+    render(ctx);
   });
 
-  // Refresh branch after tool executions (might have switched branches)
-  pi.on("tool_execution_end", async (_event, ctx) => {
-    const usage = ctx.getContextUsage();
-    if (usage) {
-      lastContextPercent = usage.percent;
-      lastContextWindow = usage.contextWindow;
+  // Accumulate usage from assistant messages
+  pi.on("message_end", async (event: any, ctx) => {
+    const msg = event?.message;
+    if (msg?.role === "assistant" && msg?.usage) {
+      const u = msg.usage;
+      session.input += u.input || 0;
+      session.output += u.output || 0;
+      session.cacheRead += u.cacheRead || 0;
+      session.cacheWrite += u.cacheWrite || 0;
+      if (u.cost?.total) {
+        session.cost += u.cost.total;
+      }
     }
-    updateStatusBar(ctx, "working");
+    render(ctx);
+  });
+
+  pi.on("tool_execution_end", async (_event, ctx) => {
+    render(ctx);
+  });
+
+  // — /usage command — runs ccu with optional args
+  pi.registerCommand("usage", {
+    description: "Show Claude Code usage stats (runs ccu). Args: [time] [project] e.g. '7d', '1m styrened'",
+    handler: async (args, ctx) => {
+      const ccuArgs = ["-a"]; // always show all projects unless filtered
+
+      if (args) {
+        const parts = args.trim().split(/\s+/);
+        for (const part of parts) {
+          // If it looks like a time filter (digits + unit)
+          if (/^\d+[dhmy]$/.test(part) || /^\d{4}-/.test(part)) {
+            ccuArgs.push("-t", part);
+          } else {
+            ccuArgs.push("-p", part);
+          }
+        }
+      }
+
+      ctx.ui.notify("Running claude-code-usage...", "info");
+
+      try {
+        const result = await pi.exec("npx", ["claude-code-usage", ...ccuArgs], {
+          timeout: 30000,
+        });
+        if (result.stdout) {
+          ctx.ui.notify(result.stdout, "info");
+        }
+        if (result.stderr && result.code !== 0) {
+          ctx.ui.notify(result.stderr, "error");
+        }
+      } catch (e: any) {
+        ctx.ui.notify(`ccu failed: ${e.message}`, "error");
+      }
+    },
   });
 }

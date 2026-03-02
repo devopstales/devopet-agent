@@ -15,9 +15,6 @@ async function switchTo(tier: TierName, pi: ExtensionAPI, ctx: any): Promise<boo
   const model = ctx.modelRegistry.find("anthropic", spec.id);
   if (!model) return false;
   const success = await pi.setModel(model);
-  if (success) {
-    ctx.ui.setStatus("model-budget", `${spec.icon} ${spec.label}`);
-  }
   return success;
 }
 
