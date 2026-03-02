@@ -1,10 +1,14 @@
 {
   "name": "pi-kit",
-  "version": "1.0.0",
-  "description": "Pi package — extensions, prompts, and themes for the pi coding agent",
+  "version": "1.1.0",
+  "description": "Pi package — extensions, prompts, skills, and themes for the pi coding agent",
   "keywords": ["pi-package"],
   "author": "",
   "license": "ISC",
+  "pi": {
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^12.6.2"
