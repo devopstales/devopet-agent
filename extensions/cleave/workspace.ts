@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ChildPlan, CleaveState, SplitPlan } from "./types.js";
+import type { OpenSpecContext } from "./openspec.js";
 
 /** Base directory for all cleave workspaces. */
 const CLEAVE_HOME = join(homedir(), ".pi", "cleave");
@@ -53,6 +54,7 @@ export function initWorkspace(
 	state: CleaveState,
 	plan: SplitPlan,
 	_repoPath: string,
+	openspecContext?: OpenSpecContext | null,
 ): string {
 	const wsPath = generateWorkspacePath(state.directive);
 	mkdirSync(wsPath, { recursive: true });
@@ -65,7 +67,7 @@ export function initWorkspace(
 	// Generate child task files
 	for (let i = 0; i < plan.children.length; i++) {
 		const child = plan.children[i];
-		const taskContent = generateTaskFile(i, child, plan.children, state.directive);
+		const taskContent = generateTaskFile(i, child, plan.children, state.directive, openspecContext);
 		writeFileSync(join(wsPath, `${i}-task.md`), taskContent, "utf-8");
 	}
 
@@ -98,6 +100,7 @@ function generateTaskFile(
 	child: ChildPlan,
 	allChildren: ChildPlan[],
 	rootDirective: string,
+	openspecContext?: OpenSpecContext | null,
 ): string {
 	const siblingRefs = allChildren
 		.filter((_, i) => i !== taskId)
@@ -111,6 +114,9 @@ function generateTaskFile(
 	const depsNote = child.dependsOn.length > 0
 		? `**Depends on:** ${child.dependsOn.join(", ")}`
 		: "**Depends on:** none (independent)";
+
+	// Build optional OpenSpec design context section
+	const designSection = buildDesignSection(child, openspecContext);
 
 	return `---
 task_id: ${taskId}
@@ -133,7 +139,7 @@ ${child.description}
 ${scopeList}
 
 ${depsNote}
-
+${designSection}
 ## Contract
 
 1. Only work on files within your scope
@@ -160,6 +166,96 @@ ${depsNote}
 - Output:
 - Edge cases:
 `;
+}
+
+/**
+ * Build the optional "Design Context" section for a child task file
+ * when OpenSpec design.md and specs are available.
+ *
+ * Includes:
+ * - Architecture decisions the child should follow
+ * - File changes relevant to this child's scope
+ * - Spec scenarios relevant to this child (acceptance criteria)
+ */
+function buildDesignSection(
+	child: ChildPlan,
+	ctx?: OpenSpecContext | null,
+): string {
+	if (!ctx) return "";
+
+	const sections: string[] = [];
+
+	// Architecture decisions — all decisions apply to all children
+	if (ctx.decisions.length > 0) {
+		sections.push(
+			"### Architecture Decisions",
+			"",
+			"Follow these design decisions from the project's design.md:",
+			"",
+			...ctx.decisions.map((d) => `- ${d}`),
+		);
+	}
+
+	// File changes relevant to this child
+	if (ctx.fileChanges.length > 0) {
+		const childLabelWords = child.label.replace(/-/g, " ").split(" ");
+		const childDescLower = child.description.toLowerCase();
+
+		const relevant = ctx.fileChanges.filter((fc) => {
+			const fpLower = fc.path.toLowerCase();
+			const pathParts = fpLower.split("/");
+			return (
+				childLabelWords.some((w) => w.length > 2 && pathParts.some((p) => p.includes(w))) ||
+				childDescLower.includes(fpLower) ||
+				child.scope.some((s) => fpLower.startsWith(s.replace(/\*+/g, "")))
+			);
+		});
+
+		if (relevant.length > 0) {
+			sections.push(
+				"### File Changes (from design.md)",
+				"",
+				"These specific file changes are planned for this task:",
+				"",
+				...relevant.map((fc) => `- \`${fc.path}\` (${fc.action})`),
+			);
+		}
+	}
+
+	// Spec scenarios as acceptance criteria
+	if (ctx.specScenarios.length > 0) {
+		// Filter scenarios relevant to this child by matching domain/requirement
+		// against the child's label and description
+		const childText = `${child.label} ${child.description}`.toLowerCase();
+		const relevant = ctx.specScenarios.filter((ss) => {
+			const specText = `${ss.domain} ${ss.requirement}`.toLowerCase();
+			return (
+				childText.split(/\s+/).some((w) => w.length > 3 && specText.includes(w)) ||
+				specText.split(/\s+/).some((w) => w.length > 3 && childText.includes(w))
+			);
+		});
+
+		if (relevant.length > 0) {
+			sections.push(
+				"### Acceptance Criteria (from specs)",
+				"",
+				"Your implementation should satisfy these spec scenarios:",
+				"",
+			);
+			for (const ss of relevant) {
+				sections.push(`**${ss.domain} → ${ss.requirement}**`);
+				for (const scenario of ss.scenarios) {
+					// Indent scenario content for readability
+					const scenarioLines = scenario.split("\n").map((l) => `  ${l}`);
+					sections.push(...scenarioLines);
+				}
+				sections.push("");
+			}
+		}
+	}
+
+	if (sections.length === 0) return "";
+	return "\n## Design Context\n\n" + sections.join("\n") + "\n\n";
 }
 
 /**

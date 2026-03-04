@@ -49,6 +49,24 @@ export interface TaskGroup {
 	}>;
 }
 
+/**
+ * Rich context extracted from an OpenSpec change, beyond just tasks.
+ * Carries design decisions, file scope, and spec scenarios for
+ * child enrichment and post-merge verification.
+ */
+export interface OpenSpecContext {
+	/** The change directory path */
+	changePath: string;
+	/** Full design.md content (null if absent) */
+	designContent: string | null;
+	/** Architecture decisions extracted from design.md */
+	decisions: string[];
+	/** Explicit file changes from design.md "File Changes" section */
+	fileChanges: Array<{ path: string; action: "new" | "modified" | "deleted" | "unknown" }>;
+	/** Delta spec scenarios for post-merge verification */
+	specScenarios: Array<{ domain: string; requirement: string; scenarios: string[] }>;
+}
+
 // ─── Detection ──────────────────────────────────────────────────────────────
 
 /**
@@ -275,6 +293,252 @@ export function openspecChangeToSplitPlan(changePath: string): SplitPlan | null 
 	}
 
 	return { children, rationale };
+}
+
+// ─── Design Context ─────────────────────────────────────────────────────────
+
+/**
+ * Parse the "File Changes" section from design.md.
+ *
+ * Supports formats:
+ *   - `src/contexts/ThemeContext.tsx` (new)
+ *   - `src/styles/globals.css` (modified)
+ *   - src/old/file.ts (deleted)
+ *   - `path/to/file.ts`  (no action → unknown)
+ */
+export function parseDesignFileChanges(
+	designContent: string,
+): Array<{ path: string; action: "new" | "modified" | "deleted" | "unknown" }> {
+	const results: Array<{ path: string; action: "new" | "modified" | "deleted" | "unknown" }> = [];
+
+	// Find the File Changes section
+	const sectionMatch = designContent.match(
+		/##\s+File\s+Changes?\s*\n([\s\S]*?)(?=\n##\s|\n#\s|$)/i,
+	);
+	if (!sectionMatch) return results;
+
+	const section = sectionMatch[1];
+	// Match lines like: - `path/to/file` (action)  or  - path/to/file (action)
+	const lineRe = /^[\s-]*[`"']?([a-zA-Z0-9_./-]+\.[a-zA-Z0-9]+)[`"']?\s*(?:\((\w+)\))?/gm;
+	let m: RegExpExecArray | null;
+	while ((m = lineRe.exec(section)) !== null) {
+		const filePath = m[1];
+		const rawAction = (m[2] || "").toLowerCase();
+		let action: "new" | "modified" | "deleted" | "unknown" = "unknown";
+		if (rawAction === "new" || rawAction === "created" || rawAction === "create") action = "new";
+		else if (rawAction === "modified" || rawAction === "updated" || rawAction === "modify") action = "modified";
+		else if (rawAction === "deleted" || rawAction === "removed" || rawAction === "delete") action = "deleted";
+		results.push({ path: filePath, action });
+	}
+
+	return results;
+}
+
+/**
+ * Extract architecture decisions from design.md.
+ *
+ * Looks for "### Decision:" headers and captures the title + rationale.
+ */
+export function parseDesignDecisions(designContent: string): string[] {
+	const decisions: string[] = [];
+	const re = /###\s+Decision:\s*(.+?)(?:\n[\s\S]*?(?=\n###|\n##|$))/g;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(designContent)) !== null) {
+		// Capture the decision title and first line of rationale
+		const title = m[0];
+		const lines = title.split("\n").filter((l) => l.trim());
+		const summary = lines.length > 1
+			? `${lines[0].replace(/^###\s+Decision:\s*/, "").trim()}: ${lines.slice(1).find((l) => !l.startsWith("#"))?.trim() || ""}`
+			: lines[0].replace(/^###\s+Decision:\s*/, "").trim();
+		decisions.push(summary);
+	}
+	return decisions;
+}
+
+// ─── Spec Scenarios ─────────────────────────────────────────────────────────
+
+/**
+ * Read delta spec files from a change and extract scenarios for verification.
+ *
+ * Parses Given/When/Then scenarios from ADDED and MODIFIED requirements
+ * in the change's specs/ directory.
+ */
+export function readSpecScenarios(
+	changePath: string,
+): Array<{ domain: string; requirement: string; scenarios: string[] }> {
+	const specsDir = join(changePath, "specs");
+	if (!existsSync(specsDir)) return [];
+
+	const results: Array<{ domain: string; requirement: string; scenarios: string[] }> = [];
+
+	// Recursively find spec.md files
+	const specFiles = findSpecFiles(specsDir);
+
+	for (const specFile of specFiles) {
+		const content = readFileSync(specFile, "utf-8");
+		const domain = specFile
+			.replace(specsDir + "/", "")
+			.replace(/\/spec\.md$/, "")
+			.replace(/\.md$/, "");
+
+		// Only extract from ADDED and MODIFIED sections (these need verification)
+		const relevantSections = content.match(
+			/##\s+(?:ADDED|MODIFIED)\s+Requirements?\s*\n([\s\S]*?)(?=\n##\s+(?:ADDED|MODIFIED|REMOVED)|$)/gi,
+		);
+		if (!relevantSections) continue;
+
+		for (const section of relevantSections) {
+			// Find requirements with scenarios
+			const reqRe = /###\s+Requirement:\s*(.+)/g;
+			let reqMatch: RegExpExecArray | null;
+			while ((reqMatch = reqRe.exec(section)) !== null) {
+				const reqName = reqMatch[1].trim();
+				// Find scenarios after this requirement until next requirement or section end
+				const afterReq = section.slice(reqMatch.index + reqMatch[0].length);
+				const nextReq = afterReq.search(/\n###\s+Requirement:/);
+				const scenarioBlock = nextReq >= 0 ? afterReq.slice(0, nextReq) : afterReq;
+
+				const scenarios: string[] = [];
+				const scenarioRe = /####\s+Scenario:\s*(.+?)(?:\n[\s\S]*?)(?=\n####|\n###|$)/g;
+				let scenMatch: RegExpExecArray | null;
+				while ((scenMatch = scenarioRe.exec(scenarioBlock)) !== null) {
+					// Extract the full scenario including Given/When/Then
+					const scenarioText = scenMatch[0]
+						.replace(/^####\s+Scenario:\s*/, "")
+						.trim();
+					scenarios.push(scenarioText);
+				}
+
+				if (scenarios.length > 0) {
+					results.push({ domain, requirement: reqName, scenarios });
+				}
+			}
+		}
+	}
+
+	return results;
+}
+
+/** Recursively find spec.md files under a directory. */
+function findSpecFiles(dir: string): string[] {
+	const files: string[] = [];
+	if (!existsSync(dir)) return files;
+
+	const entries = readdirSync(dir, { withFileTypes: true });
+	for (const entry of entries) {
+		const fullPath = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			files.push(...findSpecFiles(fullPath));
+		} else if (entry.name.endsWith(".md")) {
+			files.push(fullPath);
+		}
+	}
+	return files;
+}
+
+// ─── Full Context ───────────────────────────────────────────────────────────
+
+/**
+ * Build full OpenSpec context from a change directory.
+ *
+ * Reads design.md (decisions, file changes), delta specs (scenarios),
+ * and returns a structured context object that cleave uses to:
+ * - Enrich child task files with design context
+ * - Supply exact file scope from design file changes
+ * - Verify implementation against spec scenarios post-merge
+ */
+export function buildOpenSpecContext(changePath: string): OpenSpecContext {
+	const ctx: OpenSpecContext = {
+		changePath,
+		designContent: null,
+		decisions: [],
+		fileChanges: [],
+		specScenarios: [],
+	};
+
+	// Design
+	const designPath = join(changePath, "design.md");
+	if (existsSync(designPath)) {
+		ctx.designContent = readFileSync(designPath, "utf-8");
+		ctx.decisions = parseDesignDecisions(ctx.designContent);
+		ctx.fileChanges = parseDesignFileChanges(ctx.designContent);
+	}
+
+	// Specs
+	ctx.specScenarios = readSpecScenarios(changePath);
+
+	return ctx;
+}
+
+/**
+ * Full pipeline: read an OpenSpec change and convert to SplitPlan + context.
+ *
+ * Returns null if the change doesn't have tasks or has fewer than 2 groups.
+ */
+export function openspecChangeToSplitPlanWithContext(
+	changePath: string,
+): { plan: SplitPlan; context: OpenSpecContext } | null {
+	const plan = openspecChangeToSplitPlan(changePath);
+	if (!plan) return null;
+
+	const context = buildOpenSpecContext(changePath);
+
+	// Supplement scope from design.md file changes when available
+	if (context.fileChanges.length > 0) {
+		supplementScopeFromDesign(plan.children, context.fileChanges);
+	}
+
+	return { plan, context };
+}
+
+/**
+ * Supplement child scope with explicit file changes from design.md.
+ *
+ * For each child, if design.md lists files that match the child's description
+ * or existing scope patterns, add them. This replaces heuristic guessing
+ * with author-declared intent.
+ */
+function supplementScopeFromDesign(
+	children: ChildPlan[],
+	fileChanges: Array<{ path: string; action: string }>,
+): void {
+	// If there's only one group of files, distribute to the closest-matching child
+	// If files are clearly separated by directory, match by path prefix
+
+	const filePaths = fileChanges
+		.filter((f) => f.action !== "deleted")
+		.map((f) => f.path);
+
+	if (filePaths.length === 0) return;
+
+	for (const child of children) {
+		const descLower = child.description.toLowerCase();
+		const labelWords = child.label.replace(/-/g, " ").split(" ");
+
+		const matched: string[] = [];
+		for (const fp of filePaths) {
+			const fpLower = fp.toLowerCase();
+			// Match if: file path contains a label word, or child description mentions the file
+			const pathParts = fpLower.split("/");
+			const isMatch =
+				labelWords.some((w) => w.length > 2 && pathParts.some((p) => p.includes(w))) ||
+				descLower.includes(fpLower) ||
+				child.scope.some((s) => {
+					const pattern = s.replace(/\*\*/g, "").replace(/\*/g, "");
+					return fpLower.startsWith(pattern) || pattern.startsWith(fpLower.split("/").slice(0, -1).join("/"));
+				});
+
+			if (isMatch) matched.push(fp);
+		}
+
+		// Add matched files to scope (deduplicated)
+		const existingScope = new Set(child.scope);
+		for (const fp of matched) {
+			if (!existingScope.has(fp)) {
+				child.scope.push(fp);
+			}
+		}
+	}
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

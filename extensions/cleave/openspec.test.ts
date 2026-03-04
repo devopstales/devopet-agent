@@ -12,9 +12,14 @@ import {
 	parseTasksFile,
 	taskGroupsToChildPlans,
 	openspecChangeToSplitPlan,
+	openspecChangeToSplitPlanWithContext,
 	detectOpenSpec,
 	listChanges,
 	findExecutableChanges,
+	parseDesignFileChanges,
+	parseDesignDecisions,
+	readSpecScenarios,
+	buildOpenSpecContext,
 } from "./openspec.js";
 
 function tmpDir(): string {
@@ -370,5 +375,250 @@ In scope: login, register, logout
 		fs.writeFileSync(path.join(dir, "proposal.md"), "## Intent\nAdd dark mode support.");
 		const plan = openspecChangeToSplitPlan(dir)!;
 		assert.ok(plan.rationale.includes("dark mode"), `Got: ${plan.rationale}`);
+	});
+});
+
+// ─── parseDesignFileChanges ─────────────────────────────────────────────────
+
+describe("parseDesignFileChanges", () => {
+	it("parses backtick-quoted paths with actions", () => {
+		const design = `## File Changes\n- \`src/foo.ts\` (new)\n- \`src/bar.ts\` (modified)\n`;
+		const result = parseDesignFileChanges(design);
+		assert.equal(result.length, 2);
+		assert.deepEqual(result[0], { path: "src/foo.ts", action: "new" });
+		assert.deepEqual(result[1], { path: "src/bar.ts", action: "modified" });
+	});
+
+	it("parses unquoted paths", () => {
+		const design = `## File Changes\n- src/foo.ts (new)\n- src/bar.ts (deleted)\n`;
+		const result = parseDesignFileChanges(design);
+		assert.equal(result.length, 2);
+		assert.equal(result[0].action, "new");
+		assert.equal(result[1].action, "deleted");
+	});
+
+	it("handles missing action as unknown", () => {
+		const design = `## File Changes\n- \`src/foo.ts\`\n`;
+		const result = parseDesignFileChanges(design);
+		assert.equal(result.length, 1);
+		assert.equal(result[0].action, "unknown");
+	});
+
+	it("handles synonym actions (created, updated, removed)", () => {
+		const design = `## File Changes\n- \`a.ts\` (created)\n- \`b.ts\` (updated)\n- \`c.ts\` (removed)\n`;
+		const result = parseDesignFileChanges(design);
+		assert.equal(result[0].action, "new");
+		assert.equal(result[1].action, "modified");
+		assert.equal(result[2].action, "deleted");
+	});
+
+	it("returns empty when no File Changes section", () => {
+		const design = `## Architecture\nSome text.\n`;
+		assert.equal(parseDesignFileChanges(design).length, 0);
+	});
+
+	it("stops at next section heading", () => {
+		const design = `## File Changes\n- \`a.ts\` (new)\n## Architecture\n- \`b.ts\` (new)\n`;
+		const result = parseDesignFileChanges(design);
+		assert.equal(result.length, 1);
+		assert.equal(result[0].path, "a.ts");
+	});
+
+	it("handles singular 'File Change' heading", () => {
+		const design = `## File Change\n- \`a.ts\` (new)\n`;
+		assert.equal(parseDesignFileChanges(design).length, 1);
+	});
+});
+
+// ─── parseDesignDecisions ───────────────────────────────────────────────────
+
+describe("parseDesignDecisions", () => {
+	it("extracts decision titles with rationale", () => {
+		const design = `### Decision: Use React Context\nAvoids prop drilling.\n### Decision: CSS variables\nRuntime switching.\n`;
+		const decisions = parseDesignDecisions(design);
+		assert.equal(decisions.length, 2);
+		assert.ok(decisions[0].includes("Use React Context"));
+		assert.ok(decisions[0].includes("Avoids prop drilling"));
+		assert.ok(decisions[1].includes("CSS variables"));
+	});
+
+	it("returns empty when no decisions", () => {
+		assert.equal(parseDesignDecisions("# Design\nSome text.").length, 0);
+	});
+
+	it("handles decision with no rationale line", () => {
+		const design = `### Decision: Single-line decision\n## Next Section\n`;
+		const decisions = parseDesignDecisions(design);
+		assert.equal(decisions.length, 1);
+		assert.ok(decisions[0].startsWith("Single-line decision"));
+	});
+});
+
+// ─── readSpecScenarios ──────────────────────────────────────────────────────
+
+describe("readSpecScenarios", () => {
+	let dir: string;
+	beforeEach(() => { dir = tmpDir(); });
+	afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+	it("extracts scenarios from ADDED requirements", () => {
+		const specsDir = path.join(dir, "specs", "auth");
+		fs.mkdirSync(specsDir, { recursive: true });
+		fs.writeFileSync(path.join(specsDir, "spec.md"), [
+			"## ADDED Requirements",
+			"### Requirement: Login",
+			"#### Scenario: Valid credentials",
+			"Given a registered user",
+			"When they submit correct credentials",
+			"Then they are authenticated",
+			"#### Scenario: Invalid credentials",
+			"Given a registered user",
+			"When they submit wrong password",
+			"Then they see an error",
+		].join("\n"));
+
+		const scenarios = readSpecScenarios(dir);
+		assert.equal(scenarios.length, 1);
+		assert.equal(scenarios[0].domain, "auth");
+		assert.equal(scenarios[0].requirement, "Login");
+		assert.equal(scenarios[0].scenarios.length, 2);
+		assert.ok(scenarios[0].scenarios[0].includes("Valid credentials"));
+		assert.ok(scenarios[0].scenarios[1].includes("Invalid credentials"));
+	});
+
+	it("ignores REMOVED requirements", () => {
+		const specsDir = path.join(dir, "specs", "ui");
+		fs.mkdirSync(specsDir, { recursive: true });
+		fs.writeFileSync(path.join(specsDir, "spec.md"), [
+			"## REMOVED Requirements",
+			"### Requirement: Legacy Feature",
+			"#### Scenario: Old behavior",
+			"Given something",
+			"When removed",
+			"Then gone",
+		].join("\n"));
+
+		assert.equal(readSpecScenarios(dir).length, 0);
+	});
+
+	it("returns empty when no specs dir", () => {
+		assert.equal(readSpecScenarios(dir).length, 0);
+	});
+
+	it("extracts from MODIFIED requirements", () => {
+		const specsDir = path.join(dir, "specs", "api");
+		fs.mkdirSync(specsDir, { recursive: true });
+		fs.writeFileSync(path.join(specsDir, "spec.md"), [
+			"## MODIFIED Requirements",
+			"### Requirement: Rate Limiting",
+			"#### Scenario: Exceeds limit",
+			"Given a user at max requests",
+			"When they make another request",
+			"Then they get 429 response",
+		].join("\n"));
+
+		const scenarios = readSpecScenarios(dir);
+		assert.equal(scenarios.length, 1);
+		assert.equal(scenarios[0].requirement, "Rate Limiting");
+	});
+});
+
+// ─── buildOpenSpecContext ───────────────────────────────────────────────────
+
+describe("buildOpenSpecContext", () => {
+	let dir: string;
+	beforeEach(() => { dir = tmpDir(); });
+	afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+	it("builds full context with all artifacts", () => {
+		fs.writeFileSync(path.join(dir, "design.md"), [
+			"### Decision: Use PostgreSQL",
+			"Better for relational data.",
+			"## File Changes",
+			"- `src/db/schema.ts` (new)",
+			"- `src/api/routes.ts` (modified)",
+		].join("\n"));
+
+		const specsDir = path.join(dir, "specs", "data");
+		fs.mkdirSync(specsDir, { recursive: true });
+		fs.writeFileSync(path.join(specsDir, "spec.md"), [
+			"## ADDED Requirements",
+			"### Requirement: Data Persistence",
+			"#### Scenario: Save record",
+			"Given valid data",
+			"When submitted",
+			"Then stored in database",
+		].join("\n"));
+
+		const ctx = buildOpenSpecContext(dir);
+		assert.equal(ctx.changePath, dir);
+		assert.ok(ctx.designContent);
+		assert.equal(ctx.decisions.length, 1);
+		assert.ok(ctx.decisions[0].includes("PostgreSQL"));
+		assert.equal(ctx.fileChanges.length, 2);
+		assert.equal(ctx.specScenarios.length, 1);
+	});
+
+	it("handles missing design.md gracefully", () => {
+		const ctx = buildOpenSpecContext(dir);
+		assert.equal(ctx.designContent, null);
+		assert.equal(ctx.decisions.length, 0);
+		assert.equal(ctx.fileChanges.length, 0);
+	});
+
+	it("handles missing specs gracefully", () => {
+		fs.writeFileSync(path.join(dir, "design.md"), "### Decision: Something\nReason.\n");
+		const ctx = buildOpenSpecContext(dir);
+		assert.equal(ctx.specScenarios.length, 0);
+		assert.equal(ctx.decisions.length, 1);
+	});
+});
+
+// ─── openspecChangeToSplitPlanWithContext ────────────────────────────────────
+
+describe("openspecChangeToSplitPlanWithContext", () => {
+	let dir: string;
+	beforeEach(() => { dir = tmpDir(); });
+	afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+	it("returns plan + context together", () => {
+		fs.writeFileSync(path.join(dir, "tasks.md"), "## 1. A\n- [ ] task a\n## 2. B\n- [ ] task b\n");
+		fs.writeFileSync(path.join(dir, "design.md"), "### Decision: Use X\nBecause Y.\n## File Changes\n- `src/a.ts` (new)\n");
+
+		const result = openspecChangeToSplitPlanWithContext(dir);
+		assert.ok(result);
+		assert.equal(result.plan.children.length, 2);
+		assert.equal(result.context.decisions.length, 1);
+		assert.equal(result.context.fileChanges.length, 1);
+	});
+
+	it("returns null when tasks.md missing", () => {
+		assert.equal(openspecChangeToSplitPlanWithContext(dir), null);
+	});
+
+	it("returns null when fewer than 2 groups", () => {
+		fs.writeFileSync(path.join(dir, "tasks.md"), "## 1. Only\n- [ ] lone task\n");
+		assert.equal(openspecChangeToSplitPlanWithContext(dir), null);
+	});
+
+	it("supplements scope from design file changes", () => {
+		fs.writeFileSync(path.join(dir, "tasks.md"), [
+			"## 1. Auth Module",
+			"- [ ] Create auth middleware",
+			"## 2. Users Module",
+			"- [ ] Build user profile page",
+		].join("\n"));
+		fs.writeFileSync(path.join(dir, "design.md"), [
+			"## File Changes",
+			"- `src/auth/middleware.ts` (new)",
+			"- `src/users/profile.ts` (new)",
+		].join("\n"));
+
+		const result = openspecChangeToSplitPlanWithContext(dir)!;
+		// "auth-module" child should pick up auth/middleware.ts, "users-module" should pick up users/profile.ts
+		const authChild = result.plan.children.find(c => c.label === "auth-module")!;
+		const usersChild = result.plan.children.find(c => c.label === "users-module")!;
+		assert.ok(authChild.scope.includes("src/auth/middleware.ts"), `auth scope: ${authChild.scope}`);
+		assert.ok(usersChild.scope.includes("src/users/profile.ts"), `users scope: ${usersChild.scope}`);
 	});
 });

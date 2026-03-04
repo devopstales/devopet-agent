@@ -20,7 +20,13 @@ import { Type } from "@sinclair/typebox";
 import { assessDirective, PATTERNS } from "./assessment.js";
 import { detectConflicts, parseTaskResult } from "./conflicts.js";
 import { dispatchChildren } from "./dispatcher.js";
-import { detectOpenSpec, findExecutableChanges, openspecChangeToSplitPlan } from "./openspec.js";
+import {
+	detectOpenSpec,
+	findExecutableChanges,
+	openspecChangeToSplitPlanWithContext,
+	buildOpenSpecContext,
+	type OpenSpecContext,
+} from "./openspec.js";
 import { buildPlannerPrompt, getRepoTree, parsePlanResponse } from "./planner.js";
 import type { CleaveState, ChildState, SplitPlan } from "./types.js";
 import { DEFAULT_CONFIG } from "./types.js";
@@ -67,6 +73,41 @@ function formatConflicts(conflicts: ReturnType<typeof detectConflicts>): string 
 				`  Resolution: ${c.resolution}`,
 		)
 		.join("\n\n");
+}
+
+function formatSpecVerification(ctx: OpenSpecContext): string {
+	const lines = [
+		"### Spec Verification",
+		"",
+		"The following spec scenarios should now be satisfied. **Verify each one:**",
+		"",
+	];
+
+	for (const ss of ctx.specScenarios) {
+		lines.push(`**${ss.domain} → ${ss.requirement}**`);
+		for (const scenario of ss.scenarios) {
+			// Extract just the scenario name (first line) and the Given/When/Then
+			const scenarioLines = scenario.split("\n");
+			const name = scenarioLines[0];
+			lines.push(`- [ ] ${name}`);
+			// Include Given/When/Then as indented detail
+			const gwt = scenarioLines.slice(1).filter((l) => l.trim());
+			if (gwt.length > 0) {
+				for (const l of gwt) {
+					lines.push(`      ${l.trim()}`);
+				}
+			}
+		}
+		lines.push("");
+	}
+
+	lines.push(
+		"---",
+		"Run tests, inspect the code, or manually verify each scenario above.",
+		"If all pass, the change is ready for `/opsx:archive`.",
+	);
+
+	return lines.join("\n");
 }
 
 // ─── Extension ──────────────────────────────────────────────────────────────
@@ -195,16 +236,24 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 						});
 					}
 					const change = matched;
-					const plan = change ? openspecChangeToSplitPlan(change.path) : null;
+					const result = change ? openspecChangeToSplitPlanWithContext(change.path) : null;
 
-					if (plan) {
+					if (result) {
+						const { plan, context } = result;
 						const planJson = JSON.stringify(plan, null, 2);
+
+						// Report what OpenSpec artifacts we found
+						const artifactNotes: string[] = [];
+						if (context.designContent) artifactNotes.push(`design.md (${context.decisions.length} decisions, ${context.fileChanges.length} file changes)`);
+						if (context.specScenarios.length > 0) artifactNotes.push(`specs (${context.specScenarios.length} scenarios for post-merge verification)`);
+
 						pi.sendMessage({
 							customType: "view",
 							content: [
 								assessmentText,
 								"",
 								`**→ OpenSpec plan detected** from \`${change.name}/tasks.md\``,
+								...(artifactNotes.length > 0 ? [`**Artifacts:** ${artifactNotes.join("; ")}`] : []),
 								"",
 								`**Rationale:** ${plan.rationale}`,
 								`**Children:** ${plan.children.map((c) => c.label).join(", ")}`,
@@ -227,7 +276,8 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 								"```",
 								"",
 								"Present this plan to the user for review. After confirmation,",
-								"use the `cleave_run` tool with this plan_json and the original directive.",
+								`use the \`cleave_run\` tool with this plan_json, the original directive,`,
+								`and \`openspec_change_path\` set to \`${change.path}\`.`,
 								"",
 								"### Original Directive",
 								"",
@@ -314,6 +364,14 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			max_parallel: Type.Optional(
 				Type.Number({ description: "Maximum parallel children (default: 4)" }),
 			),
+			openspec_change_path: Type.Optional(
+				Type.String({
+					description:
+						"Path to an OpenSpec change directory. When provided, child task files are " +
+						"enriched with design.md context (architecture decisions, file scope) and " +
+						"post-merge verification checks specs against implementation.",
+				}),
+			),
 		}),
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -328,6 +386,16 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			const repoPath = ctx.cwd;
 			const maxParallel = params.max_parallel ?? DEFAULT_CONFIG.maxParallel;
 			const preferLocal = params.prefer_local ?? DEFAULT_CONFIG.preferLocal;
+
+			// ── OPENSPEC CONTEXT ───────────────────────────────────────
+			let openspecCtx: OpenSpecContext | null = null;
+			if (params.openspec_change_path) {
+				try {
+					openspecCtx = buildOpenSpecContext(params.openspec_change_path);
+				} catch {
+					// Non-fatal — proceed without enrichment
+				}
+			}
 
 			// ── PREFLIGHT ──────────────────────────────────────────────
 			await ensureCleanWorktree(pi, repoPath);
@@ -355,8 +423,8 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				createdAt: new Date().toISOString(),
 			};
 
-			// Create workspace
-			const wsPath = initWorkspace(state, plan, repoPath);
+			// Create workspace — pass OpenSpec context to enrich child task files
+			const wsPath = initWorkspace(state, plan, repoPath, openspecCtx);
 			state.workspacePath = wsPath;
 
 			// ── CREATE WORKTREES ───────────────────────────────────────
@@ -448,6 +516,13 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				if (!result.success) break;
 			}
 
+			// ── SPEC VERIFICATION ──────────────────────────────────────
+			// If OpenSpec specs exist, check implementation against scenarios
+			let specVerification: string | null = null;
+			if (openspecCtx && openspecCtx.specScenarios.length > 0 && mergeFailures.length === 0) {
+				specVerification = formatSpecVerification(openspecCtx);
+			}
+
 			// ── CLEANUP ────────────────────────────────────────────────
 			// Only clean up worktrees if all merges succeeded. On merge
 			// failure, preserve branches so the user can manually resolve.
@@ -531,6 +606,11 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				for (const label of notAttempted) {
 					reportLines.push(`  ⏭ ${label}: skipped (earlier merge failed)`);
 				}
+			}
+
+			// Spec verification (post-merge)
+			if (specVerification) {
+				reportLines.push("", specVerification);
 			}
 
 			const rawReport = reportLines.join("\n");
