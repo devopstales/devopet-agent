@@ -1032,9 +1032,11 @@ export default function (pi: ExtensionAPI) {
     ].join(" "),
     promptSnippet: "Store a fact to project memory (persists across sessions)",
     promptGuidelines: [
-      "Use memory_store to persist important discoveries — facts survive across sessions",
+      "Store conclusions, not investigation steps — if you're still debugging, don't store yet",
+      "Store current state, not transitions — write 'X is used for Y', not 'X replaced Z for Y'",
+      "Before storing, check if an existing fact covers it — use memory_supersede instead of adding duplicates",
+      "After resolving a bug, archive all investigation breadcrumbs and store one decision fact about the fix",
       "Prefer pointer facts ('X does Y. See path/to/file.ts') over inlining implementation details",
-      "Store facts when you discover: architecture decisions, non-obvious constraints, tricky bugs, environment quirks",
     ].join("\n"),
     parameters: Type.Object({
       section: StringEnum(
