@@ -966,6 +966,18 @@ export default function (pi: ExtensionAPI) {
       }
       ctx.compact({
         customInstructions: "Session hit auto-compaction threshold. Preserve recent work context and any in-progress task state.",
+        onComplete: () => {
+          // Relay: send a follow-up message so the agent resumes with fresh context.
+          // The `session_compact` handler already set postCompaction=true, so
+          // before_agent_start will inject memory into the new turn.
+          const resumeLines = [
+            "Context was auto-compacted to free space. Your project memory and working memory are intact.",
+            "",
+            "**Resume your previous task.** The compaction summary above preserves your progress.",
+            "If you need to recall specific facts, use `memory_recall(query)` for targeted retrieval.",
+          ];
+          pi.sendUserMessage(resumeLines.join("\n"), { deliverAs: "followUp" });
+        },
         onError: () => {
           // Reset so auto-compaction can retry on the next tool_execution_end cycle
           autoCompacted = false;
@@ -1565,6 +1577,17 @@ export default function (pi: ExtensionAPI) {
 
       ctx.compact({
         customInstructions: params.instructions,
+        onComplete: () => {
+          // Send resume message so the agent gets a new turn with memory injected
+          pi.sendUserMessage(
+            [
+              "Context compaction complete. Your project memory and working memory are intact.",
+              "",
+              "**Continue where you left off.** Use `memory_recall(query)` if you need to retrieve specific facts.",
+            ].join("\n"),
+            { deliverAs: "followUp" },
+          );
+        },
       });
 
       return {
@@ -1573,7 +1596,7 @@ export default function (pi: ExtensionAPI) {
           text: [
             `Context compaction triggered (was ${pct} full, ${tokens} tokens).`,
             "Compaction runs in the background — older messages will be summarized.",
-            "After the next response, use memory_query to reload project knowledge.",
+            "You will be prompted to continue after compaction completes.",
           ].join("\n"),
         }],
         details: { tokensBefore: usage?.tokens, percent: pct },
