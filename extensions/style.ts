@@ -5,8 +5,6 @@
  * Subcommands: (none), palette, d2, excalidraw, check <file>
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 // ---------------------------------------------------------------------------
@@ -167,9 +165,10 @@ function d2Template(): string {
 }
 
 function auditColors(filePath: string): string {
+	const fs = require("node:fs");
 	let content: string;
 	try {
-		content = readFileSync(filePath, "utf-8");
+		content = fs.readFileSync(filePath, "utf-8");
 	} catch {
 		return `❌ Could not read file: \`${filePath}\``;
 	}

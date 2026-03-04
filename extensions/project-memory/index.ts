@@ -1789,8 +1789,7 @@ export default function (pi: ExtensionAPI) {
     description: "Run memory extraction and exit gracefully (avoids /reload terminal corruption)",
     handler: async (_args, ctx) => {
       if (!store) {
-        ctx.shutdown();
-        setTimeout(() => process.exit(0), 2000);
+        await ctx.shutdown();
         return;
       }
 
@@ -1826,10 +1825,7 @@ export default function (pi: ExtensionAPI) {
       // Small delay so the notification renders
       await new Promise(r => setTimeout(r, 200));
 
-      ctx.shutdown();
-
-      // Fallback: if shutdown() doesn't terminate within 2s, force exit
-      setTimeout(() => process.exit(0), 2000);
+      await ctx.shutdown();
     },
   });
 }
