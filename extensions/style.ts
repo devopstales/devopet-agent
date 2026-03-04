@@ -218,11 +218,14 @@ export default function styleExtension(pi: ExtensionAPI) {
 		getArgumentCompletions: (prefix: string) => {
 			const parts = prefix.split(/\s+/);
 			if (parts.length <= 1) {
-				const subs = ["palette", "d2", "excalidraw", "check"];
-				const filtered = subs.filter(s => s.startsWith(parts[0] || ""));
-				return filtered.length > 0
-					? filtered.map(s => ({ value: s, label: s }))
-					: null;
+				const subs: Array<{ value: string; label: string; description: string }> = [
+					{ value: "palette", label: "palette", description: "Render visual swatch" },
+					{ value: "d2", label: "d2", description: "D2 style template" },
+					{ value: "excalidraw", label: "excalidraw", description: "Semantic palette table" },
+					{ value: "check", label: "check", description: "Audit file colors" },
+				];
+				const filtered = subs.filter(s => s.value.startsWith(parts[0] || ""));
+				return filtered.length > 0 ? filtered : null;
 			}
 			return null;
 		},
