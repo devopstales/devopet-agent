@@ -766,7 +766,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       // Phase 2: Global extraction — if new facts were created and global store exists
-      if (result.newFactIds.length > 0 && globalStore) {
+      if (result.newFactIds.length > 0 && globalStore && cfg.globalExtractionEnabled) {
         try {
           const newFacts = result.newFactIds
             .map(id => store!.getFact(id))
@@ -801,8 +801,11 @@ export default function (pi: ExtensionAPI) {
           }
         } catch (err) {
           // Global extraction is best-effort — don't fail the whole cycle
-          if (ctx.hasUI) {
-            ctx.ui.notify(`Global extraction failed: ${(err as Error).message}`, "warning");
+          const msg = (err as Error).message ?? "";
+          if (msg.includes("429") || msg.includes("rate_limit")) {
+            // Rate limited — silently skip, will retry next cycle
+          } else if (ctx.hasUI) {
+            ctx.ui.notify(`Global extraction failed (non-critical)`, "warning");
           }
         }
       }

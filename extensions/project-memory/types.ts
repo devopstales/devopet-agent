@@ -31,6 +31,8 @@ export interface MemoryConfig {
   compactionLocalTimeout: number;
   /** Max consecutive compaction retry attempts before giving up for the session */
   compactionRetryLimit: number;
+  /** Enable Phase 2 global extraction (generalizes project facts to user-level store) */
+  globalExtractionEnabled: boolean;
 }
 
 export const DEFAULT_CONFIG: MemoryConfig = {
@@ -48,5 +50,6 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   compactionLocalFallback: true,
   compactionLocalTimeout: 120_000,
   compactionRetryLimit: 3,
+  globalExtractionEnabled: false,
 };
 
