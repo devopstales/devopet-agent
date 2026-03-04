@@ -8,7 +8,7 @@
  *
  * Provides three tools:
  *   - generate_image_local: AI image generation via FLUX.1 (mflux, Apple Silicon MLX)
- *   - render_diagram: Mermaid diagram rendering via mmdc (falls back to source)
+ *   - render_diagram: D2 diagram rendering via d2 CLI
  *   - render_excalidraw: Excalidraw JSON → PNG via Playwright + headless Chromium
  *
  * All tools save output to ~/.pi/visuals/ for persistence across sessions.
@@ -19,8 +19,8 @@
  *     - uv + mflux installed (set DIFFUSION_CLI_DIR or use ~/diffusion-cli default)
  *     - HuggingFace token for gated models: /secrets configure HF_TOKEN
  *   render_diagram:
- *     - mmdc (optional, for PNG output): npm install -g @mermaid-js/mermaid-cli
- *     - Falls back to syntax-highlighted source if mmdc is not installed
+ *     - d2 CLI (installed via Nix or brew)
+ *     - Falls back to syntax-highlighted source if d2 is not installed
  *   render_excalidraw:
  *     - uv + playwright + chromium
  *     - First-time setup: cd <EXCALIDRAW_RENDER_DIR> && uv sync && uv run playwright install chromium
@@ -407,13 +407,13 @@ export default function renderExtension(pi: ExtensionAPI) {
 			if (!args?.trim()) {
 				// Show status instead of error
 				const mfluxOk = existsSync(join(DIFFUSION_CLI_DIR, ".venv", "bin", "mflux-generate"));
-				const mmdcOk  = hasCmd("mmdc");
+				const d2Ok    = hasCmd("d2");
 				const excaliOk = existsSync(join(EXCALIDRAW_RENDER_DIR, "uv.lock"));
 				const status = [
 					`**Visual generation status**`,
 					``,
 					`FLUX.1 (generate_image_local): ${mfluxOk ? "✅ ready" : `❌ not found — set up ${DIFFUSION_CLI_DIR}`}`,
-					`Mermaid (render_diagram): ${mmdcOk ? "✅ ready" : "⚠️  not installed — \`npm install -g @mermaid-js/mermaid-cli\`"}`,
+					`D2 (render_diagram): ${d2Ok ? "✅ ready" : "❌ not installed — \`nix profile install nixpkgs#d2\` or \`brew install d2\`"}`,
 					`Excalidraw (render_excalidraw): ${excaliOk ? "✅ ready" : `⚠️  not set up — \`cd ${EXCALIDRAW_RENDER_DIR} && uv sync && uv run playwright install chromium\``}`,
 					`Output directory: \`${VISUALS_DIR}\``,
 					``,

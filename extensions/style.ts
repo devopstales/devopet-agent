@@ -2,7 +2,7 @@
  * style — /style command for the Verdant design system
  *
  * Registers `/style [subcommand]` as an interactive command.
- * Subcommands: (none), palette, mermaid, excalidraw, check <file>
+ * Subcommands: (none), palette, d2, excalidraw, check <file>
  */
 
 import { readFileSync } from "node:fs";
