@@ -1813,7 +1813,7 @@ export default function (pi: ExtensionAPI) {
       if (!store) {
         ctx.shutdown();
         await new Promise<void>(resolve => {
-          setTimeout(() => { resolve(); process.exit(0); }, 30_000);
+          setTimeout(() => { resolve(); process.exit(0); }, 10_000);
         });
         return;
       }
@@ -1859,12 +1859,12 @@ export default function (pi: ExtensionAPI) {
       // Block until process.exit() is called by the shutdown flow.
       // The shutdown handler runs session_shutdown events (episode generation,
       // JSONL export) then calls process.exit(0). If that takes too long or
-      // hangs, force exit after 30s as a safety net.
+      // hangs, force exit after 10s as a safety net.
       await new Promise<void>(resolve => {
         setTimeout(() => {
           resolve();
           process.exit(0);
-        }, 30_000);
+        }, 10_000);
       });
     },
   });
