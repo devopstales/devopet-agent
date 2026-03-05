@@ -12,6 +12,7 @@
   "license": "ISC",
   "pi": {
     "extensions": [
+      "./extensions/auto-compact.ts",
       "./extensions/00-secrets",
       "./extensions/chronos",
       "./extensions/cleave",
@@ -30,7 +31,6 @@
       "./extensions/terminal-title.ts",
       "./extensions/view",
       "./extensions/web-search",
-      "./extensions/cleave",
       "./extensions/whoami.ts"
     ],
     "skills": [
