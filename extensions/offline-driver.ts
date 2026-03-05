@@ -19,9 +19,9 @@ const PROVIDER_NAME = "local";
 
 // Known models with metadata for ranking and display
 const KNOWN_MODELS: Record<string, { label: string; icon: string; contextWindow: number; maxTokens: number }> = {
-  "nemotron-3-nano:30b": { label: "Nemotron 3 Nano 30B", icon: "🏔️", contextWindow: 131072, maxTokens: 32768 },
-  "devstral-small-2:24b": { label: "Devstral Small 2 24B", icon: "🔧", contextWindow: 131072, maxTokens: 32768 },
-  "qwen3:30b": { label: "Qwen3 30B", icon: "🐉", contextWindow: 131072, maxTokens: 32768 },
+  "nemotron-3-nano:30b": { label: "Nemotron 3 Nano 30B", icon: "🏔️", contextWindow: 1048576, maxTokens: 32768 },
+  "devstral-small-2:24b": { label: "Devstral Small 2 24B", icon: "🔧", contextWindow: 393216, maxTokens: 32768 },
+  "qwen3:30b": { label: "Qwen3 30B", icon: "🐉", contextWindow: 262144, maxTokens: 32768 },
 };
 
 // Preferred offline models in priority order

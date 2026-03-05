@@ -43,7 +43,7 @@ Derived from `themes/default.json`. These are the ground-truth tokens.
 
 | Signal | Hex | Usage |
 |--------|-----|-------|
-| `green` | `#3daa8e` | Success, completion, positive |
+| `green` | `#34d399` | Success, completion, positive |
 | `red` | `#f44747` | Error, destructive, critical |
 | `orange` | `#e98100` | Warning, attention needed |
 | `yellow` | `#e9c400` | Caution, numbers, highlights |
@@ -206,7 +206,7 @@ group: Infrastructure {
 
 ```
 BACKGROUNDS          ACCENTS              SIGNALS
-bg:       #0c0e12    primary:    #3dc9b0  green:  #3daa8e
+bg:       #0c0e12    primary:    #3dc9b0  green:  #34d399
 cardBg:   #151c20    primaryMu:  #4a9e90  red:    #f44747
 surfaceBg:#1a2428    primaryBr:  #8ac4b8  orange: #e98100
                                           yellow: #e9c400

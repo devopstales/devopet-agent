@@ -54,7 +54,8 @@ export default function (pi: ExtensionAPI) {
     const freeBlocks = barWidth - totalFilled;
 
     // Severity color for conversation portion (based on TOTAL fullness)
-    const convColor = pct > 90 ? "error" : pct > 70 ? "warning" : "success";
+    // Normal: muted (informational, unobtrusive). Escalates to warning/error.
+    const convColor = pct > 90 ? "error" : pct > 70 ? "warning" : "muted";
 
     let bar = "";
     if (memBlocks > 0) bar += theme.fg("accent", "▓".repeat(memBlocks));
