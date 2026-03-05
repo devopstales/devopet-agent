@@ -471,6 +471,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# poppler — PDF rendering for the view extension
+# ---------------------------------------------------------------------------
+header "poppler (PDF Rendering)"
+
+if has_cmd pdftoppm; then
+    check_pass "poppler installed (pdftoppm available)"
+else
+    check_warn "poppler not found (view extension will skip PDF page rendering)"
+    if confirm "Install poppler?"; then
+        case "$PKG_MGR" in
+            brew)   pkg_install poppler ;;
+            apt)    pkg_install poppler-utils ;;
+            dnf)    pkg_install poppler-utils ;;
+            pacman) pkg_install poppler ;;
+        esac
+        if has_cmd pdftoppm; then
+            check_pass "poppler installed successfully"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Web Search — API key checks
 #
 # pi stores secrets as resolution recipes in ~/.pi/agent/secrets.json.
@@ -639,14 +661,25 @@ else
     cap_status "Web Search" "missing"
 fi
 
+# Design Tree
+cap_status "Design Tree" "ready"
+
+# MCP Bridge
+cap_status "MCP Bridge" "ready"
+
+# Secrets
+cap_status "Secrets" "ready"
+
 # Model Budget
 cap_status "Model Budget" "ready"
 
 # View
-if has_cmd pandoc; then
+if has_cmd pandoc && has_cmd pdftoppm; then
     cap_status "View (inline file viewer)" "ready"
+elif has_cmd pandoc || has_cmd pdftoppm; then
+    cap_status "View (partial — missing pandoc or poppler)" "partial"
 else
-    cap_status "View (no pandoc for docs)" "partial"
+    cap_status "View (no pandoc or poppler)" "partial"
 fi
 
 # Utilities
