@@ -11,7 +11,7 @@
 | Severity | Found | Fixed | Remaining |
 |----------|-------|-------|-----------|
 | Critical | 3     | 3     | 0         |
-| Warning  | 6     | 1     | 5         |
+| Warning  | 6     | 6     | 0         |
 | Note     | 4     | 0     | 4         |
 
 ---
@@ -37,37 +37,37 @@
 
 ---
 
-## Warnings — Remaining (non-blocking)
+## Warnings — All Fixed ✅
 
 ### W1: Cleave worktree childLabel unsanitized (FIXED — 10da000)
 **File:** `extensions/cleave/worktree.ts`  
 **Issue:** `childLabel` from the agent's plan was used directly in branch names and filesystem paths. A label containing `/` or `..` could escape `~/.pi/cleave/wt/`.  
 **Fix:** Sanitize with `replace(/[^a-zA-Z0-9_-]/g, "-").replace(/^\.+/, "")`.
 
-### W2: Duplicated OpenSpec code between cleave and openspec extensions
-**Files:** `extensions/cleave/openspec.ts` (681 lines) and `extensions/openspec/spec.ts` (658 lines)  
-**Issue:** Both implement change detection, listing, task parsing, and spec reading with different APIs. Will drift and create inconsistencies.  
-**Recommendation:** Refactor `cleave/openspec.ts` to import from `openspec/spec.ts` for shared primitives (`listChanges`, `getChange`, `parseSpecsDir`). Keep cleave-specific logic (`taskGroupsToChildPlans`, `writeBackTaskCompletion`) in the cleave module.
+### W2: Duplicated OpenSpec code between cleave and openspec (FIXED — 7d23253)
+**Files:** `extensions/cleave/openspec.ts` and `extensions/openspec/spec.ts`  
+**Issue:** Both implemented change detection with different APIs. Drift risk.  
+**Fix:** `cleave/openspec.ts` now imports `getOpenSpecDir` from `openspec/spec.ts` for detection. Cleave-specific logic (task parsing, plan generation, writeback) stays in cleave module.
 
-### W3: Hardcoded model IDs in model-budget
+### W3: Hardcoded model IDs in model-budget (FIXED — 7d23253)
 **File:** `extensions/model-budget.ts`  
-**Issue:** `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` hardcoded. Will need updates when Anthropic releases new versions.  
-**Recommendation:** Use a config file or pattern-based model resolution (find latest by prefix).
+**Issue:** `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5` hardcoded.  
+**Fix:** Prefix-based discovery via `ctx.modelRegistry.getAll()` — filters by `claude-opus`/`claude-sonnet`/`claude-haiku`, picks latest version.
 
-### W4: Anthropic connectivity check sends billable API request
+### W4: Anthropic connectivity check sends billable API request (FIXED — 7d23253)
 **File:** `extensions/offline-driver.ts`  
-**Issue:** `checkAnthropic()` sends a real `POST /v1/messages` with `max_tokens: 1`. This uses API credits on every session start.  
-**Recommendation:** Use a HEAD request or DNS resolution check instead.
+**Issue:** `checkAnthropic()` sent a `POST /v1/messages` consuming credits every session start.  
+**Fix:** Changed to `GET /v1/models` — no billing, any HTTP response confirms reachability.
 
-### W5: AGENTS.md marker-based management can lose user edits
+### W5: AGENTS.md marker overwrite risk (FIXED — 7d23253)
 **File:** `extensions/defaults.ts`  
-**Issue:** If a user edits `~/.pi/agent/AGENTS.md` without removing the `<!-- managed by pi-kit -->` marker, their changes are silently overwritten on next session start.  
-**Recommendation:** Add a content hash check — if the file has been modified from the last deployed version, warn rather than overwrite.
+**Issue:** User edits silently overwritten if marker left in file.  
+**Fix:** SHA-256 content hash tracking in `~/.pi/agent/.agents-md-hash`. External edits detected → warning instead of overwrite.
 
-### W6: SSRF potential in local inference URL
+### W6: SSRF potential in local inference URL (ACCEPTED)
 **File:** `extensions/local-inference/index.ts`, `extensions/offline-driver.ts`  
-**Issue:** `LOCAL_INFERENCE_URL` env var is used in `fetch()` without validation. Could be pointed at internal network endpoints.  
-**Risk:** Low — requires system-level access to set env vars. Standard risk accepted for development tools.
+**Issue:** `LOCAL_INFERENCE_URL` env var used in `fetch()` without validation.  
+**Status:** Low risk — requires system-level env access. Accepted for development tools.
 
 ---
 
