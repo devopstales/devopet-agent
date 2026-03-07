@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
-import { matchScenariosToChildren, type AssignedScenario } from "./workspace.js";
+import { matchScenariosToChildren } from "./workspace.js";
 import type { ChildPlan } from "./types.js";
 import type { OpenSpecContext } from "./openspec.js";
 
@@ -24,6 +24,7 @@ function makeChild(overrides: Partial<ChildPlan> & { label: string }): ChildPlan
 		description: overrides.description ?? overrides.label,
 		scope: overrides.scope ?? [],
 		dependsOn: [],
+		specDomains: [],
 		...overrides,
 	};
 }
@@ -148,6 +149,37 @@ describe("matchScenariosToChildren", () => {
 		const total = [...result.values()].reduce((sum, arr) => sum + arr.length, 0);
 		// All 3 scenarios assigned (2 by annotation, 1 orphan auto-injected)
 		assert.equal(total, 3);
+	});
+
+	it("domain prefix matching is segment-aware", () => {
+		const children = [
+			makeChild({ label: "relay", specDomains: ["relay"] }),
+			makeChild({ label: "admin", specDomains: ["relay-admin"] }),
+		];
+		const ctx = makeCtx([
+			{ domain: "relay-admin/permissions", requirement: "Admin perms", scenarios: ["S1"] },
+		]);
+		const result = matchScenariosToChildren(children, ctx);
+		// "relay" should NOT match "relay-admin/permissions" — different path segment
+		assert.equal(result.get(0)!.length, 0);
+		// "relay-admin" SHOULD match "relay-admin/permissions"
+		assert.equal(result.get(1)!.length, 1);
+	});
+
+	it("scope match requires word boundary, not substring", () => {
+		const children = [
+			makeChild({ label: "utils", scope: ["src/utils.py"] }),
+			makeChild({ label: "main", scope: ["src/main.py"] }),
+		];
+		const ctx = makeCtx([
+			{ domain: "core/utility", requirement: "Utility functions provide main functionality", scenarios: ["Given utility..."] },
+		]);
+		const result = matchScenariosToChildren(children, ctx);
+		// "utils.py" should NOT match "utility" — different word
+		assert.equal(result.get(0)!.length, 0);
+		// "main.py" should NOT match "main" as a casual English word... 
+		// actually "main.py" with word boundary WILL match "main" — this is a known limitation
+		// but at least "utils.py" won't match "utility"
 	});
 
 	it("orphan falls back to last child when no match at all", () => {

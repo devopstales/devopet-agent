@@ -234,7 +234,7 @@ export function taskGroupsToChildPlans(groups: TaskGroup[]): ChildPlan[] | null 
 			description,
 			scope,
 			dependsOn: [] as string[],
-			specDomains: group.specDomains?.length > 0 ? [...group.specDomains] : undefined,
+			specDomains: [...(group.specDomains ?? [])],
 		};
 	});
 

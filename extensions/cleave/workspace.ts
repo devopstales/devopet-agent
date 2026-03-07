@@ -243,9 +243,7 @@ function assignScenario(
 	const annotationMatches = children
 		.map((c, i) => ({ idx: i, child: c }))
 		.filter(({ child }) =>
-			child.specDomains?.some((d) =>
-				ss.domain === d || ss.domain.startsWith(d + "/") || d.startsWith(ss.domain + "/"),
-			),
+			child.specDomains.some((d) => domainMatches(d, ss.domain)),
 		)
 		.map(({ idx }) => idx);
 
@@ -261,8 +259,10 @@ function assignScenario(
 			const scopeClean = s.replace(/\*+/g, "").replace(/\/$/, "").toLowerCase();
 			const scopeParts = scopeClean.split("/");
 			const filename = scopeParts[scopeParts.length - 1];
-			// Check if the scenario text mentions this file or path
-			return filename.length > 3 && scenarioText.includes(filename);
+			if (filename.length <= 3) return false;
+			// Require word-boundary match to avoid "utils.py" matching "utility"
+			const pattern = new RegExp(`\\b${filename.replace(/\./g, "\\.")}\\b`);
+			return pattern.test(scenarioText);
 		});
 		if (hasMatch) scopeMatches.push(i);
 	}
@@ -330,6 +330,22 @@ function findOrphanTarget(
 	}
 
 	return bestIdx;
+}
+
+/**
+ * Check if an annotation domain matches a scenario domain.
+ * Matches exact or parent/child relationships using path segments:
+ *   "relay" matches "relay/rbac" (parent of scenario domain)
+ *   "relay/rbac" matches "relay" (child of scenario domain)
+ *   "relay" does NOT match "relay-admin" (different segment)
+ */
+function domainMatches(annotationDomain: string, scenarioDomain: string): boolean {
+	if (annotationDomain === scenarioDomain) return true;
+	// Annotation is parent: "relay" matches scenario "relay/rbac"
+	if (scenarioDomain.startsWith(annotationDomain + "/")) return true;
+	// Annotation is child: "relay/rbac" matches scenario "relay"
+	if (annotationDomain.startsWith(scenarioDomain + "/")) return true;
+	return false;
 }
 
 // ─── Design Section Builder ─────────────────────────────────────────────────

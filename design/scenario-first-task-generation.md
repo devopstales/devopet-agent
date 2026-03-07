@@ -1,5 +1,5 @@
 ---
-status: decided
+status: implemented
 tags: [cleave, openspec, task-generation]
 dependencies: []
 open_questions: []

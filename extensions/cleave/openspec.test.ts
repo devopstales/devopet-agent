@@ -281,6 +281,40 @@ describe("taskGroupsToChildPlans", () => {
 		const plans = taskGroupsToChildPlans(groups)!;
 		assert.ok(plans[0].scope.some((s) => s.includes("src/auth")));
 	});
+	it("carries specDomains from TaskGroup to ChildPlan", () => {
+		const groups = [
+			{ number: 1, title: "RBAC", tasks: [{ id: "1.1", text: "Add caps", done: false }], specDomains: ["relay/rbac"] },
+			{ number: 2, title: "Limits", tasks: [{ id: "2.1", text: "Add limits", done: false }], specDomains: ["relay/limits"] },
+		];
+		const plans = taskGroupsToChildPlans(groups)!;
+		assert.deepEqual(plans[0].specDomains, ["relay/rbac"]);
+		assert.deepEqual(plans[1].specDomains, ["relay/limits"]);
+	});
+
+	it("sets empty specDomains when TaskGroup has none", () => {
+		const groups = [
+			{ number: 1, title: "A", tasks: [{ id: "1.1", text: "a", done: false }] },
+			{ number: 2, title: "B", tasks: [{ id: "2.1", text: "b", done: false }] },
+		];
+		const plans = taskGroupsToChildPlans(groups)!;
+		assert.deepEqual(plans[0].specDomains, []);
+		assert.deepEqual(plans[1].specDomains, []);
+	});
+
+	it("merges specDomains when merging small groups (>4)", () => {
+		const groups = [
+			{ number: 1, title: "A", tasks: [{ id: "1.1", text: "a", done: false }], specDomains: ["d/a"] },
+			{ number: 2, title: "B", tasks: [{ id: "2.1", text: "b", done: false }], specDomains: ["d/b"] },
+			{ number: 3, title: "C", tasks: [{ id: "3.1", text: "c", done: false }], specDomains: ["d/c"] },
+			{ number: 4, title: "D", tasks: [{ id: "4.1", text: "d", done: false }], specDomains: ["d/d"] },
+			{ number: 5, title: "E", tasks: [{ id: "5.1", text: "e", done: false }], specDomains: ["d/e"] },
+		];
+		const plans = taskGroupsToChildPlans(groups)!;
+		assert.equal(plans.length, 4);
+		// All 5 domains should survive in the 4 plans
+		const allDomains = plans.flatMap((p) => p.specDomains);
+		assert.deepEqual(allDomains.sort(), ["d/a", "d/b", "d/c", "d/d", "d/e"]);
+	});
 });
 
 // ─── detectOpenSpec / listChanges / findExecutableChanges ────────────────────
