@@ -20,7 +20,7 @@ import { Type } from "@sinclair/typebox";
 
 import { assessDirective, PATTERNS } from "./assessment.js";
 import { detectConflicts, parseTaskResult } from "./conflicts.js";
-import { dispatchChildren } from "./dispatcher.js";
+import { dispatchChildren, resolveExecuteModel } from "./dispatcher.js";
 import {
 	detectOpenSpec,
 	findExecutableChanges,
@@ -31,9 +31,15 @@ import {
 	type OpenSpecContext,
 } from "./openspec.js";
 import { buildPlannerPrompt, getRepoTree, parsePlanResponse } from "./planner.js";
+import {
+	matchSkillsToAllChildren,
+	resolveSkillPaths,
+	getPreferredTier,
+} from "./skills.js";
 import type { CleaveState, ChildState, SplitPlan } from "./types.js";
 import { DEFAULT_CONFIG } from "./types.js";
 import { initWorkspace, readTaskFiles, saveState } from "./workspace.js";
+import type { SkillDirective } from "./workspace.js";
 import {
 	cleanupWorktrees,
 	createWorktree,
@@ -994,9 +1000,65 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				}
 			}
 
+			// ── SKILL MATCHING ─────────────────────────────────────────
+			// Initialize skills on children (parsePlanResponse may not set them)
+			for (const child of plan.children) {
+				child.skills = child.skills ?? [];
+			}
+
+			// Auto-match skills from scope patterns for children without annotations
+			matchSkillsToAllChildren(plan.children);
+
+			// Resolve skill names to absolute SKILL.md paths
+			const allSkillNames = new Set(plan.children.flatMap((c) => c.skills));
+			const { resolved: resolvedPaths } = resolveSkillPaths([...allSkillNames]);
+
+			// Build per-child skill directive map
+			const resolvedSkillMap = new Map<number, SkillDirective[]>();
+			for (let i = 0; i < plan.children.length; i++) {
+				const child = plan.children[i];
+				const directives: SkillDirective[] = [];
+				for (const skillName of child.skills) {
+					const found = resolvedPaths.find((r) => r.skill === skillName);
+					if (found) {
+						directives.push({ skill: found.skill, path: found.path });
+					}
+				}
+				resolvedSkillMap.set(i, directives);
+			}
+
 			// ── PREFLIGHT ──────────────────────────────────────────────
 			await ensureCleanWorktree(pi, repoPath);
 			const baseBranch = await getCurrentBranch(pi, repoPath);
+
+			// ── MODEL RESOLUTION ───────────────────────────────────────
+			// Determine local model availability (needed for model resolution)
+			let localModelAvailable = false;
+			let localModel: string | undefined;
+			if (preferLocal) {
+				try {
+					const ollamaResult = await pi.exec("ollama", ["list", "--json"], { timeout: 5_000 });
+					if (ollamaResult.code === 0) {
+						const models = JSON.parse(ollamaResult.stdout);
+						if (Array.isArray(models?.models) && models.models.length > 0) {
+							localModel = models.models[0].name;
+							localModelAvailable = true;
+						}
+					}
+				} catch {
+					// No local model available
+				}
+			}
+
+			// Resolve execute model for each child
+			for (const child of plan.children) {
+				child.executeModel = resolveExecuteModel(
+					child,
+					preferLocal,
+					localModelAvailable,
+					getPreferredTier,
+				);
+			}
 
 			// ── INITIALIZE STATE ───────────────────────────────────────
 			const state: CleaveState = {
@@ -1013,15 +1075,16 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 					dependsOn: c.dependsOn,
 					status: "pending" as const,
 					branch: `cleave/${i}-${c.label}`,
-					backend: preferLocal ? "local" as const : "cloud" as const,
+					backend: c.executeModel === "local" ? "local" as const : "cloud" as const,
+					executeModel: c.executeModel,
 				})),
 				workspacePath: "",
 				totalDurationSec: 0,
 				createdAt: new Date().toISOString(),
 			};
 
-			// Create workspace — pass OpenSpec context to enrich child task files
-			const wsPath = initWorkspace(state, plan, repoPath, openspecCtx);
+			// Create workspace — pass OpenSpec context and resolved skills to enrich child task files
+			const wsPath = initWorkspace(state, plan, repoPath, openspecCtx, resolvedSkillMap);
 			state.workspacePath = wsPath;
 
 			// ── CREATE WORKTREES ───────────────────────────────────────
@@ -1044,24 +1107,7 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			saveState(state);
 
 			// ── DISPATCH ───────────────────────────────────────────────
-			// Determine local model if preferLocal
-			let localModel: string | undefined;
-			if (preferLocal) {
-				try {
-					// Check for available local models via Ollama
-					const ollamaResult = await pi.exec("ollama", ["list", "--json"], { timeout: 5_000 });
-					if (ollamaResult.code === 0) {
-						// Just use the first available model — the dispatcher will use it
-						// for children marked as "local" backend
-						const models = JSON.parse(ollamaResult.stdout);
-						if (Array.isArray(models?.models) && models.models.length > 0) {
-							localModel = models.models[0].name;
-						}
-					}
-				} catch {
-					// No local model available — all children go cloud
-				}
-			}
+			// localModel was already resolved in MODEL RESOLUTION section above
 
 			onUpdate?.({
 				content: [{ type: "text", text: `Dispatching ${state.children.length} children...` }],

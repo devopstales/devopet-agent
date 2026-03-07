@@ -42,6 +42,9 @@ export interface AssessmentFlags {
 
 // ─── Planning ────────────────────────────────────────────────────────────────
 
+/** Model tier for child execution — maps to pi's --model flag */
+export type ModelTier = "local" | "haiku" | "sonnet" | "opus";
+
 export interface ChildPlan {
 	label: string;
 	description: string;
@@ -49,6 +52,10 @@ export interface ChildPlan {
 	dependsOn: string[];
 	/** Spec domains this child owns (from <!-- specs: ... --> annotation). Empty if none. */
 	specDomains: string[];
+	/** Skill names matched to this child (from <!-- skills: ... --> annotation or auto-matched from scope). Empty if none. */
+	skills: string[];
+	/** Resolved execution model tier. Set by model resolution before dispatch. */
+	executeModel?: ModelTier;
 }
 
 export interface SplitPlan {
@@ -79,6 +86,8 @@ export interface ChildState {
 	durationSec?: number;
 	/** "local" | "cloud" — which execution backend was used */
 	backend?: "local" | "cloud";
+	/** Resolved execution model tier for this child */
+	executeModel?: string;
 }
 
 export type CleavePhase =
