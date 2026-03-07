@@ -80,15 +80,26 @@ export class DashboardFooter implements Component {
   render(width: number): string[] {
     debug("dashboard", "render", {
       mode: this.dashState.mode,
+      width,
       hasDT: !!sharedState.designTree,
       hasOS: !!sharedState.openspec,
       hasCL: !!sharedState.cleave,
-      osChanges: (sharedState.openspec as any)?.changes?.length ?? 0,
+      hasCtx: !!this.ctxRef,
+      hasTheme: !!this.theme,
+      themeFgType: typeof this.theme?.fg,
     });
-    if (this.dashState.mode === "raised") {
-      return this.renderRaised(width);
+    try {
+      if (this.dashState.mode === "raised") {
+        return this.renderRaised(width);
+      }
+      return this.renderCompact(width);
+    } catch (err: any) {
+      debug("dashboard", "render:ERROR", {
+        error: err?.message,
+        stack: err?.stack?.split("\n").slice(0, 5).join(" | "),
+      });
+      return [`[dashboard render error: ${err?.message}]`];
     }
-    return this.renderCompact(width);
   }
 
   // ── Compact Mode (Layer 0) ────────────────────────────────────
@@ -457,6 +468,12 @@ export class DashboardFooter implements Component {
   // ── Original Footer Data ──────────────────────────────────────
 
   private renderFooterData(width: number): string[] {
+    debug("dashboard", "renderFooterData:enter", {
+      width,
+      hasCtx: !!this.ctxRef,
+      hasTheme: !!this.theme,
+      hasBranch: !!this.footerData?.getGitBranch?.(),
+    });
     const theme = this.theme;
     const ctx = this.ctxRef;
     const lines: string[] = [];

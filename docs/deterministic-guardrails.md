@@ -1,7 +1,7 @@
 ---
 id: deterministic-guardrails
 title: Deterministic Guardrail Integration — Baking Static Analysis into the Feature Lifecycle
-status: implementing
+status: decided
 dependencies: [extension-type-safety]
 tags: [quality, guardrails, lifecycle, dx]
 open_questions: []
