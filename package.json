@@ -35,6 +35,7 @@
       "./extensions/web-search",
       "./extensions/design-tree",
       "./extensions/dashboard",
+      "./extensions/tool-profile",
       "./extensions/vault",
     "./extensions/version-check.ts"
     ],
