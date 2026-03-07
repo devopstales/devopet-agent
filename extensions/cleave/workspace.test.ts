@@ -1,11 +1,14 @@
 /**
- * Tests for cleave/workspace — scenario matching and orphan detection.
+ * Tests for cleave/workspace — scenario matching, orphan detection,
+ * skill injection, and model resolution.
  */
 
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
-import { matchScenariosToChildren } from "./workspace.js";
-import type { ChildPlan } from "./types.js";
+import { matchScenariosToChildren, generateTaskFile, buildSkillSection } from "./workspace.js";
+import type { SkillDirective } from "./workspace.js";
+import { buildChildPrompt, resolveExecuteModel, mapModelTierToFlag } from "./dispatcher.js";
+import type { ChildPlan, ModelTier } from "./types.js";
 import type { OpenSpecContext } from "./openspec.js";
 
 function makeCtx(scenarios: OpenSpecContext["specScenarios"]): OpenSpecContext {
@@ -195,5 +198,267 @@ describe("matchScenariosToChildren", () => {
 		// No word overlap, no scope — should go to last child
 		assert.equal(result.get(2)!.length, 1);
 		assert.equal(result.get(2)![0].crossCutting, true);
+	});
+});
+
+// ─── generateTaskFile — Specialist Skills section ───────────────────────────
+
+describe("generateTaskFile", () => {
+	it("includes Specialist Skills section when skills are provided", () => {
+		const child = makeChild({ label: "models", scope: ["src/models/*.py"], description: "Build data models" });
+		const skills: SkillDirective[] = [
+			{ skill: "python", path: "/home/user/skills/python/SKILL.md" },
+			{ skill: "oci", path: "/home/user/skills/oci/SKILL.md" },
+		];
+		const result = generateTaskFile(0, child, [child], "Build the thing", null, [], skills);
+
+		assert.ok(result.includes("## Specialist Skills"), "Should contain Specialist Skills heading");
+		assert.ok(result.includes("**python**"), "Should list python skill");
+		assert.ok(result.includes("**oci**"), "Should list oci skill");
+		assert.ok(result.includes("/home/user/skills/python/SKILL.md"), "Should contain python path");
+		assert.ok(result.includes("/home/user/skills/oci/SKILL.md"), "Should contain oci path");
+		assert.ok(result.includes("Before starting, read these skill files"), "Should have reading instruction");
+	});
+
+	it("omits Specialist Skills section when no skills", () => {
+		const child = makeChild({ label: "models", scope: ["README.md"], description: "Update docs" });
+		const result = generateTaskFile(0, child, [child], "Update docs", null, [], []);
+
+		assert.ok(!result.includes("## Specialist Skills"), "Should NOT contain Specialist Skills heading");
+	});
+
+	it("omits Specialist Skills section when skills param is undefined", () => {
+		const child = makeChild({ label: "models", scope: ["README.md"], description: "Update docs" });
+		const result = generateTaskFile(0, child, [child], "Update docs", null, [], undefined);
+
+		assert.ok(!result.includes("## Specialist Skills"), "Should NOT contain Specialist Skills heading");
+	});
+
+	it("Specialist Skills appears before Design Context", () => {
+		const child = makeChild({ label: "rbac", specDomains: ["auth/rbac"], description: "RBAC impl" });
+		const ctx = makeCtx([
+			{ domain: "auth/rbac", requirement: "Check perms", scenarios: ["Given a user..."] },
+		]);
+		const openspecCtx: OpenSpecContext = {
+			changePath: "/tmp/test",
+			designContent: null,
+			decisions: ["Use JWT tokens"],
+			fileChanges: [],
+			specScenarios: ctx.specScenarios,
+			apiContract: null,
+		};
+		const skills: SkillDirective[] = [
+			{ skill: "python", path: "/skills/python/SKILL.md" },
+		];
+
+		// Generate with both skills and scenarios
+		const scenarios = matchScenariosToChildren([child], openspecCtx);
+		const assigned = scenarios.get(0) ?? [];
+		const result = generateTaskFile(0, child, [child], "Impl RBAC", openspecCtx, assigned, skills);
+
+		const skillIdx = result.indexOf("## Specialist Skills");
+		const designIdx = result.indexOf("## Design Context");
+
+		assert.ok(skillIdx > 0, "Should have Specialist Skills section");
+		assert.ok(designIdx > 0, "Should have Design Context section");
+		assert.ok(skillIdx < designIdx, "Specialist Skills should appear before Design Context");
+	});
+
+	it("skill paths contain absolute paths for agent file reading", () => {
+		const child = makeChild({ label: "api", scope: ["src/api.rs"], description: "Build API" });
+		const skills: SkillDirective[] = [
+			{ skill: "rust", path: "/Users/dev/.pi/agent/skills/rust/SKILL.md" },
+		];
+		const result = generateTaskFile(0, child, [child], "Build API", null, [], skills);
+
+		// Verify the path is absolute and looks actionable
+		assert.ok(result.includes("`/Users/dev/.pi/agent/skills/rust/SKILL.md`"), "Path should be absolute and code-quoted");
+	});
+});
+
+// ─── buildSkillSection ──────────────────────────────────────────────────────
+
+describe("buildSkillSection", () => {
+	it("returns empty string for empty skills", () => {
+		assert.equal(buildSkillSection([]), "");
+	});
+
+	it("returns empty string for undefined", () => {
+		assert.equal(buildSkillSection(undefined), "");
+	});
+
+	it("renders skill entries with name and path", () => {
+		const result = buildSkillSection([
+			{ skill: "python", path: "/a/b/SKILL.md" },
+			{ skill: "rust", path: "/c/d/SKILL.md" },
+		]);
+		assert.ok(result.includes("## Specialist Skills"));
+		assert.ok(result.includes("**python**: `/a/b/SKILL.md`"));
+		assert.ok(result.includes("**rust**: `/c/d/SKILL.md`"));
+	});
+});
+
+// ─── buildChildPrompt — skill directives ────────────────────────────────────
+
+describe("buildChildPrompt", () => {
+	it("adds skill contract item when task file has Specialist Skills section", () => {
+		const taskContent = [
+			"# Task 0: models",
+			"",
+			"## Specialist Skills",
+			"",
+			"- **python**: `/skills/python/SKILL.md`",
+			"",
+			"## Mission",
+			"Build models",
+		].join("\n");
+
+		const prompt = buildChildPrompt(taskContent, "Build the thing", "/workspace");
+
+		assert.ok(prompt.includes("7. **Skills**"), "Should add skills contract item");
+		assert.ok(prompt.includes("read` tool to load"), "Should instruct to use read tool");
+		assert.ok(prompt.includes("SKILL.md file before starting"), "Should mention reading before starting");
+	});
+
+	it("does NOT add skill contract item when no Specialist Skills section", () => {
+		const taskContent = [
+			"# Task 0: models",
+			"",
+			"## Mission",
+			"Build models",
+		].join("\n");
+
+		const prompt = buildChildPrompt(taskContent, "Build the thing", "/workspace");
+
+		assert.ok(!prompt.includes("7. **Skills**"), "Should NOT add skills contract item");
+	});
+
+	it("preserves the sandwich pattern: contract, directive, task, reminder", () => {
+		const taskContent = "# Task 0: test\n\n## Mission\nDo stuff";
+		const prompt = buildChildPrompt(taskContent, "Test directive", "/ws");
+
+		const contractIdx = prompt.indexOf("## Contract");
+		const directiveIdx = prompt.indexOf("## Root Directive");
+		const taskIdx = prompt.indexOf("## Your Task");
+		const reminderIdx = prompt.indexOf("## REMINDER");
+
+		assert.ok(contractIdx < directiveIdx, "Contract before Directive");
+		assert.ok(directiveIdx < taskIdx, "Directive before Task");
+		assert.ok(taskIdx < reminderIdx, "Task before Reminder");
+	});
+});
+
+// ─── resolveExecuteModel ────────────────────────────────────────────────────
+
+describe("resolveExecuteModel", () => {
+	it("defaults to sonnet when no hints", () => {
+		const result = resolveExecuteModel(
+			{ skills: [], executeModel: undefined },
+			false,
+			false,
+		);
+		assert.equal(result, "sonnet");
+	});
+
+	it("returns local when preferLocal is true and local model available", () => {
+		const result = resolveExecuteModel(
+			{ skills: ["python"], executeModel: undefined },
+			true,
+			true,
+			() => "sonnet",
+		);
+		assert.equal(result, "local");
+	});
+
+	it("does NOT return local when local model unavailable even if preferred", () => {
+		const result = resolveExecuteModel(
+			{ skills: [], executeModel: undefined },
+			true,
+			false,
+		);
+		assert.equal(result, "sonnet");
+	});
+
+	it("explicit executeModel takes precedence over skill tier", () => {
+		const result = resolveExecuteModel(
+			{ skills: ["python"], executeModel: "opus" },
+			false,
+			false,
+			() => "sonnet",
+		);
+		assert.equal(result, "opus");
+	});
+
+	it("skill tier used when no explicit executeModel", () => {
+		const result = resolveExecuteModel(
+			{ skills: ["complex-arch"], executeModel: undefined },
+			false,
+			false,
+			(skills) => skills.includes("complex-arch") ? "opus" : undefined,
+		);
+		assert.equal(result, "opus");
+	});
+
+	it("local override beats explicit executeModel", () => {
+		const result = resolveExecuteModel(
+			{ skills: [], executeModel: "opus" },
+			true,
+			true,
+		);
+		assert.equal(result, "local");
+	});
+
+	it("handles undefined skills gracefully", () => {
+		const result = resolveExecuteModel(
+			{ skills: undefined, executeModel: undefined },
+			false,
+			false,
+			() => "opus",
+		);
+		assert.equal(result, "sonnet");
+	});
+
+	it("handles empty skills with tier function", () => {
+		const result = resolveExecuteModel(
+			{ skills: [], executeModel: undefined },
+			false,
+			false,
+			() => "opus",
+		);
+		assert.equal(result, "sonnet");
+	});
+
+	it("skill tier function returning undefined falls through to default", () => {
+		const result = resolveExecuteModel(
+			{ skills: ["unknown-skill"], executeModel: undefined },
+			false,
+			false,
+			() => undefined,
+		);
+		assert.equal(result, "sonnet");
+	});
+});
+
+// ─── mapModelTierToFlag ─────────────────────────────────────────────────────
+
+describe("mapModelTierToFlag", () => {
+	it("maps local to localModel name", () => {
+		assert.equal(mapModelTierToFlag("local", "llama3:8b"), "llama3:8b");
+	});
+
+	it("maps local to undefined when no localModel available", () => {
+		assert.equal(mapModelTierToFlag("local"), undefined);
+	});
+
+	it("maps haiku to 'haiku'", () => {
+		assert.equal(mapModelTierToFlag("haiku"), "haiku");
+	});
+
+	it("maps sonnet to undefined (default, no --model needed)", () => {
+		assert.equal(mapModelTierToFlag("sonnet"), undefined);
+	});
+
+	it("maps opus to 'opus'", () => {
+		assert.equal(mapModelTierToFlag("opus"), "opus");
 	});
 });

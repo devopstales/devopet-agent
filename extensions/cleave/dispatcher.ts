@@ -20,7 +20,7 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { ChildState, CleaveState } from "./types.js";
+import type { ChildState, CleaveState, ModelTier } from "./types.js";
 import { computeDispatchWaves } from "./planner.js";
 import { saveState } from "./workspace.js";
 
@@ -46,33 +46,101 @@ export function extractResultSection(content: string): string {
 	return nextHeading === -1 ? afterResult : afterResult.slice(0, nextHeading);
 }
 
+// ─── Model resolution ───────────────────────────────────────────────────────
+
+/**
+ * Resolve the execution model tier for a child.
+ *
+ * Resolution order (first non-null wins):
+ * 1. Local override — if preferLocal is true and a local model is available
+ * 2. Explicit annotation — child.executeModel already set (from plan or annotation)
+ * 3. Skill tier hint — highest preferredTier from matched skills
+ * 4. Default — sonnet
+ */
+export function resolveExecuteModel(
+	child: { skills?: string[]; executeModel?: ModelTier },
+	preferLocal: boolean,
+	localModelAvailable: boolean,
+	getPreferredTierFn?: (skills: string[]) => ModelTier | undefined,
+): ModelTier {
+	// 1. Local override takes precedence over everything
+	if (preferLocal && localModelAvailable) return "local";
+
+	// 2. Explicit annotation on the child plan
+	if (child.executeModel) return child.executeModel;
+
+	// 3. Skill-based tier hint
+	if (child.skills && child.skills.length > 0 && getPreferredTierFn) {
+		const tier = getPreferredTierFn(child.skills);
+		if (tier) return tier;
+	}
+
+	// 4. Default
+	return "sonnet";
+}
+
+/**
+ * Map a model tier name to the --model flag value for the pi CLI.
+ *
+ * Returns undefined for "sonnet" (pi's default — no flag needed).
+ */
+export function mapModelTierToFlag(
+	tier: ModelTier,
+	localModel?: string,
+): string | undefined {
+	switch (tier) {
+		case "local":
+			return localModel;
+		case "haiku":
+			return "haiku";
+		case "opus":
+			return "opus";
+		case "sonnet":
+		default:
+			return undefined; // default — no --model flag
+	}
+}
+
 // ─── Child prompt construction ──────────────────────────────────────────────
 
 /**
  * Build the prompt sent to a child pi process.
  *
  * Uses a sandwich pattern: contract first, context middle, contract reminder last.
+ * Skill directives (D2) instruct the child to read SKILL.md files for
+ * domain-specific guidance rather than inlining them (200+ lines each).
  */
-function buildChildPrompt(
+export function buildChildPrompt(
 	taskFileContent: string,
 	rootDirective: string,
 	workspacePath: string,
 ): string {
-	const contract = `## Contract
+	// Detect if the task file has a Specialist Skills section
+	const hasSkills = taskFileContent.includes("## Specialist Skills");
 
-You are a child agent managed by the Cleave orchestrator. Follow these rules:
+	const contractLines = [
+		"## Contract",
+		"",
+		"You are a child agent managed by the Cleave orchestrator. Follow these rules:",
+		"",
+		"1. **Scope**: Only work on files within your task scope. Do not modify files outside it.",
+		"2. **Task file**: Update your task file when done:",
+		"   - Set **Status:** to exactly one of: SUCCESS, PARTIAL, FAILED, or NEEDS_DECOMPOSITION",
+		"   - Fill in Summary, Artifacts, Decisions Made, Interfaces Published",
+		"3. **Commits**: Commit your work with clear messages. Do not push.",
+		"4. **No side effects**: Do not install global packages or modify system state.",
+		"5. **Verification**: Run tests or checks and report results in the Verification section.",
+		`6. **Workspace**: ${workspacePath}`,
+	];
 
-1. **Scope**: Only work on files within your task scope. Do not modify files outside it.
-2. **Task file**: Update your task file when done:
-   - Set **Status:** to exactly one of: SUCCESS, PARTIAL, FAILED, or NEEDS_DECOMPOSITION
-   - Fill in Summary, Artifacts, Decisions Made, Interfaces Published
-3. **Commits**: Commit your work with clear messages. Do not push.
-4. **No side effects**: Do not install global packages or modify system state.
-5. **Verification**: Run tests or checks and report results in the Verification section.
-6. **Workspace**: ${workspacePath}`;
+	if (hasSkills) {
+		contractLines.push(
+			"7. **Skills**: Your task includes a Specialist Skills section. Use the `read` tool to load each listed SKILL.md file before starting work. Follow the conventions and patterns described in those skill files.",
+		);
+	}
 
 	return [
-		contract,
+		contractLines.join("\n"),
 		"",
 		"## Root Directive",
 		"",
@@ -270,6 +338,10 @@ export async function dispatchChildren(
 
 /**
  * Dispatch a single child: read task file, spawn pi, harvest result.
+ *
+ * Per-child model routing: each child's `executeModel` tier determines
+ * which model is passed via `--model`. The `localModel` param provides
+ * the Ollama model name for children with "local" tier.
  */
 async function dispatchSingleChild(
 	pi: ExtensionAPI,
@@ -285,9 +357,12 @@ async function dispatchSingleChild(
 	child.status = "running";
 	child.startedAt = new Date().toISOString();
 
-	// Determine execution backend
-	const useLocal = localModel && child.backend === "local";
-	child.backend = useLocal ? "local" : "cloud";
+	// Resolve the actual --model flag from the child's tier
+	const modelFlag = mapModelTierToFlag(
+		(child.executeModel as ModelTier) ?? "sonnet",
+		localModel,
+	);
+	child.backend = child.executeModel === "local" ? "local" : "cloud";
 
 	// Read the task file
 	const taskFilePath = join(state.workspacePath, `${child.childId}-task.md`);
@@ -306,13 +381,13 @@ async function dispatchSingleChild(
 	// Determine working directory
 	const cwd = child.worktreePath || state.repoPath;
 
-	// Spawn
+	// Spawn with per-child model
 	const result = await spawnChild(
 		prompt,
 		cwd,
 		timeoutMs,
 		signal,
-		useLocal ? localModel : undefined,
+		modelFlag,
 	);
 
 	child.completedAt = new Date().toISOString();
