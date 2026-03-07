@@ -3,6 +3,27 @@
 All notable changes to pi-kit are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-03-07
+
+### Added
+
+- **Scenario-first task generation** — cleave child tasks are now matched to spec scenarios using 3-tier priority: spec-domain annotations (`<!-- specs: domain -->`) → file scope matching → word-overlap fallback. Prevents cross-cutting spec scenarios (e.g., RBAC enforcement) from falling between children when tasks are split by file layer.
+- **Orphan scenario auto-injection** — any spec scenario matching zero children is automatically injected into the closest child with a `⚠️ CROSS-CUTTING` marker for observability.
+- **`TaskGroup.specDomains`** — parsed from `<!-- specs: ... -->` HTML comments in tasks.md group headers for deterministic scenario-to-child mapping.
+- **`matchScenariosToChildren`** — exported function for pre-computing scenario assignments across all children with orphan detection.
+
+### Fixed
+
+- Domain matching is now path-segment-aware (`relay` no longer matches `relay-admin/permissions`).
+- Scope matching uses word-boundary regex instead of substring (prevents `utils.py` matching "utility").
+- `ChildPlan.specDomains` normalized to required `string[]` (was optional, causing type inconsistency with `TaskGroup`).
+
+### Changed
+
+- `buildDesignSection` in workspace.ts uses pre-computed scenario assignments instead of per-child word-overlap heuristic.
+- `skills/openspec/SKILL.md` updated with scenario-first grouping guidance and annotation examples.
+- `skills/cleave/SKILL.md` updated with annotation syntax and orphan behavior documentation.
+
 ## [0.1.0] - 2026-03-07
 
 Initial public release.
