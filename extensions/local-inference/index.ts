@@ -20,6 +20,7 @@
  *   The abstraction layer supports any OpenAI-compatible backend. Default: Ollama.
  */
 
+import { execSync, spawn, type ChildProcess } from "node:child_process";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "../lib/typebox-helpers";
