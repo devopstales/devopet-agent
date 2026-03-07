@@ -2,6 +2,14 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import {
+  KNOWN_MODELS,
+  PREFERRED_ORDER,
+  PREFERRED_ORDER_CODE,
+} from "./lib/local-models.ts";
+
+// Re-export so existing importers (effort, cleave) continue to work.
+export { PREFERRED_ORDER, PREFERRED_ORDER_CODE };
 
 /**
  * Offline Driver Extension
@@ -12,92 +20,12 @@ import { Type } from "@sinclair/typebox";
  *
  * Registers /offline and /online commands plus a switch_to_offline_driver tool
  * the agent can self-invoke when it detects connectivity issues.
+ *
+ * Model registry and preference lists live in extensions/lib/local-models.ts.
  */
 
 const OLLAMA_URL = process.env.LOCAL_INFERENCE_URL || "http://localhost:11434";
 const PROVIDER_NAME = "local";
-
-// Known models with metadata for ranking and display.
-// Covers the full size spectrum so any MacBook from 8GB to 128GB gets sensible defaults.
-// Context window notes: phi4:14b=16K (limited for this harness), mistral:7b/codestral=32K.
-// Models with contextWindow < 32768 will struggle with deep agent sessions.
-const KNOWN_MODELS: Record<string, { label: string; icon: string; contextWindow: number; maxTokens: number }> = {
-  // ── 70B tier (64GB+) ──────────────────────────────────────────────────────
-  "qwen2.5:72b":           { label: "Qwen2.5 72B",            icon: "🧠", contextWindow: 131072,  maxTokens: 32768 },
-  "llama3.3:70b":          { label: "Llama 3.3 70B",          icon: "🦙", contextWindow: 131072,  maxTokens: 32768 },
-  "llama3.1:70b":          { label: "Llama 3.1 70B",          icon: "🦙", contextWindow: 131072,  maxTokens: 32768 },
-  // ── 32B tier (32GB+, or 24GB at Q4) ──────────────────────────────────────
-  "qwen3:32b":             { label: "Qwen3 32B",              icon: "🐉", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5:32b":           { label: "Qwen2.5 32B",            icon: "🧠", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5-coder:32b":     { label: "Qwen2.5-Coder 32B",      icon: "💻", contextWindow: 131072,  maxTokens: 32768 },
-  // ── 30B tier (24GB+ at Q4) ───────────────────────────────────────────────
-  "qwen3:30b":             { label: "Qwen3 30B",              icon: "🐲", contextWindow: 131072,  maxTokens: 32768 },
-  "nemotron-3-nano:30b":   { label: "Nemotron 3 Nano 30B",    icon: "🏔️", contextWindow: 1048576, maxTokens: 32768 },
-  // ── 22–27B tier (16GB+ at Q4, 32GB at Q8) ───────────────────────────────
-  "gemma3:27b":            { label: "Gemma3 27B",             icon: "♊", contextWindow: 131072,  maxTokens: 32768 },
-  "mistral-small":         { label: "Mistral Small 22B",      icon: "🌬️", contextWindow: 32768,   maxTokens: 32768 },
-  "codestral:22b":         { label: "Codestral 22B",          icon: "💻", contextWindow: 32768,   maxTokens: 32768 },
-  "devstral-small-2:24b":  { label: "Devstral Small 2 24B",   icon: "⚙️", contextWindow: 393216,  maxTokens: 32768 },
-  // ── 14B tier (16GB+) ─────────────────────────────────────────────────────
-  "qwen3:14b":             { label: "Qwen3 14B",              icon: "🐉", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5:14b":           { label: "Qwen2.5 14B",            icon: "🧠", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5-coder:14b":     { label: "Qwen2.5-Coder 14B",      icon: "💻", contextWindow: 131072,  maxTokens: 32768 },
-  "mistral-nemo":          { label: "Mistral Nemo 12B",       icon: "🌬️", contextWindow: 131072,  maxTokens: 32768 },
-  // ── 7–9B tier (8GB+) ─────────────────────────────────────────────────────
-  "qwen3:8b":              { label: "Qwen3 8B",               icon: "🐉", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5:7b":            { label: "Qwen2.5 7B",             icon: "🧠", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5-coder:7b":      { label: "Qwen2.5-Coder 7B",       icon: "💻", contextWindow: 131072,  maxTokens: 32768 },
-  "llama3.1:8b":           { label: "Llama 3.1 8B",           icon: "🦙", contextWindow: 131072,  maxTokens: 32768 },
-  "llama3.2:11b":          { label: "Llama 3.2 11B",          icon: "🦙", contextWindow: 131072,  maxTokens: 32768 },
-  "gemma3:9b":             { label: "Gemma3 9B",              icon: "♊", contextWindow: 131072,  maxTokens: 32768 },
-  "phi4-mini":             { label: "Phi-4 Mini 3.8B",        icon: "Φ",  contextWindow: 131072,  maxTokens: 32768 },
-  "mistral:7b":            { label: "Mistral 7B",             icon: "🌬️", contextWindow: 32768,   maxTokens: 32768 },
-  // ── 3–4B tier (8GB, last useful resort) ──────────────────────────────────
-  "qwen3:4b":              { label: "Qwen3 4B",               icon: "🐉", contextWindow: 131072,  maxTokens: 32768 },
-  "qwen2.5-coder:3b":      { label: "Qwen2.5-Coder 3B",       icon: "💻", contextWindow: 131072,  maxTokens: 32768 },
-  "gemma3:4b":             { label: "Gemma3 4B",              icon: "♊", contextWindow: 131072,  maxTokens: 32768 },
-  "llama3.2:3b":           { label: "Llama 3.2 3B",           icon: "🦙", contextWindow: 131072,  maxTokens: 32768 },
-  // ── Sub-3B (emergency fallback only — too small for reliable orchestration)
-  "qwen3:1.7b":            { label: "Qwen3 1.7B",             icon: "🐣", contextWindow: 131072,  maxTokens: 8192  },
-  "llama3.2:1b":           { label: "Llama 3.2 1B",           icon: "🐣", contextWindow: 131072,  maxTokens: 8192  },
-  "qwen3:0.6b":            { label: "Qwen3 0.6B",             icon: "🐣", contextWindow: 131072,  maxTokens: 8192  },
-};
-
-// General orchestration preference — quality-first so the best installed model wins.
-// On 64GB: 72B/70B runs. On 32GB: 32B. On 24GB: 14B Q8. On 16GB: 8B Q8. On 8GB: 4B.
-// Users install what fits their hardware; this list handles the selection automatically.
-export const PREFERRED_ORDER = [
-  // 70B tier
-  "qwen2.5:72b", "llama3.3:70b", "llama3.1:70b",
-  // 32B tier
-  "qwen3:32b", "qwen2.5:32b",
-  // 30B tier
-  "qwen3:30b", "nemotron-3-nano:30b",
-  // 22–27B tier
-  "gemma3:27b", "devstral-small-2:24b", "mistral-small",
-  // 14B tier
-  "qwen3:14b", "qwen2.5:14b", "mistral-nemo",
-  // 7–9B tier
-  "qwen3:8b", "llama3.2:11b", "gemma3:9b", "qwen2.5:7b", "llama3.1:8b", "mistral:7b",
-  // 4B tier
-  "qwen3:4b", "phi4-mini", "gemma3:4b",
-  // Sub-3B (last resort)
-  "llama3.2:3b", "qwen3:1.7b", "llama3.2:1b", "qwen3:0.6b",
-];
-
-// Code-focused preference for cleave leaf workers — biases toward Coder variants.
-export const PREFERRED_ORDER_CODE = [
-  // 32B code tier
-  "qwen2.5-coder:32b", "qwen3:32b", "codestral:22b",
-  // 30B tier
-  "qwen3:30b", "devstral-small-2:24b",
-  // 14B code tier
-  "qwen2.5-coder:14b", "qwen3:14b", "qwen2.5:14b",
-  // 7–8B code tier
-  "qwen2.5-coder:7b", "qwen3:8b", "llama3.1:8b",
-  // Small code
-  "qwen2.5-coder:3b", "qwen3:4b", "llama3.2:3b",
-];
 
 // State
 let savedCloudModel: string | null = null;
