@@ -2,8 +2,8 @@
 
 ## 1. Shared State Types & Emitter Infrastructure
 
-- [ ] 1.1 Extend SharedState interface in extensions/shared-state.ts with designTree?, openspec?, cleave? properties and their type definitions
-- [ ] 1.2 Add DashboardEvent type and "dashboard:update" channel constant
+- [x] 1.1 Extend SharedState interface in extensions/shared-state.ts with designTree?, openspec?, cleave? properties and their type definitions
+- [x] 1.2 Add DashboardEvent type and "dashboard:update" channel constant
 
 ## 2. Design Tree Emitter
 
@@ -29,27 +29,27 @@
 
 ## 5. Dashboard Footer Component
 
-- [ ] 5.1 Create extensions/dashboard/types.ts with DashboardMode enum, FooterRenderState, and section interfaces
-- [ ] 5.2 Create extensions/dashboard/footer.ts with DashboardFooter Component class implementing render(width): string[]
-- [ ] 5.3 Implement compact mode (Layer 0): single dashboard summary line with ◈ D:x/y ◎ OS:n ⚡ status + context gauge
-- [ ] 5.4 Implement raised mode (Layer 1): design tree section, openspec section, cleave section (5-8 lines)
-- [ ] 5.5 Reimplement built-in footer data: pwd (~), git branch, session name, input/output/cache tokens, cost, context%, model name, thinking level, extension statuses
-- [ ] 5.6 Support invalidate() for theme changes — rebuild all themed strings
+- [x] 5.1 Create extensions/dashboard/types.ts with DashboardMode, DashboardState interfaces
+- [x] 5.2 Create extensions/dashboard/footer.ts with DashboardFooter Component class implementing render(width): string[]
+- [x] 5.3 Implement compact mode (Layer 0): single dashboard summary line with ◈ D:x/y ◎ OS:n ⚡ status + context gauge
+- [x] 5.4 Implement raised mode (Layer 1): design tree section, openspec section, cleave section (5-8 lines)
+- [x] 5.5 Reimplement built-in footer data: pwd (~), git branch, session name, input/output/cache tokens, cost, context%, model name, thinking level, extension statuses
+- [x] 5.6 Support invalidate() for theme changes — rebuild all themed strings
 
 ## 6. Dashboard Extension Entry Point
 
-- [ ] 6.1 Create extensions/dashboard/index.ts with extension registration, setFooter(), and pi.events subscription
-- [ ] 6.2 Register Ctrl+Shift+D shortcut via pi.registerShortcut to toggle raised/lowered and call tui.requestRender()
-- [ ] 6.3 Implement /dashboard slash command for toggle and status info
-- [ ] 6.4 Persist raised/lowered state via pi.appendEntry("dashboard-state") and restore on session_start
-- [ ] 6.5 Subscribe to "dashboard:update" events and re-render footer
-- [ ] 6.6 Track turn count via turn_end events (absorbing status-bar logic)
-- [ ] 6.7 Read sharedState.memoryTokenEstimate for context gauge (absorbing status-bar logic)
-- [ ] 6.8 Unsubscribe from pi.events on session_shutdown
+- [x] 6.1 Create extensions/dashboard/index.ts with extension registration, setFooter(), and pi.events subscription
+- [x] 6.2 Register Ctrl+Shift+D shortcut via pi.registerShortcut to toggle raised/lowered and call tui.requestRender()
+- [x] 6.3 Implement /dashboard slash command for toggle and status info
+- [x] 6.4 Persist raised/lowered state via pi.appendEntry("dashboard-state") and restore on session_start
+- [x] 6.5 Subscribe to "dashboard:update" events and re-render footer
+- [x] 6.6 Track turn count via turn_end events (absorbing status-bar logic)
+- [x] 6.7 Read sharedState.memoryTokenEstimate for context gauge (absorbing status-bar logic)
+- [x] 6.8 Unsubscribe from pi.events on session_shutdown
 
 ## 7. Cleanup & Wiring
 
-- [ ] 7.1 Delete extensions/status-bar.ts
-- [ ] 7.2 Update package.json: remove status-bar.ts from pi.extensions, add extensions/dashboard/index.ts after design-tree
-- [ ] 7.3 Verify extension load order: cleave → openspec → design-tree → dashboard
+- [x] 7.1 Delete extensions/status-bar.ts
+- [x] 7.2 Update package.json: remove status-bar.ts from pi.extensions, add extensions/dashboard/index.ts after design-tree
+- [x] 7.3 Verify extension load order: cleave → openspec → design-tree → dashboard
 - [ ] 7.4 Smoke test: start pi session, verify compact footer renders with all three sections
