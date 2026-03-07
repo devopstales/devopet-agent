@@ -87,12 +87,8 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 
 		sharedState.designTree = state;
 
-		// Notify dashboard if event bus is available
-		try {
-			(ctx as any).events?.emit?.(DASHBOARD_UPDATE_EVENT);
-		} catch {
-			// Dashboard polls on tool events too — silent fallback
-		}
+		// Notify dashboard for immediate re-render
+		pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "design-tree" });
 	}
 
 	// ─── Tool: design_tree (queries) ─────────────────────────────────────

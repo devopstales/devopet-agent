@@ -7,25 +7,25 @@
 
 ## 2. Design Tree Emitter
 
-- [ ] 2.1 Add emitDashboardState() function to design-tree/index.ts that writes sharedState.designTree with node counts, focused node, and open questions
-- [ ] 2.2 Call emitDashboardState() at every point where updateWidget() was previously called (tool_execution_end, focus/unfocus, status changes)
-- [ ] 2.3 Remove all setWidget("design-tree", ...) calls from design-tree/index.ts
-- [ ] 2.4 Remove the /design widget toggle command (widget subcommand) — dashboard subsumes this
-- [ ] 2.5 Fire pi.events.emit("dashboard:update") after each sharedState write
+- [x] 2.1 Add emitDashboardState() function to design-tree/index.ts that writes sharedState.designTree with node counts, focused node, and open questions
+- [x] 2.2 Call emitDashboardState() at every point where updateWidget() was previously called (tool_execution_end, focus/unfocus, status changes)
+- [x] 2.3 Remove all setWidget("design-tree", ...) calls from design-tree/index.ts
+- [x] 2.4 Remove the /design widget toggle command (widget subcommand) — dashboard subsumes this
+- [x] 2.5 Fire pi.events.emit("dashboard:update") after each sharedState write
 
 ## 3. OpenSpec Emitter
 
-- [ ] 3.1 Add emitDashboardState() function to openspec/index.ts that writes sharedState.openspec with change names, stages, and task progress
-- [ ] 3.2 Call emitDashboardState() after session_start scan and after any change mutation (propose, add_spec, fast_forward, archive)
-- [ ] 3.3 Fire pi.events.emit("dashboard:update") after each sharedState write
+- [x] 3.1 Add emitDashboardState() function to openspec/index.ts that writes sharedState.openspec with change names, stages, and task progress
+- [x] 3.2 Call emitDashboardState() after session_start scan and after any change mutation (propose, add_spec, fast_forward, archive)
+- [x] 3.3 Fire pi.events.emit("dashboard:update") after each sharedState write
 
 ## 4. Cleave Emitter
 
-- [ ] 4.1 Add emitDashboardState() function to cleave/index.ts that writes sharedState.cleave with status, runId, and children array
-- [ ] 4.2 Emit idle state on session_start
-- [ ] 4.3 Emit state transitions: assessing → planning → dispatching → merging → done/failed
-- [ ] 4.4 In dispatcher.ts, update sharedState.cleave.children[n] in spawn start/exit callbacks with status and elapsed time
-- [ ] 4.5 Fire pi.events.emit("dashboard:update") on each transition and child status change
+- [x] 4.1 Add emitDashboardState() function to cleave/index.ts that writes sharedState.cleave with status, runId, and children array
+- [x] 4.2 Emit idle state on session_start
+- [x] 4.3 Emit state transitions: assessing → planning → dispatching → merging → done/failed
+- [x] 4.4 In dispatcher.ts, update sharedState.cleave.children[n] in spawn start/exit callbacks with status and elapsed time
+- [x] 4.5 Fire pi.events.emit("dashboard:update") on each transition and child status change
 
 ## 5. Dashboard Footer Component
 

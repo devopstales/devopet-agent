@@ -33,7 +33,7 @@ const SHARED_KEY = Symbol.for("pi-kit-shared-state");
 
 interface SharedState {
   /** Approximate token count of the last memory injection into context.
-   *  Written by project-memory, read by status-bar for the context gauge. */
+   *  Written by project-memory, read by dashboard for the context gauge. */
   memoryTokenEstimate: number;
 
   /** Design tree summary state. Written by design-tree extension. */
