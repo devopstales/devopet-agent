@@ -65,6 +65,8 @@ export interface OpenSpecContext {
 	fileChanges: Array<{ path: string; action: "new" | "modified" | "deleted" | "unknown" }>;
 	/** Delta spec scenarios for post-merge verification */
 	specScenarios: Array<{ domain: string; requirement: string; scenarios: string[] }>;
+	/** OpenAPI/AsyncAPI contract content (null if absent) */
+	apiContract: string | null;
 }
 
 // ─── Detection ──────────────────────────────────────────────────────────────
@@ -453,6 +455,7 @@ export function buildOpenSpecContext(changePath: string): OpenSpecContext {
 		decisions: [],
 		fileChanges: [],
 		specScenarios: [],
+		apiContract: null,
 	};
 
 	// Design
@@ -465,6 +468,12 @@ export function buildOpenSpecContext(changePath: string): OpenSpecContext {
 
 	// Specs
 	ctx.specScenarios = readSpecScenarios(changePath);
+
+	// API contract (OpenAPI / AsyncAPI)
+	const apiPath = join(changePath, "api.yaml");
+	if (existsSync(apiPath)) {
+		ctx.apiContract = readFileSync(apiPath, "utf-8");
+	}
 
 	return ctx;
 }

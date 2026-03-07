@@ -53,6 +53,32 @@ When a change introduces or modifies an HTTP, gRPC, WebSocket, or other network 
    - Each `Then` is a response assertion → status code, response schema, headers
    - Error scenarios → 4xx/5xx response schemas, problem detail types
 
+### Runtime API contract enforcement
+
+When starting a **new project** or a **large design task** that involves an API, ask the user:
+
+> "Should this project enforce the OpenAPI contract at runtime with validation middleware?"
+
+If yes, guide them to set up request/response validation middleware that loads the OpenAPI spec and rejects non-conforming traffic. This catches contract drift that static assessment alone cannot detect.
+
+**Implementation-agnostic guidance:**
+
+1. **The contract file is the single source of truth.** The middleware loads `api.yaml` (or its production-deployed copy) at startup. No hand-maintained schemas in code.
+2. **All requests are validated** against the contract's request body, query parameter, and path parameter schemas. Non-conforming requests return `400` with a structured error.
+3. **All responses are validated** against the contract's response schemas. Non-conforming responses return `500` in development/test and log warnings in production.
+4. **Undocumented endpoints** (routes with no matching contract path) should be rejected or flagged.
+5. **Known middleware options** (not recommendations — evaluate for your stack):
+   - **Node/Express:** `express-openapi-validator`
+   - **Node/Fastify:** built-in schema compilation from OpenAPI via `@fastify/swagger`
+   - **Python/FastAPI:** built-in Pydantic model generation from OpenAPI
+   - **Python/Django:** `drf-spectacular` with validation
+   - **Go:** `kin-openapi` middleware (`routers/gorillamux` or `routers/chi`)
+   - **Java/Spring:** `springdoc-openapi` with request validation
+   - **Rust/Actix:** `paperclip` or `utoipa` with validation layers
+   - **.NET:** `NSwag` or `Swashbuckle` with request validation middleware
+
+pi-kit takes **no position** on language, framework, or specific library choices. The directive is: if the user wants runtime enforcement, the contract must be loaded from the spec file — not reconstructed from code annotations.
+
 ### Key principle
 
 Specs define **what must be true** — they are the source of truth for correctness. Code is an implementation detail. When specs and code disagree, the spec is right and the code is wrong.

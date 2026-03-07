@@ -105,6 +105,17 @@ function formatSpecVerification(ctx: OpenSpecContext): string {
 		lines.push("");
 	}
 
+	if (ctx.apiContract) {
+		lines.push(
+			"**API Contract Conformance (`api.yaml`)**",
+			"- [ ] All contract paths/methods are implemented",
+			"- [ ] Request/response schemas match the contract",
+			"- [ ] Status codes and error responses match the contract",
+			"- [ ] No undocumented endpoints exist outside the contract",
+			"",
+		);
+	}
+
 	lines.push(
 		"---",
 		"Run tests, inspect the code, or manually verify each scenario above.",
@@ -583,6 +594,28 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 						]
 						: [];
 
+					// Include API contract if available
+					const apiContractContext = specCtx.apiContract
+						? [
+							"### API Contract",
+							"",
+							"The implementation must conform to this OpenAPI/AsyncAPI contract (`api.yaml`).",
+							"Verify that:",
+							"- All paths/methods defined in the contract are implemented",
+							"- Request/response schemas match the contract exactly",
+							"- Status codes and error responses match the contract",
+							"- Security schemes are applied as specified",
+							"- Any endpoint in the code but NOT in the contract is flagged as undocumented",
+							"",
+							"```yaml",
+							specCtx.apiContract.length > 15_000
+								? specCtx.apiContract.slice(0, 15_000) + "\n# ... (truncated)"
+								: specCtx.apiContract,
+							"```",
+							"",
+						]
+						: [];
+
 					pi.sendMessage({
 						customType: "view",
 						content: [
@@ -590,6 +623,7 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 							"",
 							`Evaluating implementation against ${scenarios.length} spec scenarios` +
 								(specCtx.decisions.length > 0 ? ` and ${specCtx.decisions.length} design decisions` : "") +
+								(specCtx.apiContract ? " and API contract (`api.yaml`)" : "") +
 								"...",
 						].join("\n"),
 						display: true,
@@ -601,15 +635,23 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 							"",
 							"Assess whether the current implementation satisfies these OpenSpec scenarios.",
 							"For each scenario, determine: **PASS**, **FAIL**, or **UNCLEAR**.",
+							...(specCtx.apiContract ? [
+								"",
+								"Also verify implementation conformance to the API contract.",
+							] : []),
 							"",
 							"### Acceptance Criteria",
 							"",
 							scenarioText,
 							"",
 							...designContext,
+							...apiContractContext,
 							"### Instructions",
 							"",
 							"1. Read the relevant source files to check each scenario",
+							...(specCtx.apiContract ? [
+								"   - Also check route definitions, schemas, and status codes against the API contract",
+							] : []),
 							"2. For each scenario, report:",
 							"   - **PASS** — implementation clearly satisfies the Given/When/Then",
 							"   - **FAIL** — implementation contradicts or is missing",

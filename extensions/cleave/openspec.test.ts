@@ -574,6 +574,18 @@ describe("buildOpenSpecContext", () => {
 		assert.equal(ctx.specScenarios.length, 0);
 		assert.equal(ctx.decisions.length, 1);
 	});
+
+	it("reads api.yaml when present", () => {
+		const contract = "openapi: '3.1.0'\npaths:\n  /api/widgets:\n    get:\n      responses:\n        '200':\n          description: OK\n";
+		fs.writeFileSync(path.join(dir, "api.yaml"), contract);
+		const ctx = buildOpenSpecContext(dir);
+		assert.equal(ctx.apiContract, contract);
+	});
+
+	it("sets apiContract to null when api.yaml absent", () => {
+		const ctx = buildOpenSpecContext(dir);
+		assert.equal(ctx.apiContract, null);
+	});
 });
 
 // ─── openspecChangeToSplitPlanWithContext ────────────────────────────────────
