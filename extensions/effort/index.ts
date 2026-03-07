@@ -47,11 +47,19 @@ const MODEL_PREFIX: Record<string, string> = {
 /** Ollama inference server URL. */
 const OLLAMA_URL = process.env.LOCAL_INFERENCE_URL || "http://localhost:11434";
 
-/** Preferred local driver models in priority order.
- *  Qwen3 32B leads — best all-round tool-call reliability for orchestration tasks.
- *  Falls back to models already wired in offline-driver if 32B isn't pulled yet.
+/** Preferred local driver models — mirrors PREFERRED_ORDER from offline-driver.
+ *  Best available wins: 70B on 64GB, 32B on 32GB, 14B on 24GB, 8B on 16GB.
  */
-const PREFERRED_LOCAL = ["qwen3:32b", "nemotron-3-nano:30b", "devstral-small-2:24b", "qwen3:30b"];
+const PREFERRED_LOCAL = [
+  "qwen2.5:72b", "llama3.3:70b", "llama3.1:70b",
+  "qwen3:32b", "qwen2.5:32b",
+  "qwen3:30b", "nemotron-3-nano:30b",
+  "gemma3:27b", "devstral-small-2:24b", "mistral-small",
+  "qwen3:14b", "qwen2.5:14b", "mistral-nemo",
+  "qwen3:8b", "llama3.2:11b", "gemma3:9b", "qwen2.5:7b", "llama3.1:8b", "mistral:7b",
+  "qwen3:4b", "phi4-mini", "gemma3:4b",
+  "llama3.2:3b", "qwen3:1.7b", "llama3.2:1b", "qwen3:0.6b",
+];
 
 // ─── Model Switching ─────────────────────────────────────────
 

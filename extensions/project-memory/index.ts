@@ -138,9 +138,25 @@ const OLLAMA_URL = () => process.env.OLLAMA_HOST || process.env.LOCAL_INFERENCE_
 const EMBEDDING_MODEL_PATTERN = /embed|embedding/i;
 
 /** Preferred models for summarization, in priority order */
+// Specific tags first (largest/best wins), family prefixes last as catch-alls.
+// startsWith matching: "qwen3:14b" matches exactly; "qwen3" catches any qwen3 variant.
 const PREFERRED_CHAT_MODELS = [
-  "qwen3:32b", "devstral-small-2:24b", "qwen3:30b", "nemotron-3-nano:30b",
-  "qwen3", "devstral-small", "nemotron",
+  // 70B (64GB+)
+  "qwen2.5:72b", "llama3.3:70b", "llama3.1:70b",
+  // 32B (32GB+)
+  "qwen3:32b", "qwen2.5:32b",
+  // 30B (24GB+ at Q4)
+  "qwen3:30b", "nemotron-3-nano:30b",
+  // 22–27B
+  "gemma3:27b", "devstral-small-2:24b",
+  // 14B (16GB+)
+  "qwen3:14b", "qwen2.5:14b", "mistral-nemo",
+  // 7–9B
+  "qwen3:8b", "llama3.2:11b", "gemma3:9b", "qwen2.5:7b", "llama3.1:8b",
+  // 4B
+  "qwen3:4b", "phi4-mini", "gemma3:4b",
+  // Family prefix catch-alls — matches any variant not listed above
+  "qwen3", "qwen2.5", "llama3", "gemma3", "mistral", "devstral", "nemotron", "phi",
 ];
 
 /**

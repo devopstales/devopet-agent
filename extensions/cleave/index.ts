@@ -1150,12 +1150,20 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 						if (Array.isArray(models?.models) && models.models.length > 0) {
 							// Prefer code-optimised models for leaf tasks; fall back in order
 							const available = models.models.map((m: { name: string }) => m.name);
+							// Code-biased preference — best installed wins across all hardware tiers
 							const preferredCodeModels = [
-								"qwen2.5-coder:32b",
-								"qwen3:32b",
-								"devstral-small-2:24b",
-								"qwen3:30b",
-								"nemotron-3-nano:30b",
+								// 32B code
+								"qwen2.5-coder:32b", "qwen3:32b", "codestral:22b",
+								// 30B
+								"qwen3:30b", "devstral-small-2:24b",
+								// 14B code
+								"qwen2.5-coder:14b", "qwen3:14b", "qwen2.5:14b",
+								// 7–8B code
+								"qwen2.5-coder:7b", "qwen3:8b", "llama3.1:8b",
+								// Small code
+								"qwen2.5-coder:3b", "qwen3:4b", "llama3.2:3b",
+								// General fallbacks
+								"nemotron-3-nano:30b", "qwen2.5:7b", "gemma3:9b",
 							];
 							localModel =
 								preferredCodeModels.find((id) => available.includes(id)) ?? available[0];
