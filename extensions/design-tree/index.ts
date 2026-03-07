@@ -73,6 +73,8 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 			nodeCount: nodes.length,
 			decidedCount: nodes.filter((n) => n.status === "decided").length,
 			exploringCount: nodes.filter((n) => n.status === "exploring" || n.status === "seed").length,
+			implementingCount: nodes.filter((n) => n.status === "implementing").length,
+			implementedCount: nodes.filter((n) => n.status === "implemented").length,
 			blockedCount: nodes.filter((n) => n.status === "blocked").length,
 			openQuestionCount: getAllOpenQuestions(dt).length,
 			focusedNode: focused
@@ -81,8 +83,12 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 						title: focused.title,
 						status: focused.status,
 						questions: [...focused.open_questions],
+						branch: focused.branches?.[0],
 					}
 				: null,
+			implementingNodes: nodes
+				.filter((n) => n.status === "implementing")
+				.map((n) => ({ id: n.id, title: n.title, branch: n.branches?.[0] })),
 		};
 
 		sharedState.designTree = state;

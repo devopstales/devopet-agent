@@ -15,6 +15,7 @@ export interface DesignTreeFocusedNode {
   title: string;
   status: string;
   questions: string[];
+  branch?: string;
 }
 
 export interface DesignTreeDashboardState {
@@ -26,6 +27,8 @@ export interface DesignTreeDashboardState {
   blockedCount: number;
   openQuestionCount: number;
   focusedNode: DesignTreeFocusedNode | null;
+  /** Implementing nodes shown in raised mode with branch associations */
+  implementingNodes?: Array<{ id: string; title: string; branch?: string }>;
 }
 
 // ── OpenSpec ─────────────────────────────────────────────────

@@ -40,6 +40,31 @@ import {
 	generateSpecFile,
 } from "./spec.js";
 import { sharedState, DASHBOARD_UPDATE_EVENT } from "../shared-state.js";
+import { scanDesignDocs, setNodeStatus } from "../design-tree/tree.js";
+
+// ─── Design Tree Archive Gate ────────────────────────────────────────────────
+
+/**
+ * Scan the design tree for nodes whose openspec_change matches the archived
+ * change name. Transition any node in "implementing" status to "implemented".
+ * Returns the list of transitioned node IDs.
+ */
+function transitionDesignNodesOnArchive(cwd: string, changeName: string): string[] {
+	const docsDir = path.join(cwd, "docs");
+	if (!fs.existsSync(docsDir)) return [];
+
+	const tree = scanDesignDocs(docsDir);
+	const transitioned: string[] = [];
+
+	for (const node of tree.nodes.values()) {
+		if (node.openspec_change === changeName && node.status === "implementing") {
+			setNodeStatus(node, "implemented");
+			transitioned.push(node.id);
+		}
+	}
+
+	return transitioned;
+}
 
 // ─── Dashboard State Emitter ─────────────────────────────────────────────────
 
@@ -464,6 +489,14 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 						};
 					}
 
+					// Archive gate: transition implementing → implemented in design tree
+					const transitioned = transitionDesignNodesOnArchive(cwd, params.change_name);
+					if (transitioned.length > 0) {
+						result.operations.push(
+							`Transitioned design node${transitioned.length > 1 ? "s" : ""} to implemented: ${transitioned.join(", ")}`,
+						);
+					}
+
 					emitOpenSpecState(cwd, pi);
 					return {
 						content: [{
@@ -472,7 +505,7 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 								result.operations.map((op) => `  - ${op}`).join("\n") +
 								"\n\nSpecs have been merged to baseline. Change is complete.",
 						}],
-						details: { operations: result.operations },
+						details: { operations: result.operations, transitionedNodes: transitioned },
 					};
 				}
 			}
@@ -681,6 +714,13 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 
 			const result = archiveChange(ctx.cwd, changeName);
 			if (result.archived) {
+				// Archive gate: transition implementing → implemented
+				const transitioned = transitionDesignNodesOnArchive(ctx.cwd, changeName);
+				if (transitioned.length > 0) {
+					result.operations.push(
+						`Transitioned design node${transitioned.length > 1 ? "s" : ""} to implemented: ${transitioned.join(", ")}`,
+					);
+				}
 				ctx.ui.notify(
 					`Archived '${changeName}':\n${result.operations.map((op) => `  - ${op}`).join("\n")}`,
 					"success",
