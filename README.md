@@ -81,7 +81,37 @@ Delegate sub-tasks to locally running LLMs via Ollama — zero API cost.
 Switch the driving model from cloud to a local Ollama model when connectivity drops or for fully offline operation.
 
 - Tool: `switch_to_offline_driver`
-- Auto-selects best available model (Nemotron, Devstral, Qwen3)
+- Auto-selects best available model from a hardware-aware preference list
+- Model registry in `extensions/lib/local-models.ts` — update one file to add new models
+- Covers full hardware spectrum: 64GB (70B), 32GB (32B), 24GB (14B/MoE-30B), 16GB (8B), 8GB (4B)
+
+### ⚔️ Effort Tiers
+
+Single global knob controlling the local-vs-cloud inference ratio across the entire harness. Seven named tiers inspired by Space Marine 2 threat designations.
+
+| Tier | Name | Driver | Cloud % |
+|------|------|--------|--------:|
+| 1 | **Servitor** | local only | 0% |
+| 2 | **Average** | local only | 0% |
+| 3 | **Substantial** | sonnet | ~30% |
+| 4 | **Ruthless** | sonnet | ~45% |
+| 5 | **Lethal** | sonnet + opus | ~65% |
+| 6 | **Absolute** | opus | ~85% |
+| 7 | **Omnissiah** | opus | 100% |
+
+- `/effort <name>` — switch tier mid-session (applies immediately)
+- `/effort cap` — lock current tier as ceiling; agent cannot upgrade past it
+- `/effort uncap` — remove ceiling lock
+- Controls: driver model, thinking level, extraction, compaction, cleave child floor, review model
+
+### 💰 Model Budget
+
+Switch model tiers to match task complexity and conserve API spend.
+
+- Tool: `set_model_tier` — opus / sonnet / haiku
+- Tool: `set_thinking_level` — off / minimal / low / medium / high
+- Downgrade for routine edits, upgrade for architecture decisions
+- Respects effort tier cap — cannot upgrade past locked ceiling
 
 ### 🎨 Render
 
