@@ -67,6 +67,18 @@ export const DEFAULT_MAPPINGS: SkillMapping[] = [
 		skill: "k8s-operations",
 		preferredTier: "sonnet",
 	},
+	// TypeScript
+	{
+		patterns: ["*.ts", "*.tsx", "tsconfig.json", "tsconfig.*.json"],
+		skill: "typescript",
+		preferredTier: "sonnet",
+	},
+	// Pi extensions (more specific than generic TypeScript — matched first by specificity)
+	{
+		patterns: ["extensions/**/*.ts", "extensions/*/index.ts"],
+		skill: "pi-extensions",
+		preferredTier: "sonnet",
+	},
 	// Git (rarely auto-matched, usually annotated)
 	{
 		patterns: [".gitignore", ".gitattributes", ".gitmodules"],
