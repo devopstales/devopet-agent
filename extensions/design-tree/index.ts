@@ -53,6 +53,7 @@ import {
 	appendBranch,
 	readGitBranch,
 	sanitizeBranchName,
+	writeNodeDocument,
 } from "./tree.js";
 
 // ─── Extension ───────────────────────────────────────────────────────────────
@@ -117,44 +118,44 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 		// Scaffold OpenSpec change
 		const result = scaffoldOpenSpecChange(cwd, tree, node);
 
-		// C2: Check if scaffold actually created files — bail if already exists
+		// Bail if scaffold failed (e.g. change directory already exists)
 		if (result.files.length === 0) {
 			return { ok: false, message: result.message };
 		}
 
-		// Determine branch name
-		const branchName = node.branches?.length > 0
-			? node.branches[0]
-			: `${branchPrefix}/${node.id}`;
+		// D1: Explicit `branch` frontmatter field overrides derived name.
+		// Otherwise derive from prefix + node ID. Never read branches[] as override —
+		// that array is a historical record, not an intent.
+		const branchName = node.branch ?? `${branchPrefix}/${node.id}`;
 
-		// C1: Validate branch name before shell operations
+		// Validate branch name before any shell or fs operations
 		const safeBranch = sanitizeBranchName(branchName);
 		if (!safeBranch) {
 			return { ok: false, message: `Invalid branch name: '${branchName}' — contains disallowed characters` };
 		}
 
-		// Atomic write: status + openspec_change + branch in one pass
-		setNodeStatus(node, "implementing");
-		appendBranch({ ...node, status: "implementing" }, safeBranch);
+		// Write all frontmatter fields in one pass to avoid partial state on failure.
+		// setNodeStatus and appendBranch each do a full file rewrite; we consolidate
+		// by writing the final intended state directly.
+		const updatedNode: DesignNode = {
+			...node,
+			status: "implementing",
+			branches: [...(node.branches ?? []), ...(node.branches?.includes(safeBranch) ? [] : [safeBranch])],
+			openspec_change: node.id,
+		};
+		// Use writeNodeDocument to emit all fields in one write
+		const sections = getNodeSections(node);
+		writeNodeDocument(updatedNode, sections);
 
-		// Write openspec_change field
-		let content = fs.readFileSync(node.filePath, "utf-8");
-		if (!content.includes("openspec_change:")) {
-			content = content.replace(
-				/^(---\n[\s\S]*?)(---\n)/m,
-				`$1openspec_change: ${node.id}\n$2`,
-			);
-			fs.writeFileSync(node.filePath, content);
-		}
-
-		// Create git branch — use execFileSync (array args, no shell interpolation)
+		// Create git branch — execFileSync with array args, no shell interpolation
 		try {
 			execFileSync("git", ["checkout", "-b", safeBranch], { cwd, stdio: "pipe" });
 		} catch {
 			try {
+				// Branch already exists — switch to it
 				execFileSync("git", ["checkout", safeBranch], { cwd, stdio: "pipe" });
 			} catch {
-				// Non-fatal — branch operations may fail in worktrees or CI
+				// Non-fatal: branch ops may fail in worktrees or detached HEAD
 			}
 		}
 

@@ -115,6 +115,9 @@ export function generateFrontmatter(node: Omit<DesignNode, "filePath" | "lastMod
 	} else {
 		fm += "open_questions: []\n";
 	}
+	if (node.branch) {
+		fm += `branch: ${yamlQuote(node.branch)}\n`;
+	}
 	if (node.branches && node.branches.length > 0) {
 		fm += `branches: [${node.branches.map((b) => yamlQuote(b)).join(", ")}]\n`;
 	}
@@ -418,6 +421,7 @@ export function scanDesignDocs(docsDir: string): DesignTree {
 				related: (fm.related as string[]) || [],
 				tags: (fm.tags as string[]) || [],
 				open_questions: mergedQuestions,
+				branch: fm.branch as string | undefined,
 				branches: (fm.branches as string[]) || [],
 				openspec_change: fm.openspec_change as string | undefined,
 				filePath,
@@ -513,6 +517,7 @@ export function createNode(
 		related: [],
 		tags: opts.tags || [],
 		open_questions: [],
+		branch: undefined,
 		branches: [],
 	};
 
@@ -726,7 +731,7 @@ export function addImplementationNotes(
  * Write a node's full document to disk (frontmatter + body).
  * Syncs open_questions between sections and frontmatter.
  */
-function writeNodeDocument(node: DesignNode, sections: DocumentSections): void {
+export function writeNodeDocument(node: DesignNode, sections: DocumentSections): void {
 	// Sync open questions from sections to node
 	const syncedNode = {
 		...node,

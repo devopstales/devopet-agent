@@ -97,7 +97,7 @@ export class DashboardFooter implements Component {
     if (dt && dt.nodeCount > 0) {
       let dtSummary = `◈ D:${dt.decidedCount}`;
       if (dt.implementingCount > 0) dtSummary += ` I:${dt.implementingCount}`;
-      if (dt.implementedCount > 0) dtSummary += ` ✔:${dt.implementedCount}`;
+      if (dt.implementedCount > 0) dtSummary += ` ✓:${dt.implementedCount}`;
       dtSummary += ` /${dt.nodeCount}`;
       dashParts.push(theme.fg("accent", dtSummary));
     }
@@ -156,7 +156,7 @@ export class DashboardFooter implements Component {
       if (dt.focusedNode) {
         const statusIcon = dt.focusedNode.status === "decided" ? theme.fg("success", "●")
           : dt.focusedNode.status === "implementing" ? theme.fg("accent", "⚙")
-          : dt.focusedNode.status === "implemented" ? theme.fg("success", "✔")
+          : dt.focusedNode.status === "implemented" ? theme.fg("success", "✓")
           : dt.focusedNode.status === "exploring" ? theme.fg("accent", "◐")
           : dt.focusedNode.status === "blocked" ? theme.fg("error", "✕")
           : theme.fg("dim", "○");

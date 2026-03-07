@@ -38,6 +38,8 @@ import {
 	appendBranch,
 	readGitBranch,
 	sanitizeBranchName,
+	writeNodeDocument,
+	getNodeSections,
 } from "./tree.js";
 
 import { VALID_STATUSES, STATUS_ICONS, STATUS_COLORS } from "./types.js";
@@ -1119,7 +1121,7 @@ describe("implementing and implemented statuses", () => {
 
 	it("have STATUS_ICONS entries", () => {
 		assert.equal(STATUS_ICONS.implementing, "⚙");
-		assert.equal(STATUS_ICONS.implemented, "✔");
+		assert.equal(STATUS_ICONS.implemented, "✓");
 	});
 
 	it("have STATUS_COLORS entries", () => {
@@ -1261,31 +1263,37 @@ describe("implement flow: status transition + frontmatter update", () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it("transitions decided → implementing with branch and openspec_change", () => {
+	it("transitions decided → implementing with branch and openspec_change in one write", () => {
 		const node = createNode(tmpDir, { id: "impl-test", title: "Impl Test", status: "decided" });
 		assert.equal(node.status, "decided");
 
-		// Simulate what the implement action does
-		const updated = setNodeStatus(node, "implementing");
-		assert.equal(updated.status, "implementing");
+		// Simulate consolidated write (as executeImplement does)
+		const updatedNode: DesignNode = {
+			...node,
+			status: "implementing",
+			branches: ["feature/impl-test"],
+			openspec_change: "impl-test",
+		};
+		const sections = getNodeSections(node);
+		writeNodeDocument(updatedNode, sections);
 
-		const withBranch = appendBranch(updated, "feature/impl-test");
-		assert.deepEqual(withBranch.branches, ["feature/impl-test"]);
-
-		// Write openspec_change to frontmatter
-		let content = fs.readFileSync(withBranch.filePath, "utf-8");
-		content = content.replace(
-			/^(---\n[\s\S]*?)(---\n)/m,
-			`$1openspec_change: impl-test\n$2`,
-		);
-		fs.writeFileSync(withBranch.filePath, content);
-
-		// Re-scan and verify
+		// Re-scan and verify all fields written in one pass
 		const tree = scanDesignDocs(tmpDir);
 		const reloaded = tree.nodes.get("impl-test")!;
 		assert.equal(reloaded.status, "implementing");
 		assert.deepEqual(reloaded.branches, ["feature/impl-test"]);
 		assert.equal(reloaded.openspec_change, "impl-test");
+	});
+
+	it("branch frontmatter field (D1 override) parses and serializes correctly", () => {
+		const node = createNode(tmpDir, { id: "branch-override", title: "Branch Override", status: "decided" });
+		const withOverride: DesignNode = { ...node, branch: "refactor/auth-overhaul" };
+		const sections = getNodeSections(node);
+		writeNodeDocument(withOverride, sections);
+
+		const tree = scanDesignDocs(tmpDir);
+		const reloaded = tree.nodes.get("branch-override")!;
+		assert.equal(reloaded.branch, "refactor/auth-overhaul");
 	});
 
 	it("rejects non-decided nodes for implementing transition", () => {

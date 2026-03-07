@@ -13,7 +13,7 @@ export const STATUS_ICONS: Record<NodeStatus, string> = {
 	exploring: "◐",
 	decided: "●",
 	implementing: "⚙",
-	implemented: "✔",
+	implemented: "✓",
 	blocked: "✕",
 	deferred: "◑",
 };
@@ -77,7 +77,9 @@ export interface DesignNode {
 	tags: string[];
 	/** Open questions — synced from ## Open Questions body section */
 	open_questions: string[];
-	/** Git branches associated with this node (e.g. from cleave worktrees) */
+	/** Explicit branch name override (D1). When set, used instead of feature/<node-id> */
+	branch?: string;
+	/** Git branches associated with this node — history of all branches that carried this work */
 	branches: string[];
 	/** OpenSpec change name linked to this node */
 	openspec_change?: string;
