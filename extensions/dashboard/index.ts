@@ -11,13 +11,14 @@
  * Absorbs status-bar.ts — the context gauge (turn counter + memory bar + %)
  * is rendered directly in the compact footer line.
  *
- * Toggle: Ctrl+Shift+D or /dashboard command.
+ * Toggle: Ctrl+Shift+B or /dashboard command.
  * Persistence: raised/lowered state saved via appendEntry("dashboard-state").
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { DASHBOARD_UPDATE_EVENT } from "../shared-state.ts";
 import { DashboardFooter } from "./footer.ts";
+import { showDashboardOverlay } from "./overlay.ts";
 import type { DashboardState, DashboardMode } from "./types.ts";
 
 export default function (pi: ExtensionAPI) {
@@ -122,20 +123,55 @@ export default function (pi: ExtensionAPI) {
     refresh(ctx);
   });
 
-  // ── Keyboard shortcut: Ctrl+Shift+D ──────────────────────────
+  // ── Keyboard shortcut: Ctrl+Shift+B ──────────────────────────
+  // First press: compact → raised. Second press from raised: open overlay.
+  // From overlay return or compact: cycles normally.
 
-  pi.registerShortcut("ctrl+shift+d", {
-    description: "Toggle dashboard (compact/raised)",
+  pi.registerShortcut("ctrl+shift+b", {
+    description: "Toggle dashboard (compact → raised → overlay)",
     handler: (ctx) => {
-      toggle(ctx);
+      if (state.mode === "raised") {
+        // Already raised — open the interactive overlay
+        showDashboardOverlay(ctx).catch(() => {});
+      } else {
+        toggle(ctx);
+      }
     },
   });
 
-  // ── Slash command: /dashboard ─────────────────────────────────
+  // ── Slash command: /dashboard [open|compact|raised] ─────────
 
   pi.registerCommand("dashboard", {
-    description: "Toggle dashboard view (compact ↔ raised)",
-    handler: async (_args, ctx) => {
+    description: "Toggle dashboard view, or /dashboard open for interactive overlay",
+    handler: async (args, ctx) => {
+      const arg = (args ?? "").trim().toLowerCase();
+
+      if (arg === "open") {
+        // Explicit overlay open
+        state.mode = "raised";
+        persistMode(ctx);
+        tui?.requestRender();
+        await showDashboardOverlay(ctx);
+        return;
+      }
+
+      if (arg === "compact") {
+        state.mode = "compact";
+        persistMode(ctx);
+        tui?.requestRender();
+        ctx.ui.notify("Dashboard: compact", "info");
+        return;
+      }
+
+      if (arg === "raised") {
+        state.mode = "raised";
+        persistMode(ctx);
+        tui?.requestRender();
+        ctx.ui.notify("Dashboard: raised", "info");
+        return;
+      }
+
+      // Default: toggle
       toggle(ctx);
       const modeLabel = state.mode === "raised" ? "raised" : "compact";
       ctx.ui.notify(`Dashboard: ${modeLabel}`, "info");
