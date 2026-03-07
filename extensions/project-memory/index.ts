@@ -55,7 +55,7 @@ import {
   createTriggerState,
   shouldExtract,
 } from "./triggers.ts";
-import { runExtractionV2, runGlobalExtraction, killActiveExtraction, killAllSubprocesses, generateEpisode } from "./extraction-v2.ts";
+import { runExtractionV2, runGlobalExtraction, killActiveExtraction, killAllSubprocesses, generateEpisode, generateEpisodeDirect } from "./extraction-v2.ts";
 import { migrateToFactStore, needsMigration, markMigrated } from "./migration.ts";
 import { SECTIONS } from "./template.ts";
 import { serializeConversation, convertToLlm } from "@mariozechner/pi-coding-agent";
@@ -277,6 +277,8 @@ export default function (pi: ExtensionAPI) {
   let config: MemoryConfig = { ...DEFAULT_CONFIG };
   let activeExtractionPromise: Promise<void> | null = null;
   let sessionActive = false;
+  /** Set by /exit handler when episode generation is done pre-goodbye */
+  let exitEpisodeDone = false;
   let consecutiveExtractionFailures = 0;
   let memoryDir = "";
   const globalMemoryDir = path.join(os.homedir(), ".pi", "memory");
@@ -534,8 +536,9 @@ export default function (pi: ExtensionAPI) {
       try { await activeExtractionPromise; } catch { /* expected after kill */ }
     }
 
-    // Generate session episode before export
-    if (store) {
+    // Episode generation: skip if /exit already did it (fast path).
+    // For non-/exit shutdowns (ctrl-c, /reload), do a quick direct attempt only.
+    if (!exitEpisodeDone && store) {
       try {
         const mind = activeMind();
         const branch = ctx.sessionManager.getBranch();
@@ -543,44 +546,35 @@ export default function (pi: ExtensionAPI) {
           .filter((e): e is SessionMessageEntry => e.type === "message")
           .map((e) => e.message);
 
-        // Only generate an episode if we had meaningful conversation (>5 messages)
         if (messages.length > 5) {
           const recentMessages = messages.slice(-20);
           const serialized = serializeConversation(convertToLlm(recentMessages));
-
-          // Get fact IDs created/modified this session (from working memory as proxy)
           const sessionFactIds = [...workingMemory];
 
-          try {
-            const episodeOutput = await generateEpisode(ctx.cwd, serialized, config);
-            if (episodeOutput) {
-              const today = new Date().toISOString().split("T")[0];
-              const episodeId = store.storeEpisode({
-                mind,
-                title: episodeOutput.title,
-                narrative: episodeOutput.narrative,
-                date: today,
-                factIds: sessionFactIds.filter(id => store!.getFact(id)?.status === "active"),
-              });
+          // Direct Ollama only — no subprocess spawn during shutdown
+          const episodeOutput = await generateEpisodeDirect(serialized, config);
+          if (episodeOutput) {
+            const today = new Date().toISOString().split("T")[0];
+            const episodeId = store.storeEpisode({
+              mind,
+              title: episodeOutput.title,
+              narrative: episodeOutput.narrative,
+              date: today,
+              factIds: sessionFactIds.filter(id => store!.getFact(id)?.status === "active"),
+            });
 
-              // Embed the episode for semantic retrieval
-              if (embeddingAvailable) {
-                const vec = await embedText(`${episodeOutput.title} ${episodeOutput.narrative}`);
-                if (vec) {
-                  store.storeEpisodeVector(episodeId, vec, embeddingModel!);
-                }
-              }
+            if (embeddingAvailable) {
+              const vec = await embedText(`${episodeOutput.title} ${episodeOutput.narrative}`);
+              if (vec) store.storeEpisodeVector(episodeId, vec, embeddingModel!);
             }
-          } catch {
-            // Best effort — don't block shutdown
           }
         }
       } catch {
-        // Best effort
+        // Best effort — don't block shutdown
       }
     }
 
-    // Auto-export: write facts.jsonl for cross-machine sync via git
+    // JSONL export + DB close (fast — synchronous I/O, ~50ms)
     if (store) {
       try {
         const fsSync = await import("node:fs");
@@ -2193,6 +2187,50 @@ export default function (pi: ExtensionAPI) {
       const factsAfter = store.countActiveFacts(mind);
       const delta = factsAfter - factsBefore;
 
+      // Generate session episode BEFORE goodbye (user sees progress, not post-goodbye lag)
+      const branch = ctx.sessionManager.getBranch();
+      const messages = branch
+        .filter((e): e is SessionMessageEntry => e.type === "message")
+        .map((e) => e.message);
+
+      if (messages.length > 5) {
+        ctx.ui.notify("Generating session summary…", "info");
+        try {
+          const recentMessages = messages.slice(-20);
+          const serialized = serializeConversation(convertToLlm(recentMessages));
+
+          // Try direct Ollama HTTP first (~500ms), fall back to subprocess (~3s)
+          let episodeOutput = await generateEpisodeDirect(serialized, config);
+          if (!episodeOutput) {
+            episodeOutput = await generateEpisode(ctx.cwd, serialized, config);
+          }
+
+          if (episodeOutput && store) {
+            const today = new Date().toISOString().split("T")[0];
+            const sessionFactIds = [...workingMemory];
+            const episodeId = store.storeEpisode({
+              mind,
+              title: episodeOutput.title,
+              narrative: episodeOutput.narrative,
+              date: today,
+              factIds: sessionFactIds.filter(id => store!.getFact(id)?.status === "active"),
+            });
+
+            // Embed episode vector (non-blocking — runs during summary display)
+            if (embeddingAvailable) {
+              embedText(`${episodeOutput.title} ${episodeOutput.narrative}`)
+                .then(vec => { if (vec && store) store.storeEpisodeVector(episodeId, vec, embeddingModel!); })
+                .catch(() => {});
+            }
+          }
+          exitEpisodeDone = true;
+        } catch {
+          // Best effort — don't block exit
+        }
+      } else {
+        exitEpisodeDone = true;
+      }
+
       // Build session-end summary from shared state
       const summaryLines: string[] = [];
 
@@ -2200,9 +2238,9 @@ export default function (pi: ExtensionAPI) {
       try {
         const branchResult = await pi.exec("git", ["branch", "--show-current"], { timeout: 3_000, cwd: ctx.cwd });
         const statusResult = await pi.exec("git", ["status", "--short"], { timeout: 3_000, cwd: ctx.cwd });
-        const branch = branchResult.stdout.trim();
+        const branchName = branchResult.stdout.trim();
         const dirtyCount = statusResult.stdout.trim().split("\n").filter(Boolean).length;
-        summaryLines.push(`🔀 ${branch}${dirtyCount > 0 ? ` · ${dirtyCount} dirty` : " · clean"}`);
+        summaryLines.push(`🔀 ${branchName}${dirtyCount > 0 ? ` · ${dirtyCount} dirty` : " · clean"}`);
       } catch { /* ignore */ }
 
       // Design tree
@@ -2243,9 +2281,8 @@ export default function (pi: ExtensionAPI) {
       ctx.shutdown();
 
       // Block until process.exit() is called by the shutdown flow.
-      // The shutdown handler runs session_shutdown events (episode generation,
-      // JSONL export) then calls process.exit(0). If that takes too long or
-      // hangs, force exit after 10s as a safety net.
+      // The shutdown handler now only does JSONL export + DB close (fast),
+      // since episode generation already completed above.
       await new Promise<void>(resolve => {
         setTimeout(() => {
           resolve();
