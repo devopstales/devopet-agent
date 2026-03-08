@@ -18,6 +18,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { Model } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "./lib/typebox-helpers";
 import { sharedState } from "./shared-state.ts";
@@ -88,25 +89,27 @@ const THINKING_LABELS: Record<ThinkingLevelName, { icon: string; label: string }
   high: { icon: "🧠", label: "deep thinking" },
 };
 
-async function switchTo(tier: TierName, pi: ExtensionAPI, ctx: any): Promise<RegistryModel | null> {
-  const all: RegistryModel[] = ctx.modelRegistry.getAll();
+async function switchTo(tier: TierName, pi: ExtensionAPI, ctx: ExtensionContext): Promise<RegistryModel | null> {
+  const all = ctx.modelRegistry.getAll() as unknown as RegistryModel[];
   const policy = (sharedState as any).routingPolicy ?? getDefaultPolicy();
   const resolved = resolveTier(tier, all, policy);
   if (!resolved) return null;
-  const model = all.find((m) => m.id === resolved.modelId) ?? { id: resolved.modelId, provider: resolved.provider };
-  const success = await pi.setModel(model as any);
+  const model = all.find((m) => m.id === resolved.modelId);
+  if (!model) return null;
+  const success = await pi.setModel(model as unknown as Model<any>);
   return success ? model : null;
 }
 
 function currentTierName(ctx: ExtensionContext): TierName | null {
   const model = ctx.model;
   if (!model) return null;
-  // Match current model ID against known tier prefixes (Anthropic) or exact IDs (OpenAI/local)
-  const id = model.id;
-  if (id.startsWith("claude-opus")) return "opus";
-  if (id.startsWith("claude-sonnet")) return "sonnet";
-  if (id.startsWith("claude-haiku")) return "haiku";
-  if ((model as any).provider === "local") return "local";
+  // Resolve the current model against the registry using the shared resolver
+  const all = ctx.modelRegistry.getAll() as unknown as RegistryModel[];
+  const policy = (sharedState as any).routingPolicy ?? getDefaultPolicy();
+  for (const tier of ["opus", "sonnet", "haiku", "local"] as TierName[]) {
+    const resolved = resolveTier(tier, all, policy);
+    if (resolved?.modelId === model.id) return tier;
+  }
   return null;
 }
 
