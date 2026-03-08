@@ -15,6 +15,7 @@ import type {
 
 import type { EffortState } from "./effort/types.ts";
 import type { ProviderRoutingPolicy } from "./lib/model-routing.ts";
+import { getDefaultPolicy } from "./lib/model-routing.ts";
 
 // Re-export dashboard types for consumer convenience
 export type {
@@ -74,6 +75,7 @@ interface SharedState {
 if (!(globalThis as any)[SHARED_KEY]) {
   (globalThis as any)[SHARED_KEY] = {
     memoryTokenEstimate: 0,
+    routingPolicy: getDefaultPolicy(),
   } satisfies SharedState;
 }
 

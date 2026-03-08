@@ -64,12 +64,41 @@ const ANTHROPIC_TIER_PREFIXES: Record<Exclude<ModelTier, "local">, string[]> = {
   opus: ["claude-opus"],
 };
 
+/**
+ * Parse trailing numeric version segments from a model ID.
+ * e.g. "claude-opus-4-6" → [4, 6], "claude-opus-10-0" → [10, 0]
+ */
+function parseModelVersion(id: string): number[] {
+  const parts = id.split("-");
+  const versions: number[] = [];
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const n = parseInt(parts[i], 10);
+    if (!isNaN(n)) versions.unshift(n);
+    else break;
+  }
+  return versions;
+}
+
+/**
+ * Compare two model IDs by their trailing numeric versions (descending).
+ * Handles multi-segment versions correctly: 10-0 > 4-9 > 4-6.
+ */
+function compareModelVersionsDesc(a: string, b: string): number {
+  const va = parseModelVersion(a);
+  const vb = parseModelVersion(b);
+  for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+    const diff = (vb[i] ?? 0) - (va[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 function matchAnthropicTier(models: RegistryModel[], tier: Exclude<ModelTier, "local">): RegistryModel | undefined {
   const prefixes = ANTHROPIC_TIER_PREFIXES[tier];
   for (const prefix of prefixes) {
     const candidates = models
       .filter((m) => m.provider === "anthropic" && m.id.startsWith(prefix))
-      .sort((a, b) => b.id.localeCompare(a.id));
+      .sort((a, b) => compareModelVersionsDesc(a.id, b.id));
     if (candidates.length > 0) return candidates[0];
   }
   return undefined;
@@ -93,19 +122,23 @@ const OPENAI_TIER_MODELS: Record<Exclude<ModelTier, "local">, string[]> = {
 };
 
 function matchOpenAITier(models: RegistryModel[], tier: Exclude<ModelTier, "local">): RegistryModel | undefined {
-  const candidates = OPENAI_TIER_MODELS[tier];
-  for (const modelId of candidates) {
+  const exactIds = OPENAI_TIER_MODELS[tier];
+  for (const modelId of exactIds) {
     const match = models.find((m) => m.provider === "openai" && m.id === modelId);
     if (match) return match;
   }
-  // Fallback: prefix scan for anything that looks right
-  const prefixMap: Record<string, string[]> = {
-    haiku: ["gpt-4o-mini", "gpt-4.1-mini"],
-    sonnet: ["gpt-4o", "gpt-4.1"],
-    opus: ["gpt-4.5", "o3", "gpt-5"],
+  // Fallback: prefix scan for models not already covered by the exact-ID list.
+  // Use distinct prefixes that don't duplicate entries in exactIds.
+  const exactIdSet = new Set(exactIds);
+  const prefixFallbacks: Record<string, string[]> = {
+    haiku: ["gpt-4o-mini-", "gpt-4.1-mini-"],
+    sonnet: ["gpt-4o-", "gpt-4.1-"],
+    opus: ["gpt-4.5-", "o3-", "gpt-5."],
   };
-  for (const prefix of prefixMap[tier] ?? []) {
-    const found = models.find((m) => m.provider === "openai" && m.id.startsWith(prefix));
+  for (const prefix of prefixFallbacks[tier] ?? []) {
+    const found = models.find(
+      (m) => m.provider === "openai" && m.id.startsWith(prefix) && !exactIdSet.has(m.id),
+    );
     if (found) return found;
   }
   return undefined;
@@ -153,7 +186,14 @@ export function resolveTier(
 
   // Build effective provider order: avoid-list providers go last (as fallback),
   // not completely excluded — we still try them if no other option exists.
-  const ordered = dedupeProviderOrder(policy.providerOrder, policy.avoidProviders);
+  let ordered = dedupeProviderOrder(policy.providerOrder, policy.avoidProviders);
+
+  // When cheapCloudPreferredOverLocal is set, ensure cloud providers take
+  // priority over local regardless of where the operator placed "local" in
+  // providerOrder. Move "local" to the end of the effective order.
+  if (policy.cheapCloudPreferredOverLocal) {
+    ordered = [...ordered.filter((p) => p !== "local"), ...ordered.filter((p) => p === "local")];
+  }
 
   for (const provider of ordered) {
     if (policy.avoidProviders.includes(provider)) continue; // skip in first pass
@@ -177,12 +217,9 @@ function tryProvider(
 ): RegistryModel | undefined {
   if (provider === "anthropic") return matchAnthropicTier(models, tier);
   if (provider === "openai") return matchOpenAITier(models, tier);
-  if (provider === "local") {
-    // When "local" appears in the cloud provider order, resolve with the best
-    // local model (even for non-local tiers). This lets operators that run
-    // purely offline still get a result.
-    return matchLocalTier(models);
-  }
+  // "local" cannot satisfy a cloud capability tier (haiku/sonnet/opus).
+  // A local 8B model is not capability-equivalent to a sonnet-tier model.
+  // Operators should request tier: "local" explicitly for local inference.
   return undefined;
 }
 

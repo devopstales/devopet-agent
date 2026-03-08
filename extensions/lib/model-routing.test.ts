@@ -21,6 +21,8 @@ import {
   type ProviderRoutingPolicy,
 } from "./model-routing.ts";
 
+import { sharedState } from "../shared-state.ts";
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -152,14 +154,14 @@ describe("resolveTier — cross-provider fallback", () => {
     assert.equal(result.modelId, ANTHROPIC_HAIKU.id);
   });
 
-  it("falls back across multiple providers until a match is found", () => {
+  it("returns undefined when only local models are available for a cloud tier", () => {
+    // Local models do not satisfy cloud capability tiers (haiku/sonnet/opus).
+    // A local 8B model is not capability-equivalent to a haiku-tier cloud model.
+    // Operators should use tier: "local" explicitly for local inference.
     const localOnly = [LOCAL_MODEL];
     const p = policy({ providerOrder: ["openai", "anthropic", "local"] });
-    // No cloud models for "haiku" — only local
     const result = resolveTier("haiku", localOnly, p);
-    // Should end up at "local" provider via fallback
-    assert.ok(result, "should resolve via local fallback");
-    assert.equal(result.provider, "local");
+    assert.equal(result, undefined, "local models must not satisfy cloud capability tiers");
   });
 });
 
@@ -256,6 +258,89 @@ describe("getDefaultPolicy", () => {
   it("requires preflight for large runs by default", () => {
     const p = getDefaultPolicy();
     assert.equal(p.requirePreflightForLargeRuns, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cheapCloudPreferredOverLocal flag
+// ---------------------------------------------------------------------------
+
+describe("resolveTier — cheapCloudPreferredOverLocal", () => {
+  it("pushes local to end when cheap cloud preferred, even if local is first in order", () => {
+    // local is first in providerOrder, but cheapCloudPreferredOverLocal forces cloud first
+    const p = policy({
+      providerOrder: ["local", "anthropic", "openai"],
+      cheapCloudPreferredOverLocal: true,
+    });
+    const result = resolveTier("haiku", ALL_MODELS, p);
+    assert.ok(result, "should resolve");
+    // Should choose anthropic (first non-local), not local
+    assert.notEqual(result.provider, "local");
+    assert.equal(result.provider, "anthropic");
+  });
+
+  it("respects original order when cheapCloudPreferredOverLocal is false", () => {
+    const p = policy({
+      providerOrder: ["local", "anthropic", "openai"],
+      cheapCloudPreferredOverLocal: false,
+    });
+    // "local" first but can't satisfy cloud tier — falls through to anthropic
+    const result = resolveTier("haiku", ALL_MODELS, p);
+    assert.ok(result);
+    // local doesn't match haiku, so falls to anthropic
+    assert.equal(result.provider, "anthropic");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shared-state routing policy mutation (W4 spec coverage)
+// ---------------------------------------------------------------------------
+
+describe("sharedState.routingPolicy", () => {
+  it("is initialized with a default policy on first import", () => {
+    assert.ok(sharedState.routingPolicy, "routingPolicy must be initialized, not undefined");
+    assert.ok(Array.isArray(sharedState.routingPolicy.providerOrder));
+    assert.ok(Array.isArray(sharedState.routingPolicy.avoidProviders));
+    assert.equal(typeof sharedState.routingPolicy.cheapCloudPreferredOverLocal, "boolean");
+    assert.equal(typeof sharedState.routingPolicy.requirePreflightForLargeRuns, "boolean");
+  });
+
+  it("records avoidProviders when operator marks a provider as low-budget", () => {
+    // Spec: "Session policy can avoid a provider temporarily"
+    // Given the operator indicates Claude budget is low
+    sharedState.routingPolicy = {
+      ...getDefaultPolicy(),
+      avoidProviders: ["anthropic"],
+      notes: "Anthropic budget is low today",
+    };
+    assert.ok(sharedState.routingPolicy.avoidProviders.includes("anthropic"),
+      "shared state must record anthropic in avoid-provider list");
+    assert.ok(sharedState.routingPolicy.notes?.includes("low"));
+  });
+
+  it("records provider order and flags from operator session policy", () => {
+    // Spec: "Session policy stores provider order and flags"
+    sharedState.routingPolicy = {
+      providerOrder: ["openai", "anthropic"],
+      avoidProviders: [],
+      cheapCloudPreferredOverLocal: true,
+      requirePreflightForLargeRuns: true,
+    };
+    assert.deepEqual(sharedState.routingPolicy.providerOrder, ["openai", "anthropic"]);
+    assert.equal(sharedState.routingPolicy.cheapCloudPreferredOverLocal, true);
+    assert.equal(sharedState.routingPolicy.requirePreflightForLargeRuns, true);
+  });
+
+  it("resolver uses updated shared-state policy for avoid-provider skipping", () => {
+    sharedState.routingPolicy = {
+      ...getDefaultPolicy(),
+      providerOrder: ["anthropic", "openai"],
+      avoidProviders: ["anthropic"],
+    };
+    const result = resolveTier("opus", ALL_MODELS, sharedState.routingPolicy);
+    assert.ok(result, "should resolve");
+    assert.notEqual(result.provider, "anthropic", "must skip anthropic per shared-state policy");
+    assert.equal(result.provider, "openai");
   });
 });
 
