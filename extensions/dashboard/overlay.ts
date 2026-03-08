@@ -11,7 +11,7 @@
  *   ↑/↓          — navigate items
  *   Enter/→      — expand/collapse item
  *   ←            — collapse expanded item
- *   Esc          — close overlay
+ *   Esc / ctrl+c — close overlay
  *
  * Reads sharedState for all data. Subscribes to dashboard:update for live refresh.
  */
@@ -168,7 +168,7 @@ export class DashboardOverlay {
 
     // Footer with key hints
     lines.push(border("├" + "─".repeat(innerW) + "┤"));
-    lines.push(border("│") + pad(th.fg("dim", " ↑↓ navigate  ←→/↵ expand  Tab switch  Esc unfocus  ctrl+esc dismiss")) + border("│"));
+    lines.push(border("│") + pad(th.fg("dim", " ↑↓ navigate  ←→/↵ expand  Tab switch  Esc close")) + border("│"));
     lines.push(border("╰" + "─".repeat(innerW) + "╯"));
 
     return lines;

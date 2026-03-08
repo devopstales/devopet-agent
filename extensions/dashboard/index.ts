@@ -121,15 +121,8 @@ export default function (pi: ExtensionAPI) {
       (tuiRef, theme, _kb, done) => {
         overlayDone = done;
         const overlay = new DashboardOverlay(tuiRef, theme, () => {
-          // Esc from focused mode → unfocus, stay visible
-          if (overlayHandle?.isFocused()) {
-            overlayHandle.unfocus();
-            state.mode = "panel";
-            tui?.requestRender();
-          } else {
-            // Esc from unfocused panel → hide
-            hidePanel();
-          }
+          // Esc → close the panel entirely
+          hidePanel();
         });
         overlay.setEventBus(pi.events);
         return overlay;
@@ -235,15 +228,15 @@ export default function (pi: ExtensionAPI) {
 
   /**
    * Toggle panel on/off. Panel and raised footer are mutually exclusive:
-   * opening the panel collapses the footer to compact.
+   * opening the panel collapses the footer to compact and focuses the overlay.
    */
   function panelToggle(ctx: ExtensionContext): void {
     if (state.mode === "panel" || state.mode === "focused") {
       hidePanel();
     } else {
-      // Opening panel forces compact footer
+      // Opening panel forces compact footer and focuses overlay for key input
       state.mode = "compact";
-      cycleTo(ctx, "panel");
+      cycleTo(ctx, "focused");
     }
   }
 
@@ -403,21 +396,6 @@ export default function (pi: ExtensionAPI) {
     description: "Toggle dashboard footer (compact ↔ raised)",
     handler: (ctx) => {
       dashToggle(ctx);
-    },
-  });
-
-  // ── Keyboard shortcut: ctrl+escape ───────────────────────────
-  // Always hides the overlay panel (regardless of focus state).
-  // Solves the stuck-panel UX: after unfocusing via Esc, the panel stays
-  // visible with no way to dismiss it — ctrl+esc is the escape hatch.
-
-  pi.registerShortcut("ctrl+escape", {
-    description: "Hide dashboard panel (dismiss overlay without cycling)",
-    handler: (ctx) => {
-      if (state.mode === "panel" || state.mode === "focused") {
-        hidePanel();
-        ctx.ui.notify("Dashboard: compact", "info");
-      }
     },
   });
 
