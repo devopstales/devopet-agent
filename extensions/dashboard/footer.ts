@@ -202,8 +202,10 @@ export class DashboardFooter implements Component {
       dashParts.push(gauge);
     }
 
-    // Append /dashboard hint for discoverability
-    const dashHint = theme.fg("dim", "/dashboard");
+    // Append /dash hint for discoverability (varies by mode)
+    const dashHint = this.dashState.mode === "panel"
+      ? theme.fg("dim", "/dashboard to close")
+      : theme.fg("dim", "/dash to expand");
 
     if (dashParts.length > 0) {
       const joined = dashParts.join("  ");
@@ -244,6 +246,9 @@ export class DashboardFooter implements Component {
       const rule = "╶" + "─".repeat(Math.min(width - 2, 58)) + "╴";
       lines.push(theme.fg("dim", rule));
     }
+
+    // /dash to compact hint prepended to footer data
+    lines.push(truncateToWidth(theme.fg("dim", "/dash to compact"), width, "…"));
 
     // Original footer data
     lines.push(...this.renderFooterData(width));
@@ -286,6 +291,9 @@ export class DashboardFooter implements Component {
       const rule = "╶" + "─".repeat(Math.min(width - 2, 78)) + "╴";
       merged.push(theme.fg("dim", rule));
     }
+
+    // /dash to compact hint prepended to footer data
+    merged.push(truncateToWidth(theme.fg("dim", "/dash to compact"), width, "…"));
 
     // Footer data
     merged.push(...this.renderFooterData(width));

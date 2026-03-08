@@ -22,10 +22,7 @@ import { DashboardOverlay, showDashboardOverlay } from "./overlay.ts";
 import type { DashboardState, DashboardMode } from "./types.ts";
 import { debug } from "../debug.ts";
 
-/** Mode cycle order for ctrl+` toggling */
-const MODE_CYCLE: DashboardMode[] = ["compact", "raised", "panel", "focused"];
-
-/** Valid /dashboard subcommands for tab completion */
+/** Valid /dashboard subcommands for tab completion (legacy) */
 const DASHBOARD_SUBCOMMANDS = ["compact", "raised", "panel", "focus", "open"];
 
 export default function (pi: ExtensionAPI) {
@@ -222,12 +219,32 @@ export default function (pi: ExtensionAPI) {
   }
 
   /**
-   * Advance to the next mode in the cycle.
+   * Toggle between compact and raised (2-state /dash toggle).
+   * Panel modes are closed first and footer returns to compact.
    */
-  function cycleNext(ctx: ExtensionContext): void {
-    const currentIdx = MODE_CYCLE.indexOf(state.mode);
-    const nextIdx = (currentIdx + 1) % MODE_CYCLE.length;
-    cycleTo(ctx, MODE_CYCLE[nextIdx]!);
+  function dashToggle(ctx: ExtensionContext): void {
+    // If panel is open, close it first and go to compact
+    if (state.mode === "panel" || state.mode === "focused") {
+      hidePanel();
+      return;
+    }
+    // 2-state toggle: compact ↔ raised
+    const next = state.mode === "raised" ? "compact" : "raised";
+    cycleTo(ctx, next);
+  }
+
+  /**
+   * Toggle panel on/off. Panel and raised footer are mutually exclusive:
+   * opening the panel collapses the footer to compact.
+   */
+  function panelToggle(ctx: ExtensionContext): void {
+    if (state.mode === "panel" || state.mode === "focused") {
+      hidePanel();
+    } else {
+      // Opening panel forces compact footer
+      state.mode = "compact";
+      cycleTo(ctx, "panel");
+    }
   }
 
   // ── Session start: set up the custom footer ──────────────────
@@ -383,9 +400,9 @@ export default function (pi: ExtensionAPI) {
   // Cycles through: compact → raised → panel → focused → compact
 
   pi.registerShortcut("ctrl+`", {
-    description: "Cycle dashboard mode (compact → raised → panel → focused)",
+    description: "Toggle dashboard footer (compact ↔ raised)",
     handler: (ctx) => {
-      cycleNext(ctx);
+      dashToggle(ctx);
     },
   });
 
@@ -404,10 +421,24 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // ── Slash command: /dashboard [open|compact|raised|panel|focus] ─
+  // ── Slash command: /dash ─────────────────────────────────────
+  // 2-state footer toggle: compact ↔ raised. Panel modes are closed first.
+
+  pi.registerCommand("dash", {
+    description: "Toggle dashboard footer: compact ↔ raised. /dashboard opens the side panel.",
+    handler: async (_args, ctx) => {
+      dashToggle(ctx);
+      const label = state.mode === "raised" ? "raised" : "compact";
+      ctx.ui.notify(`Dashboard: ${label}`, "info");
+    },
+  });
+
+  // ── Slash command: /dashboard ─────────────────────────────────
+  // Toggles the side panel open/closed. Panel and raised footer are mutually exclusive.
+  // Legacy subcommands still work for power users.
 
   pi.registerCommand("dashboard", {
-    description: "Toggle dashboard mode. Subcommands: compact, raised, panel, focus, open (legacy modal)",
+    description: "Toggle dashboard side panel (open/close). Use /dash to raise/lower the footer.",
     getArgumentCompletions: (prefix) => {
       const lower = prefix.toLowerCase();
       return DASHBOARD_SUBCOMMANDS
@@ -417,42 +448,23 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       const arg = (args ?? "").trim().toLowerCase();
 
+      // Legacy subcommands preserved
       if (arg === "open") {
-        // Legacy modal overlay (capturing, blocks until Esc)
         state.mode = "raised";
         persistMode(ctx);
         tui?.requestRender();
         await showDashboardOverlay(ctx, pi);
         return;
       }
+      if (arg === "compact") { cycleTo(ctx, "compact"); ctx.ui.notify("Dashboard: compact", "info"); return; }
+      if (arg === "raised")  { cycleTo(ctx, "raised");  ctx.ui.notify("Dashboard: raised", "info");  return; }
+      if (arg === "panel")   { cycleTo(ctx, "panel");   ctx.ui.notify("Dashboard: panel", "info");   return; }
+      if (arg === "focus")   { cycleTo(ctx, "focused"); ctx.ui.notify("Dashboard: focused", "info"); return; }
 
-      if (arg === "compact") {
-        cycleTo(ctx, "compact");
-        ctx.ui.notify("Dashboard: compact", "info");
-        return;
-      }
-
-      if (arg === "raised") {
-        cycleTo(ctx, "raised");
-        ctx.ui.notify("Dashboard: raised", "info");
-        return;
-      }
-
-      if (arg === "panel") {
-        cycleTo(ctx, "panel");
-        ctx.ui.notify("Dashboard: panel (non-capturing)", "info");
-        return;
-      }
-
-      if (arg === "focus") {
-        cycleTo(ctx, "focused");
-        ctx.ui.notify("Dashboard: focused (interactive)", "info");
-        return;
-      }
-
-      // Default: cycle to next mode
-      cycleNext(ctx);
-      ctx.ui.notify(`Dashboard: ${state.mode}`, "info");
+      // Default: toggle panel
+      panelToggle(ctx);
+      const label = (state.mode === "panel" || state.mode === "focused") ? "panel open" : "panel closed";
+      ctx.ui.notify(`Dashboard: ${label}`, "info");
     },
   });
 }
