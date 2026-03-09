@@ -44,6 +44,8 @@ function sanitizeStatusText(text: string): string {
     .trim();
 }
 
+const CLEAVE_STALE_MS = 30_000;
+
 export class DashboardFooter implements Component {
   private tui: TUI;
   private theme: Theme;
@@ -284,30 +286,27 @@ export class DashboardFooter implements Component {
   /** Multi-column raised layout for wide terminals (≥120 cols) */
   private renderRaisedColumns(width: number): string[] {
     const theme = this.theme;
-    const divider = theme.fg("dim", " │ ");
-    const dividerPlain = " │ ";
+    const gutter = "  ";
 
     // Build left column (Design Tree + Cleave) and right column (OpenSpec)
     const leftLines = this.buildDesignTreeLines(width);
     leftLines.push(...this.buildCleaveLines());
     const rightLines = this.buildOpenSpecLines(width);
 
-    // Calculate column widths — give each half, minus divider
-    const dividerWidth = dividerPlain.length;
-    const colWidth = Math.floor((width - dividerWidth) / 2);
+    // Calculate column widths — give each half, minus a soft gutter.
+    const colWidth = Math.floor((width - gutter.length) / 2);
 
-    // Merge columns side by side
+    // Merge columns side by side without a literal divider. The spacing is
+    // enough to separate sections and looks cleaner than an ASCII fence.
     const merged: string[] = [];
     const maxRows = Math.max(leftLines.length, rightLines.length);
     for (let i = 0; i < maxRows; i++) {
-      const left = i < leftLines.length ? leftLines[i] : "";
-      const right = i < rightLines.length ? rightLines[i] : "";
+      const left = i < leftLines.length ? truncateToWidth(leftLines[i], colWidth, "…") : "";
+      const right = i < rightLines.length ? truncateToWidth(rightLines[i], colWidth, "…") : "";
 
-      // Truncate left to column width, then pad to fill
-      const leftTrunc = truncateToWidth(left, colWidth, "…");
-      const leftVisLen = leftTrunc.replace(/\x1b\[[0-9;]*m/g, "").length;
+      const leftVisLen = left.replace(/\x1b\[[0-9;]*m/g, "").length;
       const leftPad = Math.max(0, colWidth - leftVisLen);
-      merged.push(leftTrunc + " ".repeat(leftPad) + divider + right);
+      merged.push(truncateToWidth(left + " ".repeat(leftPad) + gutter + right, width, "…"));
     }
 
     const raisedMeta = this.buildRaisedMetaLine(width);
@@ -465,6 +464,11 @@ export class DashboardFooter implements Component {
     const cl = sharedState.cleave;
     if (!cl || cl.status === "idle") return lines;
 
+    const isTerminalState = cl.status === "done" || cl.status === "failed";
+    if (isTerminalState && cl.updatedAt && (Date.now() - cl.updatedAt) > CLEAVE_STALE_MS) {
+      return lines;
+    }
+
     const statusColor: ThemeColor = cl.status === "done" ? "success"
       : cl.status === "failed" ? "error"
       : "warning";
@@ -492,7 +496,9 @@ export class DashboardFooter implements Component {
 
   private buildMemoryAuditLine(width: number): string {
     const theme = this.theme;
-    const summary = formatMemoryAuditSummary(sharedState.lastMemoryInjection, { wide: width >= 140 });
+    // Even on wide layouts, keep this compact so it reads as a footer audit
+    // line rather than a third content column competing with the dashboard.
+    const summary = formatMemoryAuditSummary(sharedState.lastMemoryInjection, { wide: width >= 180 });
     return truncateToWidth(theme.fg("dim", summary), width, "…");
   }
 

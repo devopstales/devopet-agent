@@ -75,6 +75,8 @@ export interface CleaveState {
   status: CleaveStatus;
   runId?: string;
   children?: CleaveChildState[];
+  /** Unix epoch ms of the last cleave dashboard update */
+  updatedAt?: number;
 }
 
 // ── Dashboard UI ─────────────────────────────────────────────

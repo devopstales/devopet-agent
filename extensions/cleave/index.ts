@@ -80,6 +80,7 @@ function emitCleaveState(
 	(sharedState as any).cleave = {
 		status,
 		runId,
+		updatedAt: Date.now(),
 		children: children?.map((c) => ({
 			label: c.label,
 			status: mapChildStatus(c.status),
