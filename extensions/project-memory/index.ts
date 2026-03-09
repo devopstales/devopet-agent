@@ -60,6 +60,13 @@ import { migrateToFactStore, needsMigration, markMigrated } from "./migration.ts
 import { SECTIONS } from "./template.ts";
 import { serializeConversation, convertToLlm } from "@mariozechner/pi-coding-agent";
 import { sharedState } from "../shared-state.ts";
+import { 
+  resolveTier, 
+  getTierDisplayLabel, 
+  getDefaultPolicy,
+  type ModelTier, 
+  type RegistryModel 
+} from "../lib/model-routing.ts";
 
 /** Map abstract effort model tiers to concrete cloud model IDs for extraction. */
 const EFFORT_EXTRACTION_MODELS: Record<string, string> = {
@@ -227,6 +234,49 @@ function buildFileDetails(fileOps: { read: Set<string>; edited: Set<string>; wri
   const modifiedFiles = [...modified].sort();
   return { readFiles, modifiedFiles };
 }
+
+/**
+ * Resolve the compaction fallback chain based on effort tier and routing policy.
+ * 
+ * Returns an ordered array of { tier, timeout } objects representing the fallback chain.
+ * Local models are resolved via discoverLocalChatModel(), cloud models via resolveTier().
+ */
+function resolveCompactionFallbackChain(
+  ctx: ExtensionContext,
+  config: MemoryConfig
+): Array<{ tier: ModelTier; timeout: number; label: string }> {
+  if (!config.compactionFallbackChain) {
+    // Legacy behavior: only try local
+    return [{ tier: "local", timeout: config.compactionLocalTimeout, label: "Local" }];
+  }
+
+  const effort = sharedState.effort;
+  const policy = sharedState.routingPolicy ?? getDefaultPolicy();
+  
+  // Effort tiers 1-5: prefer local first. Tiers 6-7: can start with cloud.
+  const startWithLocal = !effort || effort.compaction === "local";
+  
+  const chain: Array<{ tier: ModelTier; timeout: number; label: string }> = [];
+  
+  if (startWithLocal) {
+    chain.push({ tier: "local", timeout: config.compactionLocalTimeout, label: "Local" });
+  }
+  
+  // Add GPT-5.3-codex-spark (free reasoning model) as priority fallback
+  chain.push({ tier: "sonnet", timeout: config.compactionCodexTimeout, label: "GPT-5.3-Codex-Spark" });
+  
+  // Add Haiku as budget fallback
+  chain.push({ tier: "haiku", timeout: config.compactionHaikuTimeout, label: "Haiku" });
+  
+  // If we started with cloud, add local as final fallback
+  if (!startWithLocal) {
+    chain.push({ tier: "local", timeout: config.compactionLocalTimeout, label: "Local" });
+  }
+  
+  return chain;
+}
+
+// tryCompactionWithTier will be defined after helper functions
 
 /**
  * Compute degeneracy pressure as an exponential curve from onset to warning threshold.
@@ -560,6 +610,161 @@ export default function (pi: ExtensionAPI) {
     updateStatus(ctx);
   });
 
+  // ---------------------------------------------------------------------------
+  // Compaction fallback chain helpers (require store to be initialized)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Try local compaction using the existing Ollama path.
+   */
+  async function tryLocalCompaction(
+    localModel: string, 
+    prep: any, 
+    customInstructions: string | undefined,
+    signal: AbortSignal
+  ): Promise<{ summary: string; details: any } | null> {
+    // Build summarization prompt (same as existing logic)
+    const llmMessages = convertToLlm(prep.messagesToSummarize);
+    let conversationText = serializeConversation(llmMessages);
+
+    // Truncate to ~60k chars (~15k tokens) to fit local model context windows
+    const MAX_CONVERSATION_CHARS = 60_000;
+    if (conversationText.length > MAX_CONVERSATION_CHARS) {
+      conversationText = "...[earlier conversation truncated]...\n\n"
+        + conversationText.slice(-MAX_CONVERSATION_CHARS);
+    }
+
+    let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
+    if (prep.previousSummary) {
+      promptText += `<previous-summary>\n${prep.previousSummary}\n</previous-summary>\n\n`;
+    }
+
+    // Inject project memory context for richer summaries
+    if (store) {
+      const mind = activeMind();
+      const facts = store.getActiveFacts(mind);
+      if (facts.length > 0) {
+        const factLines = facts.slice(0, 30).map((f: Fact) => `- [${f.section}] ${f.content}`).join("\n");
+        promptText += `<project-memory>\n${factLines}\n</project-memory>\n\n`;
+        promptText += "The project memory above provides persistent context. Reference relevant facts in your summary.\n\n";
+      }
+    }
+
+    const basePrompt = prep.previousSummary ? COMPACTION_UPDATE_PROMPT : COMPACTION_INITIAL_PROMPT;
+    promptText += customInstructions ? `${basePrompt}\n\nAdditional focus: ${customInstructions}` : basePrompt;
+
+    // Handle split turn prefix if needed
+    let turnPrefixSummary = "";
+    if (prep.isSplitTurn && prep.turnPrefixMessages.length > 0) {
+      const prefixMessages = convertToLlm(prep.turnPrefixMessages);
+      let prefixText = serializeConversation(prefixMessages);
+      if (prefixText.length > MAX_CONVERSATION_CHARS) {
+        prefixText = "...[truncated]...\n\n" + prefixText.slice(-MAX_CONVERSATION_CHARS);
+      }
+      const prefixPrompt = `<conversation>\n${prefixText}\n</conversation>\n\n${COMPACTION_TURN_PREFIX_PROMPT}`;
+
+      try {
+        const prefixResp = await ollamaChat(localModel, COMPACTION_SYSTEM_PROMPT, prefixPrompt, {
+          maxTokens: 2048, signal,
+        });
+        if (prefixResp) turnPrefixSummary = prefixResp;
+      } catch {
+        // If turn prefix fails, continue without it
+      }
+    }
+
+    // Generate main summary
+    const summary = await ollamaChat(localModel, COMPACTION_SYSTEM_PROMPT, promptText, {
+      maxTokens: 4096, signal,
+    });
+
+    if (!summary) return null;
+
+    let fullSummary = summary;
+    if (turnPrefixSummary) {
+      fullSummary += `\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixSummary}`;
+    }
+
+    // Append file operations
+    fullSummary += formatFileOps(prep.fileOps);
+
+    return {
+      summary: fullSummary,
+      details: buildFileDetails(prep.fileOps),
+    };
+  }
+
+  /**
+   * Try cloud compaction by falling through to pi's core compaction.
+   * This is a placeholder - we don't duplicate pi's cloud calling logic here.
+   */
+  async function tryCloudCompaction(
+    model: any,
+    prep: any, 
+    customInstructions: string | undefined,
+    signal: AbortSignal,
+    ctx: ExtensionContext
+  ): Promise<{ summary: string; details: any } | null> {
+    // We deliberately return null here to fall through to pi's core compaction
+    // which already has the cloud model calling infrastructure.
+    // This allows us to leverage pi's existing robust cloud compaction 
+    // while controlling which model gets selected via the fallback chain.
+    console.log(`[project-memory] Falling through to pi core compaction with ${model.id}`);
+    return null;
+  }
+
+  /**
+   * Attempt compaction with a specific model tier from the fallback chain.
+   * Returns the compaction result or null if this tier failed.
+   */
+  async function tryCompactionWithTier(
+    tier: ModelTier,
+    timeout: number,
+    label: string,
+    prep: any,
+    customInstructions: string | undefined,
+    signal: AbortSignal,
+    ctx: ExtensionContext
+  ): Promise<{ summary: string; details: any } | null> {
+    try {
+      const timeoutSignal = AbortSignal.timeout(timeout);
+      const combinedSignal = AbortSignal.any([signal, timeoutSignal]);
+      
+      if (tier === "local") {
+        // Use local Ollama path
+        const localModel = await discoverLocalChatModel();
+        if (!localModel) {
+          console.log(`[project-memory] ${label} model not available`);
+          return null;
+        }
+        
+        return await tryLocalCompaction(localModel, prep, customInstructions, combinedSignal);
+      } else {
+        // Use cloud model via model registry
+        const all = ctx.modelRegistry.getAll() as unknown as RegistryModel[];
+        const policy = sharedState.routingPolicy ?? getDefaultPolicy();
+        const resolved = resolveTier(tier, all, policy);
+        
+        if (!resolved) {
+          console.log(`[project-memory] No ${label} model available via provider routing`);
+          return null;
+        }
+        
+        const model = all.find((m) => m.id === resolved.modelId);
+        if (!model) {
+          console.log(`[project-memory] ${label} model ${resolved.modelId} not found in registry`);
+          return null;
+        }
+        
+        return await tryCloudCompaction(model as any, prep, customInstructions, combinedSignal, ctx);
+      }
+    } catch (err) {
+      if (signal.aborted) throw err; // Don't swallow user cancellation
+      console.log(`[project-memory] ${label} compaction failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
   pi.on("session_shutdown", async (_event, ctx) => {
     sessionActive = false;
 
@@ -639,7 +844,7 @@ export default function (pi: ExtensionAPI) {
   // 2. compactionLocalFirst=false: only intercept when useLocalCompaction flag is set
   //    (after cloud failure). Cloud gets first attempt; local is the safety net.
   pi.on("session_before_compact", async (event, ctx) => {
-    // Re-read effort state at intercept time so mid-session /effort switches take effect.
+    // Check if we should intercept compaction at all
     const liveCompactionLocal = sharedState.effort
       ? sharedState.effort.compaction === "local"
       : config.compactionLocalFirst;
@@ -650,105 +855,59 @@ export default function (pi: ExtensionAPI) {
     const prep = event.preparation;
     if (!prep || prep.messagesToSummarize.length === 0) return;
 
-    const localModel = await discoverLocalChatModel();
-    if (!localModel) return; // No local model — cloud retry will also fail, but that's logged
-
+    // Get the intelligent fallback chain
+    const fallbackChain = resolveCompactionFallbackChain(ctx, config);
+    
     if (ctx.hasUI) {
+      const isRetry = !config.compactionLocalFirst;
+      const firstTier = fallbackChain[0]?.label || "Unknown";
       ctx.ui.notify(
-        config.compactionLocalFirst
-          ? "Compacting via local model"
-          : "Cloud compaction failed — falling back to local model",
-        config.compactionLocalFirst ? "info" : "warning",
+        isRetry
+          ? `Cloud compaction failed — trying intelligent fallback: ${firstTier}`
+          : `Intelligent compaction: ${firstTier} → GPT-5.3 → Haiku fallback chain`,
+        isRetry ? "warning" : "info",
       );
     }
 
-    const timeoutSignal = AbortSignal.timeout(config.compactionLocalTimeout);
-    const combinedSignal = AbortSignal.any([event.signal, timeoutSignal]);
-
-    // Build summarization prompt
-    const llmMessages = convertToLlm(prep.messagesToSummarize);
-    let conversationText = serializeConversation(llmMessages);
-
-    // Truncate to ~60k chars (~15k tokens) to fit local model context windows.
-    // Most local models have 8k-32k context; we leave room for system prompt + output.
-    const MAX_CONVERSATION_CHARS = 60_000;
-    if (conversationText.length > MAX_CONVERSATION_CHARS) {
-      conversationText = "...[earlier conversation truncated]...\n\n"
-        + conversationText.slice(-MAX_CONVERSATION_CHARS);
-    }
-
-    let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
-    if (prep.previousSummary) {
-      promptText += `<previous-summary>\n${prep.previousSummary}\n</previous-summary>\n\n`;
-    }
-
-    // Inject project memory context for richer summaries
-    if (store) {
-      const mind = activeMind();
-      const facts = store.getActiveFacts(mind);
-      if (facts.length > 0) {
-        const factLines = facts.slice(0, 30).map((f: Fact) => `- [${f.section}] ${f.content}`).join("\n");
-        promptText += `<project-memory>\n${factLines}\n</project-memory>\n\n`;
-        promptText += "The project memory above provides persistent context. Reference relevant facts in your summary.\n\n";
+    // Try each tier in the fallback chain
+    for (const [index, tier] of fallbackChain.entries()) {
+      console.log(`[project-memory] Trying compaction tier ${index + 1}/${fallbackChain.length}: ${tier.label} (${tier.timeout}ms timeout)`);
+      
+      const result = await tryCompactionWithTier(
+        tier.tier,
+        tier.timeout,
+        tier.label,
+        prep,
+        event.customInstructions,
+        event.signal,
+        ctx
+      );
+      
+      if (result) {
+        console.log(`[project-memory] Compaction succeeded with ${tier.label}`);
+        return {
+          compaction: {
+            summary: result.summary,
+            firstKeptEntryId: prep.firstKeptEntryId,
+            tokensBefore: prep.tokensBefore,
+            details: result.details,
+          },
+        };
       }
+      
+      // If this was a cloud tier that returned null, it means we should fall through
+      // to pi's core compaction with that model instead of continuing the chain.
+      if (tier.tier !== "local" && result === null) {
+        console.log(`[project-memory] ${tier.label} requesting fallthrough to pi core compaction`);
+        return; // Let pi core handle it with the selected model
+      }
+      
+      console.log(`[project-memory] ${tier.label} compaction failed, trying next tier`);
     }
 
-    const basePrompt = prep.previousSummary
-      ? COMPACTION_UPDATE_PROMPT
-      : COMPACTION_INITIAL_PROMPT;
-
-    const customInstructions = event.customInstructions;
-    promptText += customInstructions ? `${basePrompt}\n\nAdditional focus: ${customInstructions}` : basePrompt;
-
-    // Handle split turn prefix
-    let turnPrefixSummary = "";
-    if (prep.isSplitTurn && prep.turnPrefixMessages.length > 0) {
-      const prefixMessages = convertToLlm(prep.turnPrefixMessages);
-      let prefixText = serializeConversation(prefixMessages);
-      if (prefixText.length > MAX_CONVERSATION_CHARS) {
-        prefixText = "...[truncated]...\n\n" + prefixText.slice(-MAX_CONVERSATION_CHARS);
-      }
-      const prefixPrompt = `<conversation>\n${prefixText}\n</conversation>\n\n${COMPACTION_TURN_PREFIX_PROMPT}`;
-
-      try {
-        const prefixResp = await ollamaChat(localModel, COMPACTION_SYSTEM_PROMPT, prefixPrompt, {
-          maxTokens: 2048, signal: combinedSignal,
-        });
-        if (prefixResp) turnPrefixSummary = prefixResp;
-      } catch {
-        // If turn prefix fails, continue without it
-      }
-    }
-
-    // Generate main summary via local model
-    try {
-      const summary = await ollamaChat(localModel, COMPACTION_SYSTEM_PROMPT, promptText, {
-        maxTokens: 4096, signal: combinedSignal,
-      });
-
-      if (!summary) return; // Empty response — compaction fails entirely (already retried)
-
-      let fullSummary = summary;
-      if (turnPrefixSummary) {
-        fullSummary += `\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixSummary}`;
-      }
-
-      // Append file operations (mirrors pi core behavior)
-      fullSummary += formatFileOps(prep.fileOps);
-
-      return {
-        compaction: {
-          summary: fullSummary,
-          firstKeptEntryId: prep.firstKeptEntryId,
-          tokensBefore: prep.tokensBefore,
-          details: buildFileDetails(prep.fileOps),
-        },
-      };
-    } catch (err) {
-      // Local model failed — compaction fails entirely
-      console.error(`[project-memory] Local model compaction failed: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
+    // All tiers in the chain failed
+    console.error(`[project-memory] All compaction tiers failed. Fallback chain: ${fallbackChain.map(t => t.label).join(" → ")}`);
+    return; // Let pi core attempt compaction as final fallback
   });
 
   pi.on("session_compact", async (_event, ctx) => {

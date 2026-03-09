@@ -31,6 +31,12 @@ export interface MemoryConfig {
   compactionLocalFirst: boolean;
   /** Timeout for local model compaction inference in ms */
   compactionLocalTimeout: number;
+  /** Enable intelligent fallback chain: local → gpt-5.3-codex-spark → haiku */
+  compactionFallbackChain: boolean;
+  /** Timeout for gpt-5.3-codex-spark compaction fallback in ms */
+  compactionCodexTimeout: number;
+  /** Timeout for haiku compaction fallback in ms */
+  compactionHaikuTimeout: number;
   /** Max consecutive compaction retry attempts before giving up for the session */
   compactionRetryLimit: number;
   /** Enable Phase 2 global extraction (generalizes project facts to user-level store) */
@@ -51,7 +57,10 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   compactionAutoPercent: 85,
   compactionLocalFallback: true,
   compactionLocalFirst: true,
-  compactionLocalTimeout: 120_000,
+  compactionLocalTimeout: 45_000,
+  compactionFallbackChain: true,
+  compactionCodexTimeout: 60_000,
+  compactionHaikuTimeout: 30_000,
   compactionRetryLimit: 3,
   globalExtractionEnabled: false,
 };
