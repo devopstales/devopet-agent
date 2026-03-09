@@ -26,6 +26,7 @@ import { tierConfig } from "./effort/tiers.ts";
 import type { EffortLevel } from "./effort/types.ts";
 import { resolveTier, getTierDisplayLabel, getDefaultPolicy } from "./lib/model-routing.ts";
 import type { ModelTier, RegistryModel } from "./lib/model-routing.ts";
+import { writeLastUsedModel } from "./lib/model-preferences.ts";
 
 /** Model tier ordering for effort cap comparison. */
 export const TIER_ORDER: Record<string, number> = { local: 0, haiku: 1, sonnet: 2, opus: 3 };
@@ -89,6 +90,25 @@ const THINKING_LABELS: Record<ThinkingLevelName, { icon: string; label: string }
   high: { icon: "🧠", label: "deep thinking" },
 };
 
+const TIER_CAPABILITY_COPY: Record<TierName, string> = {
+  local: "on-device local execution",
+  haiku: "fast lightweight cloud tier",
+  sonnet: "balanced capability tier",
+  opus: "deep reasoning tier",
+};
+
+export function buildSetModelTierDescription(): string {
+  return (
+    "Switch the active capability tier based on task complexity. " +
+    "pi-kit resolves the requested tier through the active provider routing policy, so the backing model may come from Anthropic, OpenAI, or local inference. " +
+    "Use 'local' for on-device work, 'haiku' for simple lookups and boilerplate, 'sonnet' for routine coding and execution, and 'opus' for deep reasoning and architecture."
+  );
+}
+
+export function buildTierCommandDescription(tier: TierName): string {
+  return `Switch to ${getTierDisplayLabel(tier)} [${tier}] — ${TIER_CAPABILITY_COPY[tier]} via provider-aware routing`;
+}
+
 async function switchTo(tier: TierName, pi: ExtensionAPI, ctx: ExtensionContext): Promise<RegistryModel | null> {
   const all = ctx.modelRegistry.getAll() as unknown as RegistryModel[];
   const policy = (sharedState as any).routingPolicy ?? getDefaultPolicy();
@@ -97,7 +117,11 @@ async function switchTo(tier: TierName, pi: ExtensionAPI, ctx: ExtensionContext)
   const model = all.find((m) => m.id === resolved.modelId);
   if (!model) return null;
   const success = await pi.setModel(model as unknown as Model<any>);
-  return success ? model : null;
+  if (success) {
+    writeLastUsedModel(ctx.cwd, { provider: model.provider, modelId: model.id });
+    return model;
+  }
+  return null;
 }
 
 function currentTierName(ctx: ExtensionContext): TierName | null {
@@ -121,14 +145,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "set_model_tier",
     label: "Set Model Tier",
-    description:
-      "Switch the active model tier based on task complexity. " +
-      "Use 'opus' for deep reasoning, architecture, and planning. " +
-      "Use 'sonnet' for routine code edits, file operations, and execution. " +
-      "Use 'haiku' for simple lookups, formatting, and boilerplate generation. " +
-      "Downgrade when the current task is straightforward to conserve budget. " +
-      "Upgrade when you encounter something that needs deeper reasoning.",
-    promptSnippet: "Switch model tier (opus/sonnet/haiku) to match task complexity and conserve budget",
+    description: buildSetModelTierDescription(),
+    promptSnippet: "Switch capability tier (local/haiku/sonnet/opus) through provider-aware routing",
     promptGuidelines: [
       "Downgrade to sonnet for routine file edits, command execution, and cleanup tasks",
       "Upgrade to opus when encountering architecture decisions, complex debugging, or multi-step planning",
@@ -165,12 +183,13 @@ export default function (pi: ExtensionAPI) {
       const model = await switchTo(tier, pi, ctx);
       if (model) {
         const thinking = pi.getThinkingLevel();
-        ctx.ui.notify(`${icon} → ${displayLabel} [${tier}] (thinking: ${thinking}): ${params.reason}`, "info");
+        const target = `${model.provider}/${model.id}`;
+        ctx.ui.notify(`${icon} → ${displayLabel} [${tier}] → ${target} (thinking: ${thinking}): ${params.reason}`, "info");
         return {
           content: [
             {
               type: "text" as const,
-              text: `Switched to ${displayLabel} [${tier}] (${model.id}), thinking: ${thinking}. ${params.reason}`,
+              text: `Switched to ${displayLabel} [${tier}] via ${target}, thinking: ${thinking}. ${params.reason}`,
             },
           ],
           details: undefined,
@@ -245,7 +264,7 @@ export default function (pi: ExtensionAPI) {
     const icon = TIER_ICONS[tier];
     const displayLabel = getTierDisplayLabel(tier);
     pi.registerCommand(tier, {
-      description: `Switch to ${displayLabel} [${tier}] (${icon})`,
+      description: `${buildTierCommandDescription(tier)} (${icon})`,
       handler: async (_args, ctx) => {
         // Enforce effort cap — same check as the tool
         const capCheck = checkEffortCap(tier);

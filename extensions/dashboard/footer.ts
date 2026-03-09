@@ -2,8 +2,8 @@
  * Custom footer component for the unified dashboard.
  *
  * Implements two rendering modes:
- *   Layer 0 (compact): 3 lines — dashboard summary + original footer data
- *   Layer 1 (raised):  up to 10 lines — section details + original footer data
+ *   Layer 0 (compact): 1 line — dashboard summary only
+ *   Layer 1 (raised):  up to 10 lines — section details + footer metadata
  *
  * Reads sharedState for design-tree, openspec, and cleave data.
  * Reads footerData for git branch, extension statuses, provider count.
@@ -205,6 +205,17 @@ export class DashboardFooter implements Component {
       dashParts.push(gauge);
     }
 
+    // Compact mode should stay dashboard-first, but still expose the active
+    // provider/model in a terse way so multi-provider routing is visible.
+    const ctx = this.ctxRef;
+    const model = ctx?.model;
+    if (model && wide) {
+      const modelLabel = this.footerData.getAvailableProviderCount() > 1
+        ? `${model.provider}/${model.id}`
+        : model.id;
+      dashParts.push(theme.fg("dim", modelLabel));
+    }
+
     // Append /dash hint for discoverability (varies by mode)
     const dashHint = this.dashState.mode === "panel"
       ? theme.fg("dim", "/dashboard to close")
@@ -217,9 +228,9 @@ export class DashboardFooter implements Component {
       lines.push(truncateToWidth(dashHint, width, "…"));
     }
 
-    // Line 2-3: Original footer data (pwd + stats)
-    lines.push(...this.renderFooterData(width));
-
+    // Compact mode is intentionally dashboard-only. Detailed footer metadata
+    // stays in raised mode so the compact footer does not look like the built-in
+    // footer is still leaking through.
     return lines;
   }
 

@@ -3,6 +3,21 @@
 All notable changes to pi-kit are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - 2026-03-09
+
+### Changed
+
+- **Provider-aware model control copy** — `/local`, `/haiku`, `/sonnet`, `/opus`, and `set_model_tier` now describe provider-neutral capability tiers instead of sounding Anthropic-only.
+  - Model-switch notifications now include the resolved concrete provider/model so routing decisions are visible at runtime.
+  - Effort startup and tier-switch notifications also report the resolved provider/model.
+- **Dashboard compact footer cleanup** — compact mode now renders a single dashboard-first line instead of duplicating footer metadata into extra lines.
+  - Compact mode still shows the active model inline on wide terminals for at-a-glance provider awareness.
+
+### Fixed
+
+- **Last-used driver persistence** — pi-kit now persists the last successfully selected concrete driver model in `.pi/config.json` and restores it on session start before falling back to effort-tier defaults.
+- Compact dashboard footer no longer looks like the built-in footer is still leaking through.
+
 ## [0.3.1] - 2026-03-09
 
 ### Changed

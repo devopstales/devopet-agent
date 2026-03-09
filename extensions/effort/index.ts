@@ -31,6 +31,7 @@ import {
   type ModelTier,
   type RegistryModel,
 } from "../lib/model-routing.ts";
+import { readLastUsedModel, writeLastUsedModel } from "../lib/model-preferences.ts";
 
 // ─── Constants ───────────────────────────────────────────────
 
@@ -60,18 +61,31 @@ async function switchDriverModel(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   driver: EffortModelTier,
-): Promise<boolean> {
+): Promise<RegistryModel | null> {
   // Snapshot the registry once; both resolveTier and the model lookup use it
   const all = ctx.modelRegistry.getAll() as unknown as RegistryModel[];
   // Build O(1) index over the same snapshot — no second linear scan (C3)
   const byKey = new Map(all.map((m) => [`${m.provider}/${m.id}`, m]));
   const policy = sharedState.routingPolicy ?? getDefaultPolicy();
   const resolved = resolveTier(driver, all, policy);
-  if (!resolved) return false;
+  if (!resolved) return null;
   // Direct map lookup — no second linear scan of `all`
   const model = byKey.get(`${resolved.provider}/${resolved.modelId}`);
-  if (!model) return false;
-  return pi.setModel(model as any);
+  if (!model) return null;
+  const success = await pi.setModel(model as any);
+  return success ? model : null;
+}
+
+async function restoreLastUsedModel(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<RegistryModel | null> {
+  const persisted = readLastUsedModel(ctx.cwd);
+  if (!persisted) return null;
+  const model = ctx.modelRegistry.find(persisted.provider, persisted.modelId) as unknown as RegistryModel | undefined;
+  if (!model) return null;
+  const success = await pi.setModel(model as any);
+  return success ? model : null;
 }
 
 /**
@@ -218,18 +232,25 @@ export default function (pi: ExtensionAPI) {
     sharedState.effort = state;
     pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "effort" });
 
-    // Switch driver model
-    const modelSwitched = await switchDriverModel(pi, ctx, state.driver);
+    // Restore the operator's last explicit model choice when possible.
+    // If none is persisted (or it is no longer available), fall back to the
+    // current effort tier's resolved driver.
+    const restoredModel = await restoreLastUsedModel(pi, ctx);
+    const driverModel = restoredModel ?? await switchDriverModel(pi, ctx, state.driver);
 
     // Set thinking level
     pi.setThinkingLevel(state.thinking as any);
 
     // Notify operator
     const icon = TIER_ICONS[state.level];
-    const modelNote = modelSwitched ? "" : " (driver model unavailable)";
+    const modelNote = restoredModel
+      ? ` → restored ${restoredModel.provider}/${restoredModel.id}`
+      : driverModel
+        ? ` → ${driverModel.provider}/${driverModel.id}`
+        : " (driver model unavailable)";
     ctx.ui.notify(
       `${icon} Effort: ${state.name} (${state.driver}/${state.thinking})${modelNote}`,
-      modelSwitched ? "info" : "warning",
+      driverModel ? "info" : "warning",
     );
   });
 
@@ -330,16 +351,21 @@ export default function (pi: ExtensionAPI) {
       pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "effort" });
 
       // Switch driver model
-      const modelSwitched = await switchDriverModel(pi, ctx, state.driver);
+      const driverModel = await switchDriverModel(pi, ctx, state.driver);
+      if (driverModel) {
+        writeLastUsedModel(ctx.cwd, { provider: driverModel.provider, modelId: driverModel.id });
+      }
 
       // Set thinking level
       pi.setThinkingLevel(state.thinking as any);
 
       const icon = TIER_ICONS[state.level];
-      const modelNote = modelSwitched ? "" : " (driver model unavailable)";
+      const modelNote = driverModel
+        ? ` → ${driverModel.provider}/${driverModel.id}`
+        : " (driver model unavailable)";
       ctx.ui.notify(
         `${icon} Switched to ${state.name} (${state.driver}/${state.thinking})${modelNote}`,
-        modelSwitched ? "info" : "warning",
+        driverModel ? "info" : "warning",
       );
     },
   });
