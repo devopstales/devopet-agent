@@ -1,7 +1,7 @@
 ---
 id: lifecycle-reconciliation
 title: Lifecycle Reconciliation — Ambient Sync from Implementation Reality back to Design Tree + OpenSpec
-status: implementing
+status: implemented
 parent: design-tree-lifecycle
 tags: [design-tree, openspec, cleave, lifecycle, automation]
 open_questions: []
