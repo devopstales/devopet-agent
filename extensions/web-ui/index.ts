@@ -42,6 +42,9 @@ function openBrowser(url: string, ctx: Parameters<typeof notify>[0]): void {
       notify(ctx, `Failed to open browser (${cmd}): ${err.message}`);
     });
   }
+  if (typeof child.unref === "function") {
+    child.unref();
+  }
 }
 
 function notify(ctx: { ui?: { notify?: (msg: string, level?: "info" | "warning" | "error") => void } }, message: string): void {

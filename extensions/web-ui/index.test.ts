@@ -63,10 +63,10 @@ describe("web-ui command surface", () => {
 
   it("starts server and reports URL", async () => {
     const messages = await runCommand(api, "start");
+    realServer = _getServer(); // capture before any assertion can throw — ensures afterEach stops the server
     assert.equal(messages.length, 1);
     assert.match(messages[0], /started/i);
     assert.match(messages[0], /127\.0\.0\.1/);
-    realServer = _getServer();
     assert.ok(realServer);
   });
 
@@ -80,7 +80,7 @@ describe("web-ui command surface", () => {
     const prev = _setSpawnFn(((cmd: string, args: string[], _opts: unknown) => {
       capturedCmd = cmd;
       capturedArgs = args;
-      return { stdio: "ignore" } as any;
+      return { on: () => {}, unref: () => {} } as any;
     }) as any);
 
     try {
