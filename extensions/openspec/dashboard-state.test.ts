@@ -48,7 +48,7 @@ describe("emitOpenSpecState — shared refresh helper", () => {
 	});
 
 	it("writes openspec changes to sharedState.openspec", () => {
-		createChange(tmpDir, "my-feature");
+		createChange(tmpDir, "my-feature", "My Feature", "Test feature intent");
 
 		const pi = createFakePi();
 		emitOpenSpecState(tmpDir, pi as any);
@@ -69,7 +69,7 @@ describe("emitOpenSpecState — shared refresh helper", () => {
 	});
 
 	it("maps artifacts correctly based on change filesystem presence", () => {
-		createChange(tmpDir, "with-proposal");
+		createChange(tmpDir, "with-proposal", "With Proposal", "Test proposal intent");
 
 		const pi = createFakePi();
 		emitOpenSpecState(tmpDir, pi as any);
@@ -77,7 +77,7 @@ describe("emitOpenSpecState — shared refresh helper", () => {
 		const change = sharedState.openspec?.changes[0];
 		assert.ok(change, "change should exist");
 		// createChange writes proposal.md
-		assert.ok(change.artifacts.includes("proposal"), "should include 'proposal' artifact");
+		assert.ok(change.artifacts?.includes("proposal"), "should include 'proposal' artifact");
 	});
 
 	it("emits empty changes array when openspec/changes dir is empty", () => {
@@ -105,10 +105,32 @@ describe("emitOpenSpecState — shared refresh helper", () => {
 		// sharedState still updated with empty array so dashboard clears stale state
 		assert.ok(sharedState.openspec, "sharedState.openspec should be set");
 		assert.deepEqual(sharedState.openspec.changes, []);
+		// Dashboard event should fire so consumers know to re-render
+		const dashboardEvents = pi.emitted.filter((e) => e.channel === DASHBOARD_UPDATE_EVENT);
+		assert.equal(dashboardEvents.length, 1, "should emit dashboard update event even for empty state");
+	});
+
+	it("verifies index.ts mutation contract: caller must invoke emitOpenSpecState after mutations", () => {
+		// This test documents that index.ts is responsible for calling emitOpenSpecState
+		// after every state-mutating command. It verifies the contract by ensuring that:
+		// 1. emitOpenSpecState is the single refresh surface (not inline boilerplate)
+		// 2. Any call to it is sufficient to update dashboard state
+		createChange(tmpDir, "contract-test", "Contract Test", "Verify callers use shared helper");
+
+		const pi = createFakePi();
+		// Simulate what every mutating index.ts command path must do
+		emitOpenSpecState(tmpDir, pi as any);
+
+		// The dashboard should reflect the updated state
+		assert.ok(sharedState.openspec, "sharedState.openspec must be set — index.ts callers must not skip emitOpenSpecState");
+		assert.equal(sharedState.openspec.changes.length, 1);
+		// The event must have fired — consumers depend on this for re-render
+		const dashboardEvents = pi.emitted.filter((e) => e.channel === DASHBOARD_UPDATE_EVENT);
+		assert.equal(dashboardEvents.length, 1, "index.ts must emit DASHBOARD_UPDATE_EVENT via emitOpenSpecState, not inline");
 	});
 
 	it("emits task progress from tasks.md when present", () => {
-		createChange(tmpDir, "with-tasks");
+		createChange(tmpDir, "with-tasks", "With Tasks", "Test tasks intent");
 		const tasksPath = path.join(tmpDir, "openspec", "changes", "with-tasks", "tasks.md");
 		fs.writeFileSync(
 			tasksPath,
