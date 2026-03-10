@@ -41,7 +41,8 @@
       "./extensions/dashboard",
       "./extensions/tool-profile",
       "./extensions/vault",
-      "./extensions/version-check.ts"
+      "./extensions/version-check.ts",
+      "./extensions/web-ui"
     ],
     "skills": [
       "./skills"

@@ -82,6 +82,15 @@ Live status panel showing design tree, OpenSpec changes, cleave dispatch, and gi
   - No line cap — renders as much content as needed
 - **Keyboard**: `Ctrl+Shift+B` toggles raised/compact
 
+### 🌐 Web UI
+
+Localhost-only, read-only HTTP dashboard that exposes live control-plane state as JSON. It binds to `127.0.0.1`, is not started automatically, and serves no mutation endpoints in the MVP.
+
+- **Command**: `/web-ui [start|stop|status|open]`
+- **Shell**: polling-first HTML dashboard
+- **Endpoints**: `GET /api/state`, plus slice routes `/api/session`, `/api/dashboard`, `/api/design-tree`, `/api/openspec`, `/api/cleave`, `/api/models`, `/api/memory`, `/api/health`
+- **State contract**: versioned `ControlPlaneState` (schema v1)
+
 ### ⚔️ Effort Tiers
 
 Single global knob controlling the inference intensity across the entire harness. Seven named tiers using provider-neutral labels — tier labels resolve to concrete model IDs from whichever provider (Anthropic or OpenAI) the session routing policy prefers.
@@ -188,6 +197,7 @@ Connect external MCP (Model Context Protocol) servers as native pi tools.
 | `spinner-verbs` | Warhammer 40K-themed loading messages |
 | `style` | Verdant design system reference (`/style`) |
 | `version-check` | Polls GitHub releases hourly, notifies when a new pi-kit release is available |
+| `web-ui` | Localhost-only read-only HTTP dashboard and JSON control-plane endpoints (`/web-ui [start|stop|status|open]`) |
 
 ## Skills
 

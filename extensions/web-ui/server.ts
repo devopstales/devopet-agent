@@ -40,6 +40,10 @@ const STATIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "stat
 // Cache shell content at module load time to avoid synchronous I/O on every request.
 let _shellCache: string | null = null;
 
+export function _resetShellCache(): void {
+  _shellCache = null;
+}
+
 function serveShell(): string {
   if (_shellCache !== null) return _shellCache;
   const indexPath = path.join(STATIC_DIR, "index.html");
@@ -145,7 +149,8 @@ const SLICE_ROUTES: Record<string, keyof Omit<ControlPlaneState, "schemaVersion"
 function jsonResponse(
   res: http.ServerResponse,
   status: number,
-  body: unknown
+  body: unknown,
+  method = "GET"
 ): void {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -154,7 +159,7 @@ function jsonResponse(
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
   });
-  res.end(payload);
+  res.end(method === "HEAD" ? undefined : payload);
 }
 
 function handleRequest(
@@ -192,24 +197,24 @@ function handleRequest(
       return jsonResponse(res, 405, {
         error: "Method Not Allowed",
         detail: "This endpoint is read-only. POST/PUT/PATCH/DELETE are not supported.",
-      });
+      }, method);
     }
     const state = buildControlPlaneState(repoRoot, startedAt);
-    return jsonResponse(res, 200, state);
+    return jsonResponse(res, 200, state, method);
   }
 
   // ── Slice routes ──
   const sliceKey = SLICE_ROUTES[url];
   if (sliceKey !== undefined) {
     if (method !== "GET" && method !== "HEAD") {
-      return jsonResponse(res, 405, { error: "Method Not Allowed" });
+      return jsonResponse(res, 405, { error: "Method Not Allowed" }, method);
     }
     const slice = buildSlice(sliceKey, repoRoot, startedAt);
-    return jsonResponse(res, 200, slice);
+    return jsonResponse(res, 200, slice, method);
   }
 
   // ── 404 for everything else ──
-  jsonResponse(res, 404, { error: "Not Found" });
+  jsonResponse(res, 404, { error: "Not Found" }, method);
 }
 
 // ── Server lifecycle ──────────────────────────────────────────────────────────
