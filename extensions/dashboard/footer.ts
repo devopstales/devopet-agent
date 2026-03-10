@@ -219,7 +219,6 @@ export class DashboardFooter implements Component {
         // Narrow: terse
         let dtSummary = `◈ D:${dt.decidedCount}`;
         if (dt.implementingCount > 0) dtSummary += ` I:${dt.implementingCount}`;
-        if (dt.implementedCount > 0) dtSummary += ` ✓:${dt.implementedCount}`;
         dtSummary += `/${dt.nodeCount}`;
         dashParts.push({ text: theme.fg("accent", dtSummary) });
       }
@@ -493,7 +492,6 @@ export class DashboardFooter implements Component {
     const statusParts: string[] = [];
     if (dt.decidedCount > 0) statusParts.push(theme.fg("success", `${dt.decidedCount} decided`));
     if (dt.implementingCount > 0) statusParts.push(theme.fg("accent", `${dt.implementingCount} implementing`));
-    if (dt.implementedCount > 0) statusParts.push(theme.fg("success", `${dt.implementedCount} implemented`));
     if (dt.exploringCount > 0) statusParts.push(theme.fg("accent", `${dt.exploringCount} exploring`));
     if (dt.blockedCount > 0) statusParts.push(theme.fg("error", `${dt.blockedCount} blocked`));
     if (dt.openQuestionCount > 0) statusParts.push(theme.fg("dim", `${dt.openQuestionCount}?`));
