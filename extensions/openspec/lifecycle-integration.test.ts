@@ -128,50 +128,104 @@ describe("openspec lifecycle integration", () => {
     return { notifications, sentMessages: pi.sentMessages };
   }
 
+  async function runTool(params: Record<string, unknown>, cwd = tmpDir) {
+    const tool = pi.tools.find((entry: any) => entry.name === "openspec_manage");
+    assert.ok(tool, "missing openspec_manage tool");
+    return await tool.execute("tool-1", params, {} as any, () => {}, { cwd });
+  }
+
   async function persistAssessment(
     outcome: "pass" | "reopen" | "ambiguous",
     options?: { cwd?: string; summary?: string; changedFiles?: string[]; constraints?: string[] },
   ) {
-    const tool = pi.tools.find((entry: any) => entry.name === "openspec_manage");
-    assert.ok(tool, "missing openspec_manage tool");
-    return await tool.execute(
-      "tool-1",
-      {
-        action: "reconcile_after_assess",
-        change_name: "my-change",
-        assessment_kind: "spec",
-        outcome,
-        summary: options?.summary,
-        changed_files: options?.changedFiles,
-        constraints: options?.constraints,
-      },
-      {} as any,
-      () => {},
-      { cwd: options?.cwd ?? tmpDir },
-    );
+    return await runTool({
+      action: "reconcile_after_assess",
+      change_name: "my-change",
+      assessment_kind: "spec",
+      outcome,
+      summary: options?.summary,
+      changed_files: options?.changedFiles,
+      constraints: options?.constraints,
+    }, options?.cwd ?? tmpDir);
   }
 
-  it("reuses current persisted assessment during /opsx:verify", async () => {
+  it("surfaces archive-ready during /opsx:verify when assessment and lifecycle state are current", async () => {
     await persistAssessment("pass");
 
     const result = await runCommand("opsx:verify", "my-change");
     assert.equal(result.sentMessages.length, 0);
     assert.equal(result.notifications.length, 1);
-    assert.match(result.notifications[0].text, /Verification state for 'my-change' is current/);
+    assert.match(result.notifications[0].text, /Verification state for 'my-change': archive-ready/);
+    assert.match(result.notifications[0].text, /Next: \/opsx:archive my-change/);
     assert.match(result.notifications[0].text, /Outcome: pass/);
     assert.equal(result.notifications[0].level, "info");
+  });
+
+  it("surfaces verification substates in lifecycle status and get output", async () => {
+    let status = await runTool({ action: "status" });
+    const missingText = status.content[0].text as string;
+    assert.match(missingText, /\(verifying\)/);
+    assert.match(missingText, /Verification: missing-assessment/);
+    assert.match(missingText, /Next: \/assess spec my-change/);
+    assert.equal(status.details.changes[0].verificationSubstate, "missing-assessment");
+
+    await persistAssessment("pass");
+    status = await runTool({ action: "status" });
+    const readyText = status.content[0].text as string;
+    assert.match(readyText, /Verification: archive-ready/);
+    assert.match(readyText, /Next: \/opsx:archive my-change/);
+    assert.equal(status.details.changes[0].stage, "verifying");
+    assert.equal(status.details.changes[0].verificationStage, "verifying");
+    assert.equal(status.details.changes[0].verificationSubstate, "archive-ready");
+
+    const getResult = await runTool({ action: "get", change_name: "my-change" });
+    const getText = getResult.content[0].text as string;
+    assert.match(getText, /\*\*Verification substate:\*\* archive-ready/);
+    assert.match(getText, /Next: \/opsx:archive my-change/);
   });
 
   it("requests refreshed assessment during /opsx:verify when persisted state is stale", async () => {
     await persistAssessment("pass");
 
     fs.appendFileSync(path.join(tmpDir, "openspec", "changes", "my-change", "tasks.md"), "- [x] 1.2 Still done\n");
+    pi.sentMessages.length = 0;
 
     const result = await runCommand("opsx:verify", "my-change");
     assert.equal(result.notifications.length, 0);
     assert.equal(result.sentMessages.length, 1);
-    assert.match(result.sentMessages[0].content, /does not match the current implementation snapshot/);
+    assert.match(result.sentMessages[0].content, /Verification state: stale-assessment/);
+    assert.match(result.sentMessages[0].content, /Implementation snapshot fingerprint differs/);
     assert.match(result.sentMessages[0].content, /Run `\/assess spec my-change` now/);
+  });
+
+  it("surfaces reopened-work during /opsx:verify instead of collapsing to a rerun prompt", async () => {
+    await persistAssessment("reopen", { summary: "Follow-up work remains" });
+    pi.sentMessages.length = 0;
+
+    const result = await runCommand("opsx:verify", "my-change");
+    assert.equal(result.sentMessages.length, 0);
+    assert.equal(result.notifications.length, 1);
+    assert.match(result.notifications[0].text, /Verification state for 'my-change': reopened-work/);
+    assert.match(result.notifications[0].text, /Complete follow-up work for my-change/);
+    assert.match(result.notifications[0].text, /Outcome: reopen/);
+    assert.equal(result.notifications[0].level, "warning");
+  });
+
+  it("keeps /opsx:verify blocked on awaiting-reconciliation when lifecycle bindings are stale", async () => {
+    await persistAssessment("pass");
+    fs.rmSync(path.join(tmpDir, "docs", "my-change.md"));
+
+    const status = await runTool({ action: "status" });
+    const statusText = status.content[0].text as string;
+    assert.match(statusText, /Verification: awaiting-reconciliation/);
+
+    pi.sentMessages.length = 0;
+    const result = await runCommand("opsx:verify", "my-change");
+    assert.equal(result.sentMessages.length, 0);
+    assert.equal(result.notifications.length, 1);
+    assert.match(result.notifications[0].text, /Verification state for 'my-change': awaiting-reconciliation/);
+    assert.match(result.notifications[0].text, /Bind the change to a decided\/implementing design node before archive/);
+    assert.equal(result.notifications[0].level, "warning");
   });
 
   it("refuses /opsx:archive when assessment is missing and succeeds on current explicit pass", async () => {
