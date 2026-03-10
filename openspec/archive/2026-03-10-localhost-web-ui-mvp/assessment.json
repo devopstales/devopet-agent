@@ -3,11 +3,11 @@
   "changeName": "localhost-web-ui-mvp",
   "assessmentKind": "spec",
   "outcome": "pass",
-  "timestamp": "2026-03-10T21:02:12.407Z",
-  "summary": "Validated localhost-web-ui-mvp against the implemented localhost-only, read-only web UI behavior: typecheck passes, npm test passes, the web UI server binds to 127.0.0.1 only, serves the polling HTML shell and versioned ControlPlaneState/slice routes, and refuses unsupported mutation methods.",
+  "timestamp": "2026-03-10T21:03:18.789Z",
+  "summary": "Refreshed localhost-web-ui-mvp lifecycle state after binding the change to the implemented design node. The implementation remains validated: localhost-only binding, read-only routes, polling shell, versioned ControlPlaneState, passing typecheck, and passing tests.",
   "snapshot": {
-    "gitHead": "b85677e3902b3b52c13f989e206b48998f9dd3c1",
-    "fingerprint": "aa4a690cd6987d61e225f0d226fa24aa19cf9fc6778d562d447ffee5d0017529",
+    "gitHead": "2bd0035ddd301b63810bc0eb8ffb8aebc24545a0",
+    "fingerprint": "d34689b10565b0a3581ec61eb8c46bc2184a6c495b0af8eb86528be3fa66e3dd",
     "dirty": false,
     "scopedPaths": [
       "README.md",
@@ -118,17 +118,7 @@
   "reconciliation": {
     "reopen": false,
     "changedFiles": [
-      "extensions/web-ui/types.ts",
-      "extensions/web-ui/state.ts",
-      "extensions/web-ui/server.ts",
-      "extensions/web-ui/static/index.html",
-      "extensions/web-ui/http.test.ts",
-      "extensions/web-ui/server.test.ts",
-      "extensions/web-ui/state.test.ts",
-      "extensions/web-ui/index.ts",
-      "extensions/web-ui/index.test.ts",
-      "package.json",
-      "README.md"
+      "docs/pikit-web-ui-hosting.md"
     ],
     "constraints": [],
     "recommendedAction": null

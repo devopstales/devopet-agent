@@ -3,8 +3,8 @@ id: pikit-web-ui-hosting
 title: pi-kit self-hosted web UI
 status: implemented
 parent: repo-consolidation-hardening
-openspec_change: localhost-web-ui-mvp
 open_questions: []
+openspec_change: localhost-web-ui-mvp
 ---
 
 # pi-kit self-hosted web UI
@@ -91,6 +91,7 @@ The MVP should bind only to `127.0.0.1` by default, choose a configurable high p
 - `extensions/web-ui/index.test.ts` (new) — Cover command surface behavior and shutdown cleanup
 - `package.json` (modified) — Register the new `web-ui` extension in `pi.extensions`
 - `README.md` (modified) — Document localhost web UI commands, routes, and security defaults
+- `docs/pikit-web-ui-hosting.md` (modified) — Post-assess reconciliation delta — touched during follow-up fixes
 
 ### Constraints
 
