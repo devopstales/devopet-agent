@@ -3,12 +3,12 @@
   "changeName": "subprocess-safety-hardening",
   "assessmentKind": "spec",
   "outcome": "pass",
-  "timestamp": "2026-03-10T21:28:09.964Z",
-  "summary": "Refreshed subprocess-safety-hardening lifecycle state after reconciling task completion and marking the design node implemented. The current snapshot still satisfies the subprocess hardening change: web-ui browser launch uses explicit argv-based spawn, local-inference shutdown avoids broad pkill behavior, bootstrap helper dispatch is constrained around explicit executable plus argv parsing, and typecheck/tests pass.",
+  "timestamp": "2026-03-10T21:28:24.548Z",
+  "summary": "Refreshed subprocess-safety-hardening assessment for the current unarchived snapshot immediately before archive. The implementation still satisfies the change: explicit argv-based browser launch in web-ui, scoped local-inference shutdown without broad pkill matching, constrained bootstrap helper dispatch, and passing typecheck/tests.",
   "snapshot": {
-    "gitHead": "207601d48ae5ddf4ea2b90b7ee7862e766f41f82",
-    "fingerprint": "ad3bcf4d60b3a9c4ffcf773a2b09085a8f5a69388930fda37cec76d32dcc1486",
-    "dirty": true,
+    "gitHead": "2c2f0c51c9df0a6d33b6709932ac0642d70bbb1c",
+    "fingerprint": "66bf6a0e5fc3d51b286178e4b95fc4dae7afcbd7bd2597d6c0631dd812837646",
+    "dirty": false,
     "scopedPaths": [
       "docs/subprocess-safety-hardening.md",
       "extensions/bootstrap/*.test.ts",
