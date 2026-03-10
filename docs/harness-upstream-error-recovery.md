@@ -1,0 +1,60 @@
+---
+id: harness-upstream-error-recovery
+title: Harness upstream error recovery and fallback signaling
+status: implementing
+parent: assess-bridge-completed-results
+tags: [harness, errors, retry, fallback, providers]
+open_questions: []
+branches: ["feature/harness-upstream-error-recovery"]
+openspec_change: harness-upstream-error-recovery
+---
+
+# Harness upstream error recovery and fallback signaling
+
+## Overview
+
+Surface upstream driver/provider failures to the agent and operator, classify obvious transient failures for bounded retry, and route sustained usage/limit/backoff issues into intelligent model or driver fallback.
+
+## Research
+
+### Existing recovery primitives and current gap
+
+pi core already persists assistant error turns and has one built-in automatic recovery path for context overflow in agent-session.js: it removes the last error message, compacts, and retries once. pi-kit also already records transient provider/model cooldowns in extensions/model-budget.ts via turn_end -> getAssistantErrorMessage() -> recordTransientFailureForModel(), but today that path only notifies the operator. The agent/harness does not receive a structured recovery event, so an upstream Codex/server_error remains opaque to the agent even when pi-kit can classify it as transient or route around it.
+
+### Useful existing routing hooks
+
+extensions/lib/model-routing.ts already classifies transient failures with patterns such as 429, rate limit, temporarily unavailable, overloaded, and try again later, and can place both providers and individual candidates on cooldown. extensions/lib/operator-fallback.ts can resolve alternate candidates for the same capability role after a transient failure. Offline-driver.ts can switch execution to local models when cloud reachability fails. The missing layer is a harness-facing recovery controller that turns these primitives into structured events, bounded retries, and explicit model/driver switches the agent can observe.
+
+## Decisions
+
+### Decision: Handle upstream failures through a structured recovery controller
+
+**Status:** decided
+**Rationale:** Do not scatter retry and failover logic across individual tools or slash commands. A single recovery controller should observe assistant error turns, classify failures, emit a structured recovery event into the session, and decide whether to retry, switch model/provider, or escalate to the operator.
+
+### Decision: Retry only same-model transient upstream failures; switch on rate-limit/backoff classes
+
+**Status:** decided
+**Rationale:** Bounded same-model retry is appropriate for obvious upstream flakiness such as server_error, transient 5xx, timeouts, or overloaded responses. Repeating the same request against a provider that is explicitly rate-limiting or backing off wastes time and tokens. Those cases should instead cool down the failing provider/candidate and resolve an alternate model or local driver through the existing routing profile.
+
+## Open Questions
+
+*No open questions.*
+
+## Implementation Notes
+
+### File Scope
+
+- `extensions/model-budget.ts` (modified) — replace notify-only transient failure handling with structured recovery classification and fallback planning
+- `extensions/lib/model-routing.ts` (modified) — expand failure taxonomy from boolean transient detection to structured classes and retryability metadata
+- `extensions/lib/operator-fallback.ts` (modified) — promote alternate-candidate guidance into executable recovery plans
+- `extensions/offline-driver.ts` (modified) — support automatic local-driver handoff for cloud reachability failures when policy permits
+- `extensions/shared-state.ts` (modified) — store last recovery event / retry budget for dashboard and session injection
+- `extensions/dashboard/*` (modified) — surface current recovery state and active provider cooldowns to the operator
+
+### Constraints
+
+- The agent must see a structured recovery notice before or with any automatic retry so upstream failures are not invisible in the harness transcript.
+- Automatic retries must be bounded and idempotent-aware: at most one same-model retry for obvious upstream flakiness before escalation or failover.
+- Provider/model switching should reuse existing capability-role routing and cooldown state instead of hardcoding Codex-specific fallbacks.
+- Authentication, quota exhaustion, malformed tool results, and context-overflow paths must not be treated as generic transient retry cases.

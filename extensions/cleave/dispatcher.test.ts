@@ -534,6 +534,10 @@ function makeMockPi() {
 				return ""; // operator presses Enter → keep current
 			},
 		},
+		exec: async (_cmd: string, args: string[]) => {
+			if (args[0] === "status") return { code: 0, stdout: "", stderr: "" };
+			return { code: 0, stdout: "", stderr: "" };
+		},
 		// Minimal stubs so dispatchSingleChild doesn't crash looking for pi internals
 		modelRegistry: { getAll: () => [] },
 	} as any;
@@ -634,7 +638,11 @@ describe("dispatchChildren preflight — integration (spec: Large/Small run trig
 			};
 
 			// pi.ui exists but .input is not a function — the C2 bug scenario
-			const mockPi = { ui: { /* no input */ }, modelRegistry: { getAll: () => [] } } as any;
+			const mockPi = {
+				ui: { /* no input */ },
+				exec: async () => ({ code: 0, stdout: "", stderr: "" }),
+				modelRegistry: { getAll: () => [] },
+			} as any;
 			const state = makeTestState(LARGE_RUN_THRESHOLD);
 			const messages: string[] = [];
 
