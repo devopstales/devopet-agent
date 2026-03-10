@@ -3,7 +3,7 @@
  *
  * Implements two rendering modes:
  *   Layer 0 (compact): 1 line — dashboard summary only
- *   Layer 1 (raised):  up to 10 lines — section details + footer metadata
+ *   Layer 1 (raised):  uncapped — section details, branch tree, and footer metadata
  *
  * Reads sharedState for design-tree, openspec, and cleave data.
  * Reads footerData for git branch, extension statuses, provider count.
@@ -17,6 +17,7 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { TUI } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { leftRight, mergeColumns } from "./render-utils.ts";
+import { buildBranchTreeLines, readLocalBranches } from "./git.ts";
 import type { DashboardState, RecoveryCooldownSummary, RecoveryDashboardState } from "./types.ts";
 import { sharedState } from "../shared-state.ts";
 import { debug } from "../debug.ts";
@@ -327,18 +328,37 @@ export class DashboardFooter implements Component {
   }
 
   /**
+   * Build the git branch tree lines for the raised layout.
+   * Reads local branches from .git/refs/heads/ (no shell spawn).
+   */
+  private buildBranchTree(width: number): string[] {
+    const cwd = process.cwd();
+    const repoName = cwd.split("/").pop() ?? cwd;
+    const currentBranch = this.footerData.getGitBranch();
+    const allBranches = readLocalBranches(cwd);
+    const designNodes = sharedState.designTree?.nodes?.map((n) => ({
+      branches: n.branches ?? [],
+      title: n.title,
+    }));
+    const lines = buildBranchTreeLines(
+      { repoName, currentBranch, allBranches, designNodes },
+      this.theme,
+    );
+    return lines.map((l) => truncateToWidth(l, width, "…"));
+  }
+
+  /**
    * Stacked layout for narrow terminals (<120 cols).
    * All sections rendered full-width, top to bottom.
    */
   private renderRaisedStacked(width: number): string[] {
-    const theme = this.theme;
     const lines: string[] = [];
 
+    lines.push(...this.buildBranchTree(width));
     lines.push(...this.buildDesignTreeLines(width));
     lines.push(...this.buildOpenSpecLines(width));
     lines.push(...this.buildRecoveryLines(width));
     lines.push(...this.buildCleaveLines(width));
-
     lines.push(...this.buildFooterZone(width));
 
     return lines;
@@ -346,23 +366,25 @@ export class DashboardFooter implements Component {
 
   /**
    * Wide layout (≥120 cols) — 3-zone:
-   *   Zone 1: Design tree — full width
-   *   Zone 2: mergeColumns — Recovery+Cleave left │ OpenSpec right
-   *   Zone 3: Shared footer (meta, memory audit, separator, hint, footer data)
+   *   Zone A: Git branch tree — full width
+   *   Zone B: Design tree — full width
+   *   Zone C: mergeColumns — Recovery+Cleave left │ OpenSpec right
+   *   Zone D: Shared footer (meta, memory audit, separator, hint, footer data)
    */
   private renderRaisedWide(width: number): string[] {
     const divider = "│";
-    // Give each column roughly half the width minus one char for the divider.
-    const colWidth = Math.floor((width - divider.length) / 2);
-    const leftColWidth = colWidth;
-    const rightColWidth = width - colWidth - divider.length;
+    const leftColWidth = Math.floor((width - divider.length) / 2);
+    const rightColWidth = width - leftColWidth - divider.length;
 
     const lines: string[] = [];
 
-    // Zone 1 — design tree full-width
+    // Zone A — git branch tree full-width
+    lines.push(...this.buildBranchTree(width));
+
+    // Zone B — design tree full-width
     lines.push(...this.buildDesignTreeLines(width));
 
-    // Zone 2 — two-column split
+    // Zone C — two-column split: recovery+cleave left, openspec right
     const leftLines = [
       ...this.buildRecoveryLines(leftColWidth),
       ...this.buildCleaveLines(leftColWidth),
@@ -373,7 +395,7 @@ export class DashboardFooter implements Component {
       lines.push(...mergeColumns(leftLines, rightLines, leftColWidth, rightColWidth, divider));
     }
 
-    // Zone 3 — shared footer
+    // Zone D — shared footer
     lines.push(...this.buildFooterZone(width));
 
     return lines;
@@ -737,15 +759,19 @@ export class DashboardFooter implements Component {
 
     let pwdLine = theme.fg("dim", "⌂ ") + theme.fg("muted", pwd);
 
-    const branch = this.footerData.getGitBranch();
-    if (branch) {
-      // Color branch by convention: feature→accent, fix→warning, main/master→success
-      const branchColor: ThemeColor = /^(main|master)$/.test(branch) ? "success"
-        : branch.startsWith("feature/") ? "accent"
-        : branch.startsWith("fix/") || branch.startsWith("hotfix/") ? "warning"
-        : branch.startsWith("refactor/") ? "accent"
-        : "muted";
-      pwdLine += theme.fg("dim", "  ") + theme.fg(branchColor, branch);
+    // In raised mode the branch tree above already shows all branches — skip
+    // the redundant inline branch here to avoid duplication. Compact/stacked
+    // footer still shows the current branch for quick orientation.
+    if (this.dashState.mode !== "raised") {
+      const branch = this.footerData.getGitBranch();
+      if (branch) {
+        const branchColor: ThemeColor = /^(main|master)$/.test(branch) ? "success"
+          : branch.startsWith("feature/") ? "accent"
+          : branch.startsWith("fix/") || branch.startsWith("hotfix/") ? "warning"
+          : branch.startsWith("refactor/") ? "accent"
+          : "muted";
+        pwdLine += theme.fg("dim", "  ") + theme.fg(branchColor, branch);
+      }
     }
 
     const sessionName = ctx?.sessionManager?.getSessionName?.();

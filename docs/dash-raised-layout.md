@@ -220,8 +220,8 @@ Tests in `render-utils.test.ts` cover:
 
 ### Decision: Line cap: 12 for wide (≥120), 10 for narrow
 
-**Status:** decided
-**Rationale:** 2-column layout at ≥120 has a 2-row shared footer zone, leaving only 8 rows for column content at the current cap=10. Raising to 12 gives 10 content rows — enough to see 3-4 items per column. Narrow stacked layout keeps 10 since vertical space is the constraint there.
+**Status:** superseded
+**Rationale:** Initially proposed; superseded by "Remove the line cap in raised mode" once it was clear raised mode is an intentionally expanded view with no reason to artificially constrain output.
 
 ### Decision: Remove the line cap in raised mode
 
