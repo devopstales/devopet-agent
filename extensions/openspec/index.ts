@@ -44,12 +44,12 @@ import {
 	readAssessmentRecord,
 	writeAssessmentRecord,
 	getAssessmentStatus,
-	resolveVerificationStatus,
 	type AssessmentKind,
 	type AssessmentOutcome,
 	type AssessmentRecord,
-	type VerificationStatus,
+	type LifecycleSummary,
 } from "./spec.ts";
+import { buildLifecycleSummary } from "./lifecycle.ts";
 import { transitionDesignNodesOnArchive } from "./archive-gate.ts";
 import { emitOpenSpecState } from "./dashboard-state.ts";
 import {
@@ -209,37 +209,6 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 		};
 	}
 
-	function buildArchiveAssessmentGate(
-		state: AssessmentState,
-		changeName: string,
-	): { ok: boolean; message: string } {
-		if (!state.record) {
-			return {
-				ok: false,
-				message: `Archive refused for '${changeName}' because no persisted assessment record exists. Run /opsx:verify ${changeName} first.`,
-			};
-		}
-		if (state.record.outcome === "ambiguous") {
-			return {
-				ok: false,
-				message: `Archive refused for '${changeName}' because the latest structured assessment is ambiguous. Re-run verification and reconcile the result before archive.`,
-			};
-		}
-		if (state.record.outcome === "reopen") {
-			return {
-				ok: false,
-				message: `Archive refused for '${changeName}' because the latest structured assessment reopened work. Finish the follow-up work, then verify again.`,
-			};
-		}
-		if (state.status === "stale") {
-			return {
-				ok: false,
-				message: `Archive refused for '${changeName}' because the latest assessment is stale for the current implementation snapshot. Run /opsx:verify ${changeName} to refresh it.`,
-			};
-		}
-		return { ok: true, message: "Assessment gate satisfied." };
-	}
-
 	function formatAssessmentSummary(record: AssessmentRecord): string[] {
 		return [
 			`Assessment kind: ${record.assessmentKind}`,
@@ -251,22 +220,10 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 		];
 	}
 
-	function getVerificationStatus(cwd: string, change: ChangeInfo): VerificationStatus {
-		const assessment = getAssessmentStatus(cwd, change.name);
-		const reconciliation = evaluateLifecycleReconciliation(cwd, change.name);
-		const archiveBlockedReason = reconciliation.issues.length > 0
-			? reconciliation.issues.map((issue) => issue.suggestedAction).join(" ")
-			: null;
-		return resolveVerificationStatus({
-			stage: change.stage,
-			record: assessment.record,
-			freshness: assessment.freshness,
-			archiveBlocked: reconciliation.issues.length > 0,
-			archiveBlockedReason,
-			archiveBlockedIssueCodes: reconciliation.issues.map((issue) => issue.code),
-			changeName: change.name,
-		});
-	}
+	// getLifecycleSummary is the single shared resolver for all lifecycle surfaces.
+	// It is imported from lifecycle.ts so that tests can import and verify the same
+	// function is used by both status and get surfaces (not re-implemented locally).
+	const getLifecycleSummary = buildLifecycleSummary;
 
 	// ─── Tool: openspec_manage ───────────────────────────────────────
 
@@ -342,12 +299,12 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 					}
 
 					const lines = changes.map((c) => {
-						const verification = getVerificationStatus(cwd, c);
-						const verificationLine = verification.substate
-							? `\n  Verification: ${verification.substate}`
+						const lifecycle = getLifecycleSummary(cwd, c);
+						const verificationLine = lifecycle.verificationSubstate
+							? `\n  Verification: ${lifecycle.verificationSubstate}`
 							: "";
-						const nextLine = verification.nextAction
-							? `\n  Next: ${verification.nextAction}`
+						const nextLine = lifecycle.nextAction
+							? `\n  Next: ${lifecycle.nextAction}`
 							: `\n  ${nextStepHint(c)}`;
 						return `${formatChangeStatus(c)}${verificationLine}${nextLine}`;
 					});
@@ -356,15 +313,17 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 						content: [{ type: "text", text: lines.join("\n\n") }],
 						details: {
 							changes: changes.map((c) => {
-								const verification = getVerificationStatus(cwd, c);
+								const lifecycle = getLifecycleSummary(cwd, c);
 								return {
 									name: c.name,
-									stage: c.stage,
-									verificationStage: verification.coarseStage,
-									verificationSubstate: verification.substate,
-									nextAction: verification.nextAction,
-									totalTasks: c.totalTasks,
-									doneTasks: c.doneTasks,
+									stage: lifecycle.stage,
+									verificationStage: lifecycle.stage,
+									verificationSubstate: lifecycle.verificationSubstate,
+									archiveReady: lifecycle.archiveReady,
+									bindingStatus: lifecycle.bindingStatus,
+									nextAction: lifecycle.nextAction,
+									totalTasks: lifecycle.totalTasks,
+									doneTasks: lifecycle.doneTasks,
 									specCount: countScenarios(c.specs),
 								};
 							}),
@@ -411,13 +370,12 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 						}
 					}
 
-					const verification = getVerificationStatus(cwd, change);
-					if (verification.substate) {
-						lines.push("", `**Verification substate:** ${verification.substate}`);
-						if (verification.reason) lines.push(`**Why:** ${verification.reason}`);
+					const lifecycle = getLifecycleSummary(cwd, change);
+					if (lifecycle.verificationSubstate) {
+						lines.push("", `**Verification substate:** ${lifecycle.verificationSubstate}`);
 					}
 
-					lines.push("", verification.nextAction ? `Next: ${verification.nextAction}` : nextStepHint(change));
+					lines.push("", lifecycle.nextAction ? `Next: ${lifecycle.nextAction}` : nextStepHint(change));
 
 					// Include proposal content if it exists
 					if (change.hasProposal) {
@@ -754,34 +712,20 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 							isError: true,
 						};
 					}
-					const assessmentState = await getAssessmentState(cwd, changeInfo);
-					const assessmentGate = buildArchiveAssessmentGate(assessmentState, params.change_name);
-					if (!assessmentGate.ok) {
+					// Archive gate: use the canonical lifecycle resolver so that the readiness
+					// check here is identical to what the status/get surfaces report.
+					const lifecycle = getLifecycleSummary(cwd, changeInfo);
+					if (!lifecycle.archiveReady) {
+						const assessmentState = await getAssessmentState(cwd, changeInfo);
 						return {
 							content: [{
 								type: "text",
 								text: [
-									assessmentGate.message,
+									`Archive refused for '${params.change_name}': ${lifecycle.reason ?? lifecycle.nextAction ?? "lifecycle not ready for archive."}`,
 									...(assessmentState.record ? ["", ...formatAssessmentSummary(assessmentState.record)] : []),
 								].join("\n"),
 							}],
-							details: { assessmentState },
-							isError: true,
-						};
-					}
-
-					const reconciliation = evaluateLifecycleReconciliation(cwd, params.change_name);
-					if (reconciliation.issues.length > 0) {
-						return {
-							content: [{
-								type: "text",
-								text: [
-									`Archive refused for '${params.change_name}' because lifecycle state is stale:`,
-									"",
-									formatReconciliationIssues(reconciliation.issues),
-								].join("\n"),
-							}],
-							details: { reconciliation, assessmentState },
+							details: { lifecycle },
 							isError: true,
 						};
 					}
@@ -1011,15 +955,22 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 					ctx.ui.notify(`Error: ${(e as Error).message}`, "error");
 				}
 			} else if (name && title) {
-				// Name and title provided, prompt for intent only
+				// Change was already created by structuredExecutor with empty intent.
+				// Prompt for intent and patch proposal.md — do NOT call createChange again.
 				const intentInput = await ctx.ui.input("Enter change intent (what this change accomplishes):");
-				if (intentInput) {
+				const changeData = result.data as { changePath?: string } | undefined;
+				if (intentInput && changeData?.changePath) {
 					try {
-						const newResult = createChange(ctx.cwd, name, title, intentInput);
+						const proposalPath = path.join(changeData.changePath, "proposal.md");
+						if (fs.existsSync(proposalPath)) {
+							const current = fs.readFileSync(proposalPath, "utf-8");
+							fs.writeFileSync(proposalPath, current.replace(/^## Intent\n[\s\S]*?(?=\n##|$)/m, `## Intent\n${intentInput}\n`));
+						}
 						emitOpenSpecState(ctx.cwd, pi);
-						ctx.ui.notify(`Created OpenSpec change: ${path.basename(newResult.changePath)}`, "info");
+						ctx.ui.notify(`Created OpenSpec change: ${path.basename(changeData.changePath)}`, "info");
 					} catch (e) {
-						ctx.ui.notify(`Error: ${(e as Error).message}`, "error");
+						ctx.ui.notify(`Error updating intent: ${(e as Error).message}`, "warning");
+						ctx.ui.notify(result.humanText, "info");
 					}
 				} else {
 					// Use the result we already have (with empty intent)
@@ -1353,9 +1304,9 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 			}
 
 			const lines = changes.map((c) => {
-				const verification = getVerificationStatus(ctx.cwd, c);
-				const verificationLine = verification.substate ? `\n  Verification: ${verification.substate}` : "";
-				const nextLine = verification.nextAction ? `\n  → ${verification.nextAction}` : `\n  → ${nextStepHint(c)}`;
+				const lifecycle = getLifecycleSummary(ctx.cwd, c);
+				const verificationLine = lifecycle.verificationSubstate ? `\n  Verification: ${lifecycle.verificationSubstate}` : "";
+				const nextLine = lifecycle.nextAction ? `\n  → ${lifecycle.nextAction}` : `\n  → ${nextStepHint(c)}`;
 				return `${formatChangeStatus(c)}${verificationLine}${nextLine}`;
 			});
 
@@ -1365,15 +1316,17 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 				humanText: lines.join("\n\n"),
 				data: {
 					changes: changes.map((c) => {
-						const verification = getVerificationStatus(ctx.cwd, c);
+						const lifecycle = getLifecycleSummary(ctx.cwd, c);
 						return {
 							name: c.name,
-							stage: c.stage,
-							verificationStage: verification.coarseStage,
-							verificationSubstate: verification.substate,
-							nextAction: verification.nextAction,
-							totalTasks: c.totalTasks,
-							doneTasks: c.doneTasks,
+							stage: lifecycle.stage,
+							verificationStage: lifecycle.stage,
+							verificationSubstate: lifecycle.verificationSubstate,
+							archiveReady: lifecycle.archiveReady,
+							bindingStatus: lifecycle.bindingStatus,
+							nextAction: lifecycle.nextAction,
+							totalTasks: lifecycle.totalTasks,
+							doneTasks: lifecycle.doneTasks,
 							specCount: countScenarios(c.specs),
 						};
 					}),
@@ -1435,12 +1388,12 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 			}
 
 			const assessmentState = await getAssessmentState(ctx.cwd, change);
-			const verification = getVerificationStatus(ctx.cwd, change);
-			const effectiveSubstate = verification.substate
+			const lifecycle = getLifecycleSummary(ctx.cwd, change);
+			const effectiveSubstate = lifecycle.verificationSubstate
 				?? (assessmentState.record?.outcome === "reopen" ? "reopened-work" : null);
-			const effectiveReason = verification.reason
+			const effectiveReason: string | null = lifecycle.reason
 				?? (effectiveSubstate === "reopened-work" ? "The latest persisted assessment reopened work." : null);
-			const effectiveNextAction = verification.nextAction
+			const effectiveNextAction = lifecycle.nextAction
 				?? (effectiveSubstate === "reopened-work"
 					? `Complete follow-up work for ${changeName}, reconcile lifecycle artifacts, then re-run /assess spec ${changeName}`
 					: null);
@@ -1504,7 +1457,7 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 			const content = [
 				`[OpenSpec: Verify \`${changeName}\`]`,
 				"",
-				`Verification state: ${effectiveSubstate ?? verification.substate ?? change.stage}`,
+				`Verification state: ${effectiveSubstate ?? lifecycle.verificationSubstate ?? change.stage}`,
 				...(effectiveReason ? [effectiveReason, ""] : []),
 				`${refreshReason}`,
 				"",
@@ -1529,7 +1482,7 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 				humanText: content,
 				data: {
 					changeName,
-					substate: effectiveSubstate ?? verification.substate ?? change.stage,
+					substate: effectiveSubstate ?? lifecycle.verificationSubstate ?? change.stage,
 					reason: refreshReason,
 					nextAction: `/assess spec ${changeName}`,
 					assessment: assessmentState.record,
@@ -1606,38 +1559,24 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 				});
 			}
 
-			const assessmentState = await getAssessmentState(ctx.cwd, changeInfo);
-			const assessmentGate = buildArchiveAssessmentGate(assessmentState, changeName);
-			if (!assessmentGate.ok) {
+			// Archive gate: use the canonical lifecycle resolver so that readiness
+			// reported here is identical to what the status/get surfaces show.
+			const lifecycle = getLifecycleSummary(ctx.cwd, changeInfo);
+			if (!lifecycle.archiveReady) {
+				const assessmentState = await getAssessmentState(ctx.cwd, changeInfo);
 				const message = [
-					assessmentGate.message,
+					`Archive refused for '${changeName}': ${lifecycle.reason ?? lifecycle.nextAction ?? "lifecycle not ready for archive."}`,
 					...(assessmentState.record ? ["", ...formatAssessmentSummary(assessmentState.record)] : []),
 				].join("\n");
 
 				return buildSlashCommandResult("opsx:archive", [changeName], {
 					ok: false,
-					summary: `Archive refused: assessment gate failed`,
+					summary: "Archive refused: lifecycle not ready",
 					humanText: message,
-					data: { assessmentState, gateRefusal: assessmentGate.message },
+					data: { lifecycle, gateRefusal: true },
 					effects: { sideEffectClass: "workspace-write" },
 					nextSteps: [
-						{ label: "Run verification", command: `/opsx:verify ${changeName}`, rationale: "Refresh assessment" },
-					],
-				});
-			}
-
-			const reconciliation = evaluateLifecycleReconciliation(ctx.cwd, changeName);
-			if (reconciliation.issues.length > 0) {
-				const message = `Archive refused for '${changeName}' because lifecycle state is stale:\n${formatReconciliationIssues(reconciliation.issues)}`;
-
-				return buildSlashCommandResult("opsx:archive", [changeName], {
-					ok: false,
-					summary: "Archive refused: lifecycle reconciliation needed",
-					humanText: message,
-					data: { reconciliation, assessmentState },
-					effects: { sideEffectClass: "workspace-write" },
-					nextSteps: [
-						{ label: "Reconcile lifecycle", rationale: "Fix lifecycle state before archive" },
+						{ label: "Run verification", command: `/opsx:verify ${changeName}`, rationale: "Refresh assessment to unblock archive" },
 					],
 				});
 			}

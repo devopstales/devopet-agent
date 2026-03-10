@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { sharedState, DASHBOARD_UPDATE_EVENT } from "../shared-state.ts";
 import { debug } from "../debug.ts";
 import { listChanges } from "./spec.ts";
+import { buildLifecycleSummary } from "./lifecycle.ts";
 
 /**
  * Emit OpenSpec state to sharedState for the unified dashboard.
@@ -19,11 +20,19 @@ export function emitOpenSpecState(cwd: string, pi: ExtensionAPI): void {
 			if (c.hasSpecs) artifacts.push("specs");
 			if (c.hasTasks) artifacts.push("tasks");
 			const specDomains = c.specs.map((s) => s.domain).filter(Boolean);
+
+			// Resolve canonical lifecycle summary — single source of truth for
+			// readiness and verification substate, shared with status/get surfaces.
+			const lifecycle = buildLifecycleSummary(cwd, c);
+
 			return {
 				name: c.name,
-				stage: c.stage || "proposal",
-				tasksDone: c.doneTasks,
-				tasksTotal: c.totalTasks,
+				stage: lifecycle.stage,
+				verificationSubstate: lifecycle.verificationSubstate,
+				archiveReady: lifecycle.archiveReady,
+				bindingStatus: lifecycle.bindingStatus,
+				tasksDone: lifecycle.doneTasks,
+				tasksTotal: lifecycle.totalTasks,
 				artifacts,
 				specDomains,
 				path: c.path,

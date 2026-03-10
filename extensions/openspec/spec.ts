@@ -1214,6 +1214,123 @@ export function countScenarios(specs: SpecFile[]): number {
 	return count;
 }
 
+// ─── Canonical Lifecycle Resolver ────────────────────────────────────────────
+
+/**
+ * Normalized lifecycle summary for an OpenSpec change.
+ *
+ * This is the single source of truth for a change's lifecycle state.
+ * All consumers (status surfaces, archive gates, dashboard, design-tree)
+ * should derive their display from this shape rather than recomputing
+ * stage/substate/readiness independently.
+ */
+export interface LifecycleSummary {
+	/** Coarse lifecycle stage. Preserves historical stage contract. */
+	stage: ChangeStage;
+
+	/**
+	 * Fine-grained verification substate. Only non-null when stage === 'verifying'.
+	 * Adds precision without changing the coarse stage contract.
+	 */
+	verificationSubstate: VerificationSubstate | null;
+
+	/** Whether the change is safe to archive. */
+	archiveReady: boolean;
+
+	/** Whether a design-tree binding exists for this change. */
+	bindingStatus: "bound" | "unbound" | "unknown";
+
+	/** Total number of tasks (0 if no tasks.md). */
+	totalTasks: number;
+
+	/** Number of completed tasks. */
+	doneTasks: number;
+
+	/**
+	 * Assessment freshness. Null when no assessment record has been written.
+	 */
+	assessmentFreshness: AssessmentFreshness | null;
+
+	/** Suggested next action for the operator. */
+	nextAction: string | null;
+
+	/** Human-readable reason explaining the current substate. Null when not in verifying stage. */
+	reason: string | null;
+}
+
+/**
+ * Canonical lifecycle resolver.
+ *
+ * Accepts the raw artifact state and derived assessment/reconciliation data,
+ * and returns one normalized LifecycleSummary through a single implementation
+ * path. All callers must route through this function — no separate stage or
+ * substate derivations.
+ */
+export function resolveLifecycleSummary(input: {
+	change: Pick<ChangeInfo, "name" | "stage" | "totalTasks" | "doneTasks">;
+	record: AssessmentRecord | null;
+	freshness: AssessmentFreshness | null;
+	archiveBlocked: boolean;
+	archiveBlockedReason: string | null;
+	archiveBlockedIssueCodes: readonly string[];
+	boundNodeIds?: readonly string[];
+}): LifecycleSummary {
+	const { change, record, freshness, archiveBlocked, archiveBlockedReason, archiveBlockedIssueCodes, boundNodeIds } = input;
+
+	// Derive verification status via existing resolveVerificationStatus — preserving
+	// the historical substate contract without duplicating its logic.
+	const vs = resolveVerificationStatus({
+		stage: change.stage,
+		record,
+		freshness: freshness ?? { current: false, reasons: ["No assessment record"] },
+		archiveBlocked,
+		archiveBlockedReason,
+		archiveBlockedIssueCodes,
+		changeName: change.name,
+	});
+
+	const archiveReady = vs.substate === "archive-ready";
+
+	const bindingStatus: LifecycleSummary["bindingStatus"] = archiveBlockedIssueCodes.includes("missing_design_binding")
+		? "unbound"
+		: (boundNodeIds && boundNodeIds.length > 0) ? "bound" : "unknown";
+
+	// When stage is not "verifying" (e.g. "implementing" after a reopen appended tasks),
+	// resolveVerificationStatus returns null reason/nextAction.  Derive a fallback so that
+	// the archive gate still surfaces a meaningful message.
+	let reason = vs.reason;
+	let nextAction = vs.nextAction;
+	if (!archiveReady && !reason) {
+		if (!record) {
+			reason = "No persisted assessment record exists for this task-complete change.";
+			nextAction = `/assess spec ${change.name}`;
+		} else if (record.outcome === "reopen" || record.reconciliation?.reopen) {
+			reason = "The latest persisted assessment reopened work.";
+			nextAction = `Complete follow-up work for ${change.name}, reconcile lifecycle artifacts, then re-run /assess spec ${change.name}`;
+		} else if (record.outcome === "ambiguous") {
+			reason = "The latest persisted assessment is ambiguous and must be refreshed before archive.";
+			nextAction = `Refresh /assess spec ${change.name} for the current implementation snapshot`;
+		} else if (freshness && !freshness.current) {
+			reason = freshness.reasons.join(" ");
+			nextAction = `Refresh /assess spec ${change.name} for the current implementation snapshot`;
+		}
+	}
+
+	return {
+		stage: change.stage,
+		verificationSubstate: vs.substate,
+		archiveReady,
+		bindingStatus,
+		totalTasks: change.totalTasks,
+		doneTasks: change.doneTasks,
+		assessmentFreshness: freshness,
+		nextAction: nextAction ?? null,
+		reason: reason ?? null,
+	};
+}
+
+// ─── Spec Summary ────────────────────────────────────────────────────────────
+
 /**
  * Summarize a change's specs as a human-readable string.
  */
