@@ -1,7 +1,7 @@
 ---
 id: dashboard-lifecycle-publisher-consolidation
 title: Dashboard and lifecycle publisher consolidation
-status: implementing
+status: implemented
 parent: repo-consolidation-hardening
 tags: [dashboard, lifecycle, publishers, consolidation, shared-state]
 open_questions: []
@@ -35,3 +35,21 @@ Introduce a small shared publisher module or command-safe refresh helpers that o
 ## Open Questions
 
 *No open questions.*
+
+## Implementation Notes
+
+### File Scope
+
+- `extensions/openspec/index.ts` (modified) — Centralized OpenSpec dashboard refresh usage around the shared publisher helper and file-watch refresh scheduling.
+- `extensions/openspec/dashboard-state.ts` (modified) — Serves as the shared OpenSpec dashboard refresh helper that writes shared state and emits dashboard updates.
+- `extensions/openspec/dashboard-state.test.ts` (modified) — Regression coverage for the shared OpenSpec dashboard refresh helper contract.
+- `extensions/design-tree/index.ts` (modified) — Replaced repeated inline design-tree publisher calls with the local emitCurrentState refresh helper across mutation paths.
+- `extensions/design-tree/dashboard-state.ts` (modified) — Continues to own focused-node-aware design-tree dashboard publication for the consolidated refresh path.
+- `extensions/design-tree/index.test.ts` (modified) — Regression coverage for focus-aware design-tree dashboard refresh behavior after consolidation.
+- `openspec/changes/dashboard-lifecycle-publisher-consolidation/tasks.md` (modified) — Post-assess reconciliation delta — touched during follow-up fixes
+- `docs/dashboard-lifecycle-publisher-consolidation.md` (modified) — Post-assess reconciliation delta — touched during follow-up fixes
+
+### Constraints
+
+- Keep consolidation bounded to publisher and refresh seams; do not rewrite unrelated OpenSpec or design-tree domain logic.
+- Preserve focus-aware design-tree publication and existing dashboard update semantics while reducing repeated inline refresh boilerplate.
