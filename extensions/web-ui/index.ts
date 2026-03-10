@@ -1,13 +1,13 @@
-import { exec as nodeExec } from "node:child_process";
+import { spawn as nodeSpawn } from "node:child_process";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { startWebUIServer, type WebUIServer } from "./server.ts";
 
 let server: WebUIServer | null = null;
-let execFn: typeof nodeExec = nodeExec;
+let spawnFn: typeof nodeSpawn = nodeSpawn;
 
-export function _setExecFn(fn: typeof nodeExec): typeof nodeExec {
-  const prev = execFn;
-  execFn = fn;
+export function _setSpawnFn(fn: typeof nodeSpawn): typeof nodeSpawn {
+  const prev = spawnFn;
+  spawnFn = fn;
   return prev;
 }
 
@@ -18,12 +18,13 @@ export function _setServer(next: WebUIServer | null): void {
 export { server as _server };
 
 function openBrowser(url: string): void {
-  const cmd = process.platform === "darwin"
-    ? `open ${JSON.stringify(url)}`
-    : process.platform === "win32"
-      ? `cmd /c start \"\" ${JSON.stringify(url)}`
-      : `xdg-open ${JSON.stringify(url)}`;
-  execFn(cmd, () => {});
+  if (process.platform === "darwin") {
+    spawnFn("open", [url], { stdio: "ignore" });
+  } else if (process.platform === "win32") {
+    spawnFn("cmd", ["/c", "start", "", url], { stdio: "ignore" });
+  } else {
+    spawnFn("xdg-open", [url], { stdio: "ignore" });
+  }
 }
 
 function notify(ctx: { ui?: { notify?: (msg: string, level?: "info" | "warning" | "error") => void } }, message: string): void {
