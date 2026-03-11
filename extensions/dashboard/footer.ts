@@ -410,8 +410,14 @@ export class DashboardFooter implements Component {
     const branchLines = this.buildBranchTree(innerWidth);
     const [topLine = "", ...extraBranchLines] = branchLines;
 
+    // The first branch line is embedded in the top border as "╭─ [topLine] ─╮",
+    // which adds a 3-char prefix (╭─·).  Content lines are wrapped with "│·"
+    // (2-char prefix).  Shift continuation branch lines right by 1 to keep
+    // ├─/└─ connectors vertically aligned with the ┬ junction in the border.
+    const alignedBranchLines = extraBranchLines.map((l) => " " + l);
+
     const contentLines = [
-      ...extraBranchLines,
+      ...alignedBranchLines,
       ...this.buildDesignTreeLines(innerWidth),
       ...this.buildOpenSpecLines(innerWidth),
       ...this.buildRecoveryLines(innerWidth),
@@ -441,6 +447,9 @@ export class DashboardFooter implements Component {
     const branchLines = this.buildBranchTree(innerWidth);
     const [topLine = "", ...extraBranchLines] = branchLines;
 
+    // Same 1-char alignment correction as renderRaisedStacked.
+    const alignedBranchLines = extraBranchLines.map((l) => " " + l);
+
     const leftLines = [
       ...this.buildDesignTreeLines(leftColWidth),
       ...this.buildRecoveryLines(leftColWidth),
@@ -449,7 +458,7 @@ export class DashboardFooter implements Component {
     const rightLines = this.buildOpenSpecLines(rightColWidth);
 
     const contentLines: string[] = [
-      ...extraBranchLines,
+      ...alignedBranchLines,
       ...(leftLines.length > 0 || rightLines.length > 0
         ? mergeColumns(leftLines, rightLines, leftColWidth, rightColWidth, colDivider)
         : []),
