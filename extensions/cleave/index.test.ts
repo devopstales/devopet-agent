@@ -82,7 +82,7 @@ function runAssessSpecScenario(mode: "bridged" | "interactive" | "reopen") {
 	return runJsonScript(script);
 }
 
-function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkpoint" | "generic" | "unknowns") {
+function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkpoint" | "checkpoint-clipboard" | "generic" | "unknowns") {
 	const script = String.raw`
 (async () => {
   const { runDirtyTreePreflight } = await import('./extensions/cleave/index.ts');
@@ -93,6 +93,7 @@ function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkp
     clean: [],
     'volatile-only': [],
     checkpoint: ['checkpoint', ''],
+    'checkpoint-clipboard': ['checkpoint', '/var/folders/vl/w3m4rq616c9gv9cmbj99kz_80000gn/T/pi-clipboard-9b123c74-47d4-4fd6-8185-c57d16f4433a.png'],
     generic: ['proceed-without-cleave'],
     unknowns: ['stash-unrelated'],
   };
@@ -106,6 +107,7 @@ function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkp
           clean: '',
           'volatile-only': ' M .pi/memory/facts.jsonl\n',
           checkpoint: ' M openspec/changes/cleave-dirty-tree-checkpointing/tasks.md\n?? docs/cleave-dirty-tree-checkpointing.md\n',
+          'checkpoint-clipboard': ' M openspec/changes/cleave-dirty-tree-checkpointing/tasks.md\n?? docs/cleave-dirty-tree-checkpointing.md\n',
           generic: ' M README.md\n',
           unknowns: ' M openspec/changes/other-change/tasks.md\n?? scratch/notes.md\n',
         };
@@ -234,5 +236,14 @@ describe("dirty-tree preflight acceptance coverage", () => {
 		assert.ok(addCommand.includes("openspec/changes/cleave-dirty-tree-checkpointing/tasks.md"));
 		assert.ok(!addCommand.includes("docs/cleave-dirty-tree-checkpointing.md"));
 		assert.ok(commitCommand.some((part: string) => /checkpoint/i.test(String(part))));
+	});
+
+	it("ignores transient clipboard attachment paths during checkpoint approval", () => {
+		const result = runDirtyTreePreflightScenario("checkpoint-clipboard");
+		const commitCommand = result.commands.find((command: string[]) => command[1] === "commit");
+		assert.equal(result.result, "continue");
+		assert.ok(commitCommand, "expected git commit after checkpoint approval");
+		assert.match(String(commitCommand[3] ?? ""), /checkpoint/i);
+		assert.ok(!commitCommand.includes("/var/folders/vl/w3m4rq616c9gv9cmbj99kz_80000gn/T/pi-clipboard-9b123c74-47d4-4fd6-8185-c57d16f4433a.png"));
 	});
 });

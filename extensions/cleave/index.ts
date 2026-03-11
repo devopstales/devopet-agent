@@ -204,6 +204,16 @@ interface DirtyTreePreflightOptions {
 	ui?: { input?: (prompt: string, initial?: string) => Promise<string | undefined> };
 }
 
+const TRANSIENT_CLIPBOARD_ATTACHMENT_PATH =
+	/^\/var\/folders\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/T\/pi-clipboard-[A-Fa-f0-9-]+\.(?:png|jpe?g|gif|webp)$/;
+
+function normalizePreflightInput(response: string | undefined): string | undefined {
+	const trimmed = response?.trim();
+	if (!trimmed) return undefined;
+	if (TRANSIENT_CLIPBOARD_ATTACHMENT_PATH.test(trimmed)) return undefined;
+	return trimmed;
+}
+
 function formatDirtyTreeSummary(classification: WorkspaceDirtyTreeClassification, suggestedMessage: string | null): string {
 	const renderGroup = (title: string, entries: ClassifiedDirtyPath[], empty: string): string[] => [
 		title,
@@ -248,14 +258,14 @@ async function checkpointRelatedChanges(
 		throw new Error("Checkpoint requires interactive approval, but input is unavailable.");
 	}
 	const suggested = checkpointMessage ?? "chore(cleave): checkpoint before cleave";
-	const response = (await ui.input(
+	const response = normalizePreflightInput(await ui.input(
 		[
 			`Checkpoint ${classification.checkpointFiles.length} related file(s).`,
 			`Press Enter to approve the suggested message, type a custom commit message to approve with edits, or type 'cancel' to decline.`,
 			`Suggested message: ${suggested}`,
 		].join("\n"),
 		suggested,
-	))?.trim();
+	));
 	if (!response) {
 		// Accept the suggested message when the operator confirms with Enter.
 	} else if (response.toLowerCase() === "cancel") {
@@ -313,9 +323,9 @@ export async function runDirtyTreePreflight(pi: ExtensionAPI, options: DirtyTree
 	}
 
 	while (true) {
-		const answer = (await options.ui.input(
+		const answer = normalizePreflightInput(await options.ui.input(
 			"Dirty tree action [checkpoint|stash-unrelated|stash-volatile|proceed-without-cleave|cancel]:",
-		))?.trim().toLowerCase();
+		))?.toLowerCase();
 		try {
 			switch (answer) {
 				case "checkpoint":
