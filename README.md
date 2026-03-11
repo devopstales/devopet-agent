@@ -1,18 +1,46 @@
 # pi-kit
 
-A batteries-included extension package for the [pi coding agent](https://github.com/badlogic/pi-mono). Adds persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and quality-of-life tools — all loadable with a single install.
+A batteries-included extension package for the pi coding agent. Adds persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and quality-of-life tools — all loadable with a single install.
+
+## Installation
+
+pi-kit runs on top of a patched fork of the pi coding agent (`@cwilson613/pi-coding-agent`). The fork is published to npm and tracks upstream [`badlogic/pi-mono`](https://github.com/badlogic/pi-mono) daily, adding targeted fixes for OAuth login reliability and bracketed-paste input handling.
+
+**Step 1 — Install the pi binary from the patched fork:**
+
+```bash
+npm install -g @cwilson613/pi-coding-agent
+```
+
+**Step 2 — Install pi-kit extensions:**
 
 ```bash
 pi install https://github.com/cwilson613/pi-kit
 ```
 
-> **Note:** `pi install` and `pi update` track the `main` branch. There is no tag-pinned install yet — see [#5](https://github.com/cwilson613/pi-kit/issues/5). The version-check extension notifies you when a new release is available.
+**Step 3 — First-time setup:**
+
+```bash
+pi          # start pi in any project directory
+/bootstrap  # check deps, install missing tools, configure preferences
+```
+
+### Keeping up to date
+
+| What to update | How |
+|----------------|-----|
+| **pi-kit extensions** | `/update` or `pi update` (tracks `main` branch) |
+| **pi binary** | `/update-pi` — checks npm for latest `@cwilson613/pi-coding-agent`, prompts before installing |
+
+> The patched fork syncs from upstream daily via GitHub Actions. Bug fixes and new AI provider support land automatically. If a sync PR has conflicts, they are surfaced for manual review before merging — upstream changes are never silently dropped.
+
+> **Note:** `pi install` and `pi update` track the `main` branch. The version-check extension notifies you when a new pi-kit release is available.
 
 ## Architecture
 
 ![pi-kit Architecture](docs/img/architecture.png)
 
-pi-kit extends the pi agent with **27 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+pi-kit extends `@cwilson613/pi-coding-agent` with **27 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
 
 ### Development Methodology
 
@@ -185,7 +213,7 @@ Connect external MCP (Model Context Protocol) servers as native pi tools.
 
 | Extension | Description |
 |-----------|-------------|
-| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences (`/bootstrap`, `/refresh`) |
+| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences (`/bootstrap`, `/refresh`, `/update-pi`) |
 | `chronos` | Authoritative date/time from system clock — eliminates AI date math errors |
 | `01-auth` | Auth status, diagnosis, and refresh across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
@@ -231,13 +259,26 @@ Pre-built prompts for common workflows:
 
 ## Requirements
 
-- [pi coding agent](https://github.com/badlogic/pi-mono) (`@cwilson613/pi-coding-agent` ≥ 0.57)
-- **Optional**: [Ollama](https://ollama.ai) — for local inference, offline mode, and semantic memory search
-- **Optional**: [d2](https://d2lang.com) — for diagram rendering
-- **Optional**: [mflux](https://github.com/filipstrand/mflux) — for FLUX.1 image generation on Apple Silicon
-- **Optional**: API keys for web search (Brave, Tavily, or Serper)
+**Required:**
+- `@cwilson613/pi-coding-agent` ≥ 0.57 — patched fork of [badlogic/pi-mono](https://github.com/badlogic/pi-mono). Install via `npm install -g @cwilson613/pi-coding-agent`. Fork source: [cwilson613/pi-mono](https://github.com/cwilson613/pi-mono)
+
+**Optional (installed by `/bootstrap`):**
+- [Ollama](https://ollama.ai) — local inference, offline mode, semantic memory search
+- [d2](https://d2lang.com) — diagram rendering
+- [mflux](https://github.com/filipstrand/mflux) — FLUX.1 image generation on Apple Silicon
+- API keys for web search (Brave, Tavily, or Serper)
 
 Run `/bootstrap` after install to check dependencies and configure preferences.
+
+## Why a Patched Fork?
+
+Upstream [`badlogic/pi-mono`](https://github.com/badlogic/pi-mono) is the canonical pi coding agent. pi-kit depends on a fork rather than the upstream package for two reasons:
+
+1. **OAuth login reliability** — upstream had no fetch timeout on OAuth token exchange calls. A slow or unreachable endpoint would hang the login UI indefinitely with no recovery path. Fixed in [`packages/ai/src/utils/oauth/`](https://github.com/cwilson613/pi-mono/tree/main/packages/ai/src/utils/oauth).
+
+2. **Bracketed-paste stuck state** — a missing end-marker (e.g. from a large paste that split across chunks) would leave `isInPaste = true` permanently, silently swallowing all subsequent keystrokes including Enter. Fixed with a 500ms watchdog timer and Escape-to-clear in [`packages/tui/src/components/input.ts`](https://github.com/cwilson613/pi-mono/blob/main/packages/tui/src/components/input.ts).
+
+Both fixes are submitted as PRs to upstream ([#2060](https://github.com/badlogic/pi-mono/pull/2060), [#2061](https://github.com/badlogic/pi-mono/pull/2061)). Once merged, the fork becomes a pass-through and the dependency can revert to `@mariozechner/pi-coding-agent`.
 
 ## License
 
