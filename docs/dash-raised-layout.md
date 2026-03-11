@@ -2,8 +2,10 @@
 id: dash-raised-layout
 title: "Raised Dashboard: Horizontal Split Layout"
 status: implemented
+related: [dashboard-cleanup]
 tags: [dashboard, tui, layout]
-open_questions: []
+open_questions:
+  - "Should raised mode reserve a fixed bottom block for meta/footer rows and truncate only the upper dashboard sections, or should it switch to a split render where only the bottom block is always visible?"
 branches: ["feature/dash-raised-layout"]
 openspec_change: dash-raised-layout
 ---
@@ -206,6 +208,10 @@ Tests in `render-utils.test.ts` cover:
 - `leftRight` with OSC 8 on both sides — assert `visibleWidth(result) === width`
 - `mergeColumns` with mismatched row counts — assert every row is exactly `leftWidth + 1 + rightWidth` visible columns
 
+### Pinned footer metadata problem
+
+In raised mode the dashboard can grow enough that the footer metadata block (driver/model, thinking level, memory audit, and footer data) scrolls off the visible bottom. The current raised renderer appends those lines after the content sections, so they are not structurally pinned. A better layout is to keep the dashboard content flexible while reserving the final visible rows for the meta/footer block, with compact mode remaining a single dashboard-first line.
+
 ## Decisions
 
 ### Decision: Column split threshold: ≥120 columns
@@ -220,7 +226,7 @@ Tests in `render-utils.test.ts` cover:
 
 ### Decision: Line cap: 12 for wide (≥120), 10 for narrow
 
-**Status:** superseded
+**Status:** exploring
 **Rationale:** Initially proposed; superseded by "Remove the line cap in raised mode" once it was clear raised mode is an intentionally expanded view with no reason to artificially constrain output.
 
 ### Decision: Remove the line cap in raised mode
@@ -228,9 +234,14 @@ Tests in `render-utils.test.ts` cover:
 **Status:** decided
 **Rationale:** Raised mode is an intentionally expanded view — the user toggled it to see detail. Capping at 10 or 12 lines was a holdover from when the dashboard was compact-first. In raised mode, render as many lines as the content warrants. The pi footer widget system scrolls naturally and the terminal handles overflow. Compact mode still stays at 1 line.
 
+### Decision: Raised dashboard should pin model/thinking/memory metadata to the bottom
+
+**Status:** exploring
+**Rationale:** The operator relies on driver/model/thinking level and memory visibility as persistent session controls. In the raised dashboard, those values should remain anchored in the bottom rows while the higher-level dashboard sections above them absorb truncation or scrolling pressure.
+
 ## Open Questions
 
-*No open questions.*
+- Should raised mode reserve a fixed bottom block for meta/footer rows and truncate only the upper dashboard sections, or should it switch to a split render where only the bottom block is always visible?
 
 ## Implementation Notes
 
