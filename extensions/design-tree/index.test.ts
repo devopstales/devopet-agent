@@ -684,7 +684,7 @@ describe("design-tree add_question and remove_question memory fact emission", ()
 		await runUpdateTool({ action: "add_question", node_id: "my-node", question: "Should we cache responses?" });
 		sharedState.factArchiveQueue = []; // reset after add
 
-		await runUpdateTool({ action: "remove_question", node_id: "my-node", question: "Should we cache responses?" });
+		const result = await runUpdateTool({ action: "remove_question", node_id: "my-node", question: "Should we cache responses?" });
 
 		const archiveQueue = sharedState.factArchiveQueue ?? [];
 		assert.ok(archiveQueue.length > 0, "factArchiveQueue must have entries after remove_question");
@@ -692,6 +692,33 @@ describe("design-tree add_question and remove_question memory fact emission", ()
 			archiveQueue.some((prefix) => prefix === "OPEN [my-node]: Should we cache responses?"),
 			`factArchiveQueue must contain the expected content prefix; got: ${JSON.stringify(archiveQueue)}`,
 		);
+		// factWasEmitted should be true because add_question ran first in this test
+		assert.strictEqual(result.details.factWasEmitted, true, "factWasEmitted should be true when add_question ran first");
+	});
+
+	it("remove_question reports factWasEmitted=false when no add_question preceded it", async () => {
+		// Simulate a question added before fact-emission was deployed:
+		// manually inject the question into the node without going through add_question.
+		sharedState.lifecycleCandidateQueue = [];
+		sharedState.factArchiveQueue = [];
+
+		// Add question via add_question first so it exists on the node, then clear the queue
+		// to simulate a pre-deployment scenario where no fact was emitted.
+		await runUpdateTool({ action: "add_question", node_id: "my-node", question: "Legacy question pre-deployment?" });
+		sharedState.lifecycleCandidateQueue = []; // wipe — simulates no stored fact
+
+		const result = await runUpdateTool({ action: "remove_question", node_id: "my-node", question: "Legacy question pre-deployment?" });
+
+		assert.strictEqual(result.details.factWasEmitted, false, "factWasEmitted should be false when lifecycleCandidateQueue has no matching fact");
+		// The archive queue should still be populated so downstream consumers can attempt archival
+		const archiveQueue = sharedState.factArchiveQueue ?? [];
+		assert.ok(
+			archiveQueue.some((p) => p === "OPEN [my-node]: Legacy question pre-deployment?"),
+			"factArchiveQueue must still contain the prefix even when factWasEmitted=false",
+		);
+		// Caller gets an informational note in the response text
+		const text = result.content[0].text as string;
+		assert.ok(text.includes("no corresponding memory fact found"), `Expected warning note in response; got: ${text}`);
 	});
 
 	it("remove_question archive prefix matches the OPEN [...] format emitted by add_question", async () => {
