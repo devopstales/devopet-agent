@@ -50,7 +50,8 @@ import {
 	type LifecycleSummary,
 } from "./spec.ts";
 import { buildLifecycleSummary } from "./lifecycle.ts";
-import { transitionDesignNodesOnArchive } from "./archive-gate.ts";
+import { transitionDesignNodesOnArchive, resolveBoundDesignNodes } from "./archive-gate.ts";
+import { deleteMergedBranches } from "./branch-cleanup.ts";
 import { emitOpenSpecState } from "./dashboard-state.ts";
 import {
 	applyPostAssessReconciliation,
@@ -759,6 +760,19 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 						result.operations.push(
 							`Transitioned design node${transitioned.length > 1 ? "s" : ""} to implemented: ${transitioned.join(", ")}`,
 						);
+					}
+
+					// Auto-delete merged feature branches from transitioned design nodes
+					const allBranches = resolveBoundDesignNodes(cwd, params.change_name)
+						.flatMap((n) => n.branches ?? []);
+					if (allBranches.length > 0) {
+						const { deleted, skipped } = await deleteMergedBranches(pi, cwd, allBranches);
+						if (deleted.length > 0) {
+							result.operations.push(`Deleted merged branches: ${deleted.join(", ")}`);
+						}
+						if (skipped.length > 0) {
+							result.operations.push(`Skipped unmerged/protected branches: ${skipped.join(", ")}`);
+						}
 					}
 
 					emitOpenSpecState(cwd, pi);
@@ -1703,6 +1717,19 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 				result.operations.push(
 					`Transitioned design node${transitioned.length > 1 ? "s" : ""} to implemented: ${transitioned.join(", ")}`,
 				);
+			}
+
+			// Auto-delete merged feature branches from transitioned design nodes
+			const allBranches = resolveBoundDesignNodes(ctx.cwd, changeName)
+				.flatMap((n) => n.branches ?? []);
+			if (allBranches.length > 0) {
+				const { deleted, skipped } = await deleteMergedBranches(pi, ctx.cwd, allBranches);
+				if (deleted.length > 0) {
+					result.operations.push(`Deleted merged branches: ${deleted.join(", ")}`);
+				}
+				if (skipped.length > 0) {
+					result.operations.push(`Skipped unmerged/protected branches: ${skipped.join(", ")}`);
+				}
 			}
 
 			emitOpenSpecState(ctx.cwd, pi);
