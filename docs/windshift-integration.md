@@ -1,13 +1,12 @@
 ---
 id: windshift-integration
 title: Windshift PM Integration — Design Tree + OpenSpec sync
-status: seed
+status: deferred
 tags: [integration, project-management, windshift, lifecycle, self-hosted]
 open_questions:
   - Does Windshift add personal access token (PAT) support? Without it, programmatic access requires storing a session cookie — fragile and not suitable for an extension.
   - Do we want push-only (design-tree → Windshift on lifecycle transitions) or bidirectional sync? Bidirectional adds complexity but lets the operator triage in the Windshift UI.
   - Should OpenSpec changes map to Windshift Milestones or parent Items? Milestones have a completion semantic but less flexibility; parent Items allow full hierarchy.
-  - Wait for Windshift to stabilize (API versioning, PAT support, webhooks) or build against current surface and accept churn? Project is days old.
 ---
 
 # Windshift PM Integration — Design Tree + OpenSpec sync
@@ -49,6 +48,21 @@ Explore bidirectional sync between pi-kit's design-tree/OpenSpec lifecycle and a
 
 
 ### Beads feature mapping against pi-kit extensions (2026-03-12)
+
+
+
+## Decisions
+
+### Decision: Close beads gaps in design-tree rather than adopting beads
+
+**Status:** decided
+**Rationale:** Pi-kit already covers ~85% of beads features more richly (vector-search context injection vs keyword, richer status enum, git-native storage). The two real gaps — bd ready and bd blocked equivalents — were closed by adding ready and blocked actions to the design_tree tool. priority (1-5) and issue_type (epic/feature/task/bug/chore) fields added to DesignNode. No external dependency needed. 1526 tests passing.
+
+## Open Questions
+
+- Does Windshift add personal access token (PAT) support? Without it, programmatic access requires storing a session cookie — fragile and not suitable for an extension.
+- Do we want push-only (design-tree → Windshift on lifecycle transitions) or bidirectional sync? Bidirectional adds complexity but lets the operator triage in the Windshift UI.
+- Should OpenSpec changes map to Windshift Milestones or parent Items? Milestones have a completion semantic but less flexibility; parent Items allow full hierarchy.
 
 ## Beads core feature set
 
@@ -185,13 +199,6 @@ From steveyegge/beads (canonical), beads-rs, beads_rust:
 **Gap 2 — `bd blocked` equivalent**: No structured query for "what's blocked and why". Blocked nodes exist in the design tree but can't be listed with their blocking deps in one call.
 
 Both gaps are small additions to the existing `design_tree` tool — new `action` variants, not new extensions.
-
-## Open Questions
-
-- Does Windshift add personal access token (PAT) support? Without it, programmatic access requires storing a session cookie — fragile and not suitable for an extension.
-- Do we want push-only (design-tree → Windshift on lifecycle transitions) or bidirectional sync? Bidirectional adds complexity but lets the operator triage in the Windshift UI.
-- Should OpenSpec changes map to Windshift Milestones or parent Items? Milestones have a completion semantic but less flexibility; parent Items allow full hierarchy.
-- Wait for Windshift to stabilize (API versioning, PAT support, webhooks) or build against current surface and accept churn? Project is days old.
 
 ## Beads ecosystem (strongest signal)
 

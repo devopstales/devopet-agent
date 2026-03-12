@@ -80,7 +80,11 @@ Structured design exploration with persistent markdown documents — the upstrea
 
 - **Tools**: `design_tree` (query), `design_tree_update` (create/mutate nodes)
 - **Commands**: `/design list`, `/design new`, `/design update`, `/design branch`, `/design decide`, `/design implement`
-- **Document structure**: Frontmatter (status, tags, dependencies, open questions) + sections (Overview, Research, Decisions, Open Questions, Implementation Notes)
+- **Document structure**: Frontmatter (status, tags, dependencies, priority, issue_type, open questions) + sections (Overview, Research, Decisions, Open Questions, Implementation Notes)
+- **Work triage**: `design_tree(action="ready")` returns all decided, dependency-resolved nodes sorted by priority — the session-start "what next?" query
+- **Blocked audit**: `design_tree(action="blocked")` returns all stalled nodes with each blocking dependency's id, title, and status
+- **Priority**: `set_priority` (1 = critical → 5 = trivial) on any node; `ready` auto-sorts by it
+- **Issue types**: `set_issue_type` classifies nodes as `epic | feature | task | bug | chore` — bugs and chores are now first-class tracked work
 - **OpenSpec bridge**: `design_tree_update` with `action: "implement"` scaffolds `openspec/changes/<node-id>/` from a decided node's content; `/cleave` executes it
 - **Full pipeline**: design → decide → implement → `/cleave` → `/assess spec` → archive
 
