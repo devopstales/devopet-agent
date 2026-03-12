@@ -579,7 +579,7 @@ describe("design-spec-gates: set_status(decided) and implement", () => {
 		assert.ok(result.isError, "should be blocked when design spec is still active");
 		assert.match(
 			result.content[0]?.text ?? "",
-			/assess design.*archive|archive.*design change/i,
+			/archive.*design change/i,
 			"error message should mention archiving the design change",
 		);
 	});
@@ -591,6 +591,10 @@ describe("design-spec-gates: set_status(decided) and implement", () => {
 		const result = await runUpdateTool({ action: "set_status", node_id: "my-node", status: "decided" });
 		assert.ok(!result.isError, `should succeed when design spec is archived, got: ${result.content[0]?.text}`);
 		assert.match(result.content[0]?.text ?? "", /decided/, "success message should mention decided");
+
+		// W3: verify the status was actually written to disk
+		const raw = fs.readFileSync(path.join(tmpDir, "docs", "my-node.md"), "utf8");
+		assert.match(raw, /status:\s*decided/, "node status should be persisted as 'decided' on disk");
 	});
 
 	// ── implement gates ───────────────────────────────────────────────────
@@ -624,7 +628,7 @@ describe("design-spec-gates: set_status(decided) and implement", () => {
 		assert.ok(result.isError, "implement should be blocked when design spec is active");
 		assert.match(
 			result.content[0]?.text ?? "",
-			/assess design.*archive|archive.*design change/i,
+			/archive.*design change/i,
 			"error message should mention archiving the design change",
 		);
 	});
@@ -640,5 +644,13 @@ describe("design-spec-gates: set_status(decided) and implement", () => {
 
 		const result = await runUpdateTool({ action: "implement", node_id: "my-node" });
 		assert.ok(!result.isError, `implement should succeed when design spec is archived, got: ${result.content[0]?.text}`);
+
+		// W4: verify scaffoldOpenSpecChange side-effect — proposal.md should be created
+		const changeDir = path.join(tmpDir, "openspec", "changes", "my-node");
+		assert.ok(fs.existsSync(changeDir), "openspec/changes/<node-id>/ directory should be created");
+		assert.ok(
+			fs.existsSync(path.join(changeDir, "proposal.md")),
+			"proposal.md should be scaffolded in the change directory",
+		);
 	});
 });

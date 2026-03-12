@@ -42,10 +42,16 @@ export function resolveDesignSpecBinding(cwd: string, nodeId: string): DesignSpe
 	const designDir = path.join(cwd, "openspec", "design", nodeId);
 	const designArchiveDir = path.join(cwd, "openspec", "design-archive");
 
-	const active = fs.existsSync(designDir) && fs.statSync(designDir).isDirectory();
+	// W1: require at least one file inside the directory before treating it as active
+	const active =
+		fs.existsSync(designDir) &&
+		fs.statSync(designDir).isDirectory() &&
+		fs.readdirSync(designDir).length > 0;
 
+	// W2: scan both branches unconditionally — active takes precedence over archived
+	// but we still detect archived so callers can surface manual-recovery conflicts.
 	let archived = false;
-	if (!active && fs.existsSync(designArchiveDir)) {
+	if (fs.existsSync(designArchiveDir)) {
 		for (const entry of fs.readdirSync(designArchiveDir, { withFileTypes: true })) {
 			if (!entry.isDirectory()) continue;
 			// Match YYYY-MM-DD-<nodeId> convention
@@ -57,7 +63,8 @@ export function resolveDesignSpecBinding(cwd: string, nodeId: string): DesignSpe
 		}
 	}
 
-	return { archived, active, missing: !active && !archived };
+	// Precedence: active wins over archived (active change is not yet complete)
+	return { archived: archived && !active, active, missing: !active && !archived };
 }
 
 export interface OpenSpecBindingResolution {

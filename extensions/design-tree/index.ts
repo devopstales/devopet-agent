@@ -700,7 +700,7 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 							return {
 								content: [{
 									type: "text",
-									text: "Run /assess design then archive the design change before marking decided",
+									text: "Run /assess spec then /opsx:archive the design change before marking decided",
 								}],
 								details: {},
 								isError: true,
@@ -1001,7 +1001,7 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 							return {
 								content: [{
 									type: "text",
-									text: "Run /assess design then archive the design change before marking decided",
+									text: "Run /assess spec then /opsx:archive the design change before marking decided",
 								}],
 								details: {},
 								isError: true,
