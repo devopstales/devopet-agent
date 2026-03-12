@@ -12,6 +12,54 @@ import type { DesignNode } from "../design-tree/types.ts";
 
 export type OpenSpecBindingMatch = "explicit" | "id-fallback";
 
+// ─── Design-phase spec binding ───────────────────────────────────────────────
+
+/**
+ * Result of resolving whether a design node has a design-phase OpenSpec change.
+ *
+ * Paths checked:
+ *  - active:   openspec/design/<nodeId>/      (a live design-phase change)
+ *  - archived: openspec/design-archive/YYYY-MM-DD-<nodeId>/  (completed and archived)
+ *
+ * Exactly one of {active, archived} can be true; missing is true when neither exists.
+ */
+export interface DesignSpecBinding {
+	/** A completed design-phase change exists in openspec/design-archive/. */
+	archived: boolean;
+	/** A live design-phase change exists in openspec/design/. */
+	active: boolean;
+	/** No design-phase change found in either location. */
+	missing: boolean;
+}
+
+/**
+ * Scan the design-phase OpenSpec directories for a node's design change.
+ *
+ * @param cwd    Project root
+ * @param nodeId Design node ID to match
+ */
+export function resolveDesignSpecBinding(cwd: string, nodeId: string): DesignSpecBinding {
+	const designDir = path.join(cwd, "openspec", "design", nodeId);
+	const designArchiveDir = path.join(cwd, "openspec", "design-archive");
+
+	const active = fs.existsSync(designDir) && fs.statSync(designDir).isDirectory();
+
+	let archived = false;
+	if (!active && fs.existsSync(designArchiveDir)) {
+		for (const entry of fs.readdirSync(designArchiveDir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			// Match YYYY-MM-DD-<nodeId> convention
+			const match = entry.name.match(/^\d{4}-\d{2}-\d{2}-(.+)$/);
+			if (match && match[1] === nodeId) {
+				archived = true;
+				break;
+			}
+		}
+	}
+
+	return { archived, active, missing: !active && !archived };
+}
+
 export interface OpenSpecBindingResolution {
 	bound: boolean;
 	changeName: string | null;

@@ -98,3 +98,49 @@ describe("archive-gate binding resolution", () => {
 		assert.equal(tree.nodes.get("my-change")?.status, "implemented");
 	});
 });
+
+import { resolveDesignSpecBinding } from "./archive-gate.ts";
+
+describe("resolveDesignSpecBinding", () => {
+	let tmpDir: string;
+
+	beforeEach(() => {
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "design-spec-binding-"));
+	});
+
+	afterEach(() => {
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	it("returns missing=true when neither active nor archived change exists", () => {
+		const result = resolveDesignSpecBinding(tmpDir, "my-node");
+		assert.deepStrictEqual(result, { archived: false, active: false, missing: true });
+	});
+
+	it("returns active=true when openspec/design/<nodeId>/ directory exists", () => {
+		fs.mkdirSync(path.join(tmpDir, "openspec", "design", "my-node"), { recursive: true });
+		const result = resolveDesignSpecBinding(tmpDir, "my-node");
+		assert.deepStrictEqual(result, { archived: false, active: true, missing: false });
+	});
+
+	it("returns archived=true when openspec/design-archive/YYYY-MM-DD-<nodeId>/ exists", () => {
+		fs.mkdirSync(path.join(tmpDir, "openspec", "design-archive", "2026-03-12-my-node"), { recursive: true });
+		const result = resolveDesignSpecBinding(tmpDir, "my-node");
+		assert.deepStrictEqual(result, { archived: true, active: false, missing: false });
+	});
+
+	it("active takes precedence over archived if both exist (active wins)", () => {
+		fs.mkdirSync(path.join(tmpDir, "openspec", "design", "my-node"), { recursive: true });
+		fs.mkdirSync(path.join(tmpDir, "openspec", "design-archive", "2026-03-12-my-node"), { recursive: true });
+		const result = resolveDesignSpecBinding(tmpDir, "my-node");
+		// active=true means we skip the archive scan
+		assert.equal(result.active, true);
+		assert.equal(result.missing, false);
+	});
+
+	it("does not match a different node id in archive", () => {
+		fs.mkdirSync(path.join(tmpDir, "openspec", "design-archive", "2026-03-12-other-node"), { recursive: true });
+		const result = resolveDesignSpecBinding(tmpDir, "my-node");
+		assert.deepStrictEqual(result, { archived: false, active: false, missing: true });
+	});
+});
