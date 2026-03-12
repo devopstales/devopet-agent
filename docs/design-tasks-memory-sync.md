@@ -1,7 +1,7 @@
 ---
 id: design-tasks-memory-sync
 title: Design Tasks + Memory Sync — Open Questions, tasks.md, and memory integration
-status: decided
+status: implemented
 parent: dual-lifecycle-openspec
 open_questions: []
 ---

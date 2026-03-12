@@ -1,7 +1,7 @@
 ---
 id: design-node-acceptance-criteria
 title: Design Node Acceptance Criteria — format, storage, and evaluation
-status: decided
+status: implemented
 parent: dual-lifecycle-openspec
 open_questions: []
 ---

@@ -1,7 +1,7 @@
 ---
 id: design-assess-command
 title: "Design Assessment Command — /assess design integration"
-status: decided
+status: implemented
 parent: dual-lifecycle-openspec
 open_questions: []
 ---
