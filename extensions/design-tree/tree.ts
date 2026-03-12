@@ -1451,3 +1451,132 @@ export function scaffoldOpenSpecChange(
 
 	return { message, changePath, files };
 }
+
+// ─── Design-phase OpenSpec Scaffolding ──────────────────────────────────────
+
+/**
+ * Scaffold a design-phase OpenSpec change at openspec/design/<node-id>/.
+ * Called on set_status(exploring) transition — idempotent (returns early if
+ * the directory already has files).
+ *
+ * Generated files:
+ *   proposal.md — one-liner intent + link to design doc
+ *   spec.md     — template with Scenarios / Falsifiability / Constraints subsections
+ *   tasks.md    — Open Questions mirrored as unchecked tasks
+ */
+export function scaffoldDesignOpenSpecChange(
+	cwd: string,
+	node: DesignNode,
+): { message: string; changePath: string; created: boolean } {
+	const changePath = path.join(cwd, "openspec", "design", node.id);
+
+	// Idempotent: if directory already has markdown files, skip
+	if (fs.existsSync(changePath)) {
+		const existing = fs.readdirSync(changePath).filter((f) => f.endsWith(".md"));
+		if (existing.length > 0) {
+			return {
+				message: `Design OpenSpec change already exists at openspec/design/${node.id}/ — skipping scaffold.`,
+				changePath,
+				created: false,
+			};
+		}
+	}
+
+	fs.mkdirSync(changePath, { recursive: true });
+
+	const sections = getNodeSections(node);
+	const docRelPath = `docs/${node.id}.md`;
+
+	// ── proposal.md ──────────────────────────────────────────────
+	const intentLine = sections.overview
+		? sections.overview.split("\n").find((l) => l.trim()) ?? sections.overview
+		: `Explore and decide the design of: ${node.title}`;
+
+	const proposal = [
+		`# ${node.title}`,
+		"",
+		"## Intent",
+		"",
+		intentLine,
+		"",
+		`See [${node.title} design doc](../../../${docRelPath}) for full context.`,
+		"",
+	].join("\n");
+
+	fs.writeFileSync(path.join(changePath, "proposal.md"), proposal);
+
+	// ── spec.md ───────────────────────────────────────────────────
+	const spec = [
+		`# ${node.title} — Design Spec`,
+		"",
+		"> This spec defines acceptance criteria for the design phase.",
+		"> Add Given/When/Then scenarios that must be true before marking this node 'decided'.",
+		"",
+		"## Scenarios",
+		"",
+		"<!-- Add scenarios here. Example:",
+		"Given [context]",
+		"When [action or condition]",
+		"Then [observable outcome]",
+		"-->",
+		"",
+		"## Falsifiability",
+		"",
+		"<!-- What would disprove this design? List concrete failure conditions. -->",
+		"",
+		"## Constraints",
+		"",
+		"<!-- Non-negotiable constraints this design must satisfy. -->",
+		"",
+	].join("\n");
+
+	fs.writeFileSync(path.join(changePath, "spec.md"), spec);
+
+	// ── tasks.md ──────────────────────────────────────────────────
+	const tasks = buildDesignTasksContent(node, sections);
+	fs.writeFileSync(path.join(changePath, "tasks.md"), tasks);
+
+	return {
+		message: `Scaffolded design OpenSpec change at openspec/design/${node.id}/ (proposal.md, spec.md, tasks.md).`,
+		changePath,
+		created: true,
+	};
+}
+
+/**
+ * Build tasks.md content from a node's Open Questions.
+ * Used both during initial scaffold and for mirroring on question mutations.
+ */
+export function buildDesignTasksContent(node: DesignNode, sections: DocumentSections): string {
+	const lines = [`# ${node.title} — Design Tasks`, ""];
+
+	if (sections.openQuestions.length === 0) {
+		lines.push("## 1. Design exploration", "");
+		lines.push(`- [ ] 1.1 Explore and decide: ${node.title}`);
+		lines.push("");
+	} else {
+		lines.push("## 1. Open Questions", "");
+		let i = 1;
+		for (const q of sections.openQuestions) {
+			lines.push(`- [ ] 1.${i} ${q}`);
+			i++;
+		}
+		lines.push("");
+	}
+
+	return lines.join("\n");
+}
+
+/**
+ * Mirror the node's Open Questions to tasks.md in the design OpenSpec change
+ * directory (openspec/design/<node-id>/tasks.md), if that directory exists.
+ * Idempotent — overwrites tasks.md on every call.
+ */
+export function mirrorOpenQuestionsToDesignSpec(cwd: string, node: DesignNode): void {
+	const tasksPath = path.join(cwd, "openspec", "design", node.id, "tasks.md");
+	if (!fs.existsSync(tasksPath)) return;
+
+	const sections = getNodeSections(node);
+	const content = buildDesignTasksContent(node, sections);
+	fs.writeFileSync(tasksPath, content);
+}
