@@ -244,9 +244,11 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 		promptSnippet:
 			"Manage OpenSpec lifecycle — propose changes, write specs, generate plans, verify, archive",
 		promptGuidelines: [
+			"⚠️  IMPORTANT: For tracked changes use design_tree_update(implement) from a decided node — /opsx:propose is for untracked/throwaway changes only.",
+			"The primary entry point for all tracked work is design_tree_update with action 'implement' on a decided design node, which scaffolds the full change directory automatically.",
 			"Before implementing any multi-file change, create an OpenSpec change with a proposal and specs.",
 			"Specs define what must be true BEFORE code is written — they are the source of truth for correctness.",
-			"Use 'propose' to start a change, 'add_spec' or 'generate_spec' to define requirements with Given/When/Then scenarios.",
+			"Use 'propose' to start an untracked change, 'add_spec' or 'generate_spec' to define requirements with Given/When/Then scenarios.",
 			"Use 'fast_forward' to generate design.md and tasks.md from the specs, then `/cleave` to execute.",
 			"Treat lifecycle reconciliation as required: after implementation checkpoints, ensure tasks.md and bound design-tree state reflect reality before archive.",
 			"After `/assess spec` or `/assess cleave`, call `openspec_manage` with action `reconcile_after_assess` when review reopens work, changes file scope, or uncovers new constraints.",
@@ -799,7 +801,7 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 
 	bridge.register(pi, {
 		name: "opsx:propose",
-		description: "Create a new OpenSpec change: /opsx:propose <name> <title>",
+		description: "Create a new untracked OpenSpec change: /opsx:propose <name> <title>. For tracked work, use design_tree_update(implement) from a decided node instead.",
 		bridge: {
 			agentCallable: true,
 			sideEffectClass: "workspace-write",

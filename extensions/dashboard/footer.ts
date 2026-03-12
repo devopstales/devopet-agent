@@ -934,7 +934,7 @@ export class DashboardFooter implements Component {
       ? theme.fg(allComplete ? "success" : "dim", ` ${totalDone}/${totalAll}`)
       : "";
     lines.push(
-      theme.fg("accent", "◎ OpenSpec") +
+      theme.fg("accent", "◎ Implementation") +
       theme.fg("dim", `  ${active.length} change${active.length > 1 ? "s" : ""}`) +
       aggregateProgress,
     );
