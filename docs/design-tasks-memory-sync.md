@@ -3,8 +3,7 @@ id: design-tasks-memory-sync
 title: Design Tasks + Memory Sync — Open Questions, tasks.md, and memory integration
 status: decided
 parent: dual-lifecycle-openspec
-open_questions:
-  - "tasks.md auto-mirror from Open Questions: is this a live sync (every add_question/remove_question also writes tasks.md) or a one-time generation at exploring time that diverges? Live sync keeps them in sync but adds write overhead to every question mutation."
+open_questions: []
 ---
 
 # Design Tasks + Memory Sync — Open Questions, tasks.md, and memory integration
@@ -36,7 +35,7 @@ open_questions:
 
 ## Open Questions
 
-- tasks.md auto-mirror from Open Questions: is this a live sync (every add_question/remove_question also writes tasks.md) or a one-time generation at exploring time that diverges? Live sync keeps them in sync but adds write overhead to every question mutation.
+*No open questions.*
 
 ## The problem being solved
 
