@@ -10,6 +10,9 @@
  *                  ╰── N lines
  *   Banner:      ── ◈ label ──────────────────────────────────────────────
  *                  content line
+ *
+ * NOTE: All classes use explicit field declarations (not constructor parameter
+ * properties) to remain compatible with Node.js strip-only TypeScript mode.
  */
 import { truncateToWidth, visibleWidth } from "@cwilson613/pi-tui";
 import type { Theme } from "@cwilson613/pi-coding-agent";
@@ -22,12 +25,9 @@ export interface SciComponent {
 // ─── Tool glyphs by name ───────────────────────────────────────────────────
 
 export const TOOL_GLYPHS: Record<string, string> = {
-	// design tree
 	design_tree: "◈",
 	design_tree_update: "◈",
-	// openspec
 	openspec_manage: "◎",
-	// memory
 	memory_store: "⌗",
 	memory_recall: "⌗",
 	memory_query: "⌗",
@@ -40,16 +40,11 @@ export const TOOL_GLYPHS: Record<string, string> = {
 	memory_search_archive: "⌗",
 	memory_episodes: "⌗",
 	memory_ingest_lifecycle: "⌗",
-	// cleave
 	cleave_run: "⚡",
 	cleave_assess: "⚡",
-	// auth
 	whoami: "⊙",
-	// chronos
 	chronos: "◷",
-	// web search
 	web_search: "⌖",
-	// render / view
 	render_diagram: "⬡",
 	render_native_diagram: "⬡",
 	render_excalidraw: "⬡",
@@ -65,20 +60,23 @@ export function glyphFor(toolName: string): string {
 
 // ─── SciCallLine ──────────────────────────────────────────────────────────
 //
-//   ◈──{ design_tree }── node_id:exploring ─────────────────────────────
-//   ^   ^^^^^^^^^^^       ^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^^^
-//   glyph  tool name (accent)   summary (muted)   fill ─── (dim)
+//   ◈──{ design_tree }── action:node_id ─────────────────────────────────
 
 export class SciCallLine implements SciComponent {
-	constructor(
-		private glyph: string,
-		private toolName: string,
-		private summary: string,
-		private theme: Theme,
-	) {}
+	glyph: string;
+	toolName: string;
+	summary: string;
+	theme: Theme;
+
+	constructor(glyph: string, toolName: string, summary: string, theme: Theme) {
+		this.glyph = glyph;
+		this.toolName = toolName;
+		this.summary = summary;
+		this.theme = theme;
+	}
 
 	render(width: number): string[] {
-		const { theme: th } = this;
+		const th = this.theme;
 		const g = th.fg("accent", this.glyph);
 		const dashes = th.fg("dim", "──");
 		const openBracket = th.fg("border", "{");
@@ -104,23 +102,23 @@ export class SciCallLine implements SciComponent {
 //
 //   ▶░░░░░▓▒{ tool_name }░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
 //
-// A bright "cursor" block scans left→right in the free space to the left of
-// the tool name. Re-renders each time render() is called using Date.now().
+// A bright block scans left→right while a tool is pending.
 
 export class SciLoadingLine implements SciComponent {
-	constructor(
-		private toolName: string,
-		private theme: Theme,
-	) {}
+	toolName: string;
+	theme: Theme;
+
+	constructor(toolName: string, theme: Theme) {
+		this.toolName = toolName;
+		this.theme = theme;
+	}
 
 	render(width: number): string[] {
-		const { theme: th } = this;
+		const th = this.theme;
 		const label = `{ ${this.toolName} }`;
 		const labelVw = visibleWidth(label);
-		// Reserve: 1 char glyph + bar + 1 space + label
 		const barWidth = Math.max(4, width - labelVw - 2);
-		const fps120ms = 120;
-		const frame = Math.floor(Date.now() / fps120ms) % barWidth;
+		const frame = Math.floor(Date.now() / 120) % barWidth;
 
 		const bar = Array.from({ length: barWidth }, (_, i) => {
 			if (i === frame) return th.fg("accent", "▓");
@@ -148,14 +146,18 @@ export class SciLoadingLine implements SciComponent {
 //   ╰── · pending
 
 export class SciResult implements SciComponent {
-	constructor(
-		private summary: string,
-		private status: "success" | "error" | "pending",
-		private theme: Theme,
-	) {}
+	summary: string;
+	status: "success" | "error" | "pending";
+	theme: Theme;
+
+	constructor(summary: string, status: "success" | "error" | "pending", theme: Theme) {
+		this.summary = summary;
+		this.status = status;
+		this.theme = theme;
+	}
 
 	render(width: number): string[] {
-		const { theme: th } = this;
+		const th = this.theme;
 		const cap = th.fg("dim", "  ╰──");
 		const dot =
 			this.status === "success"
@@ -179,88 +181,54 @@ export class SciResult implements SciComponent {
 //   ╰── footer summary
 
 export class SciExpandedResult implements SciComponent {
-	constructor(
-		private lines: string[],
-		private footerSummary: string,
-		private theme: Theme,
-	) {}
+	lines: string[];
+	footerSummary: string;
+	theme: Theme;
+
+	constructor(lines: string[], footerSummary: string, theme: Theme) {
+		this.lines = lines;
+		this.footerSummary = footerSummary;
+		this.theme = theme;
+	}
 
 	render(width: number): string[] {
-		const { theme: th } = this;
+		const th = this.theme;
 		const innerWidth = Math.max(1, width - 4);
 		const result: string[] = [];
 		for (const line of this.lines) {
-			const styled = th.fg("dim", "  │") + " " + truncateToWidth(line, innerWidth);
-			result.push(styled);
+			result.push(th.fg("dim", "  │") + " " + truncateToWidth(line, innerWidth));
 		}
-		result.push(th.fg("dim", "  ╰──") + " " + th.fg("muted", truncateToWidth(this.footerSummary, Math.max(1, width - 8))));
+		result.push(
+			th.fg("dim", "  ╰──") +
+			" " +
+			th.fg("muted", truncateToWidth(this.footerSummary, Math.max(1, width - 8))),
+		);
 		return result;
 	}
 
 	invalidate(): void {}
 }
 
-// ─── SciStack (call + result in one component) ────────────────────────────
-//
-// Combines SciCallLine (or SciLoadingLine when pending) with SciResult or
-// SciExpandedResult, eliminating the need for callers to manage two objects.
-
-export class SciStack implements SciComponent {
-	private cachedLines?: string[];
-	private cachedWidth?: number;
-	private cachedTs?: number; // last render timestamp — for animation invalidation
-
-	constructor(
-		private callLine: SciComponent,
-		private resultLine: SciComponent | null,
-	) {}
-
-	render(width: number): string[] {
-		const now = Date.now();
-		// Bust cache every ~120ms for animation (loading line)
-		const animating = !this.resultLine;
-		if (
-			this.cachedLines &&
-			this.cachedWidth === width &&
-			(!animating || (this.cachedTs !== undefined && now - this.cachedTs < 120))
-		) {
-			return this.cachedLines;
-		}
-		const lines: string[] = [];
-		lines.push(...this.callLine.render(width));
-		if (this.resultLine) {
-			lines.push(...this.resultLine.render(width));
-		}
-		this.cachedLines = lines;
-		this.cachedWidth = width;
-		this.cachedTs = now;
-		return lines;
-	}
-
-	invalidate(): void {
-		this.cachedLines = undefined;
-		this.cachedTs = undefined;
-		this.callLine.invalidate();
-		this.resultLine?.invalidate();
-	}
-}
-
 // ─── SciBanner (custom message renderer) ─────────────────────────────────
 //
 //   ── ◈ label ──────────────────────────────────────────────────────────
 //     content line 1
-//     content line 2
 
 export class SciBanner implements SciComponent {
-	constructor(
-		private glyph: string,
-		private label: string,
-		private contentLines: string[],
-		private theme: Theme,
-	) {}
+	glyph: string;
+	label: string;
+	contentLines: string[];
+	theme: Theme;
+
+	constructor(glyph: string, label: string, contentLines: string[], theme: Theme) {
+		this.glyph = glyph;
+		this.label = label;
+		this.contentLines = contentLines;
+		this.theme = theme;
+	}
 
 	render(width: number): string[] {
-		const { theme: th } = this;
+		const th = this.theme;
 		const midText = ` ${th.fg("accent", this.glyph)} ${th.fg("muted", this.label)} `;
 		const midVw = visibleWidth(midText);
 		const leftLen = 2;
