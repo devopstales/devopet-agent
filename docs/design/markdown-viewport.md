@@ -20,7 +20,7 @@ This is not a markdown previewer. It is the **project intelligence portal** for 
 2. **Lifecycle layer** — visualize the state of the design tree and OpenSpec pipeline as interactive graphs and kanban-style boards; surface open questions, blocked nodes, spec coverage, and verification status
 3. **Intelligence layer** — go beyond what the TUI dashboard can show: dependency graphs, spec-to-implementation traceability, cleave execution timelines, memory fact graphs, project health scoring
 
-The rendering backend is a **lightweight Rust binary** (single file, <10MB, no Node.js). It serves the browser UI over localhost HTTP with WebSocket push for live updates. It is spawned by a pi-kit extension (`/vault serve`) and is also usable standalone.
+The rendering backend is a **lightweight Rust binary** (single file, <10MB, no Node.js). It serves the browser UI over localhost HTTP with WebSocket push for live updates. It is spawned by a pi-kit extension (`/auspex open`) and is also usable standalone.
 
 ## Research
 
@@ -149,7 +149,7 @@ This means a single `cargo build --release` produces the complete binary with WA
 ### Decision: Standalone binary + pi-kit extension bridge
 
 **Status:** decided
-**Rationale:** The binary lives in its own repo and is independently installable. Pi-kit gets a `/vault serve` extension command that spawns it and opens the browser. Clean separation — the viewer is useful beyond pi-kit.
+**Rationale:** The binary lives in its own repo and is independently installable. Pi-kit gets a `/auspex open` extension command that spawns it and opens the browser. Clean separation — the viewer is useful beyond pi-kit.
 
 ### Decision: Extend the existing mdserve fork — distribution model decided
 
@@ -174,7 +174,7 @@ This means a single `cargo build --release` produces the complete binary with WA
 ### Decision: Nix flake distribution following styrened pattern
 
 **Status:** decided
-**Rationale:** Nix flake with `flake-utils.lib.eachDefaultSystem` + `nix/package.nix` (buildRustPackage or crane) following styrened's exact structure. Version from a VERSION file, commitSha injected at build time, `cleanSource` to exclude target/. WASM bundle for Dioxus web target built as a separate derivation and embedded in the main binary via `include_bytes!` — single binary output, zero runtime deps, works on macOS + Linux. The pi-kit extension (`/vault serve`) invokes the binary by name; it is the user's responsibility to have it on PATH (installed via Nix). Cargo install remains available for non-Nix users.
+**Rationale:** Nix flake with `flake-utils.lib.eachDefaultSystem` + `nix/package.nix` (buildRustPackage or crane) following styrened's exact structure. Version from a VERSION file, commitSha injected at build time, `cleanSource` to exclude target/. WASM bundle for Dioxus web target built as a separate derivation and embedded in the main binary via `include_bytes!` — single binary output, zero runtime deps, works on macOS + Linux. The pi-kit extension (`/auspex open`) invokes the binary by name; it is the user's responsibility to have it on PATH (installed via Nix). Cargo install remains available for non-Nix users.
 
 ## Open Questions
 
