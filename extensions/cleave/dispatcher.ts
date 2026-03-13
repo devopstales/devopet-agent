@@ -81,7 +81,7 @@ export function resolveModelIdForTier(
 export function emitCleaveChildProgress(
 	pi: Pick<ExtensionAPI, "events">,
 	childId: number,
-	patch: { status?: "pending" | "running" | "done" | "failed"; elapsed?: number; startedAt?: number; lastLine?: string },
+	patch: { status?: "pending" | "running" | "done" | "failed"; elapsed?: number; startedAt?: number; lastLine?: string; worktreePath?: string },
 ): void {
 	const cleaveState = (sharedState as any).cleave;
 	if (!cleaveState?.children?.[childId]) return;
@@ -94,8 +94,17 @@ export function emitCleaveChildProgress(
 	if (patch.startedAt !== undefined) {
 		cleaveState.children[childId].startedAt = patch.startedAt;
 	}
+	if (patch.worktreePath !== undefined) {
+		cleaveState.children[childId].worktreePath = patch.worktreePath;
+	}
 	if (patch.lastLine !== undefined) {
+		// Update lastLine for backward compat
 		cleaveState.children[childId].lastLine = patch.lastLine;
+		// Append to ring buffer (cap at 30)
+		const child = cleaveState.children[childId];
+		if (!child.recentLines) child.recentLines = [];
+		child.recentLines.push(patch.lastLine);
+		if (child.recentLines.length > 30) child.recentLines.splice(0, child.recentLines.length - 30);
 	}
 	cleaveState.updatedAt = Date.now();
 	pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "cleave", childId, patch });
@@ -635,7 +644,7 @@ async function dispatchSingleChild(
 	const startedAtMs = Date.now();
 
 	// Mirror to sharedState for live dashboard updates (include startedAt for elapsed ticker)
-	emitCleaveChildProgress(pi, child.childId, { status: "running", startedAt: startedAtMs });
+	emitCleaveChildProgress(pi, child.childId, { status: "running", startedAt: startedAtMs, worktreePath: child.worktreePath });
 
 	// Debounced last-line emitter: buffers stdout lines and pushes to shared
 	// state at most once per 500ms to avoid flooding the event bus.

@@ -124,7 +124,11 @@ export interface CleaveChildState {
   elapsed?: number;
   /** Epoch ms when the child transitioned to "running". Used for live elapsed calculation. */
   startedAt?: number;
-  /** Last meaningful stdout line from the child process. Updated ~500ms while running. */
+  /** Ring buffer of the last 30 meaningful stdout lines from the child process (filtered). */
+  recentLines?: string[];
+  /** Worktree path for this child — used to run git diff on demand. */
+  worktreePath?: string;
+  /** Last meaningful stdout line — kept in sync with recentLines tail for backward compat. */
   lastLine?: string;
 }
 

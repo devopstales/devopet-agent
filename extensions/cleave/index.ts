@@ -16,9 +16,11 @@
 
 import type { ExtensionAPI, ExtensionCommandContext, AgentToolUpdateCallback } from "@cwilson613/pi-coding-agent";
 import { truncateTail, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "@cwilson613/pi-coding-agent";
+
 import { Text } from "@cwilson613/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 
 import { sharedState, DASHBOARD_UPDATE_EVENT } from "../shared-state.ts";
@@ -2897,5 +2899,171 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				},
 			};
 		},
+	});
+
+	// ─── /cleave inspect ──────────────────────────────────────────────────────
+
+	/**
+	 * Run `git diff --stat` + `git status --short` in a worktree.
+	 * Returns a formatted string or an empty string if no changes / no worktree.
+	 * Result is cached for 2s to avoid subprocess spam on repeated renders.
+	 */
+	const execFileAsync = promisify(execFile);
+	const diffCache = new Map<string, { ts: number; result: string }>();
+
+	async function runGitDiff(worktreePath: string): Promise<string> {
+		const cached = diffCache.get(worktreePath);
+		if (cached && Date.now() - cached.ts < 2000) return cached.result;
+		try {
+			const [stat, status] = await Promise.all([
+				execFileAsync("git", ["diff", "--stat", "HEAD"], { cwd: worktreePath }).then(r => r.stdout.trim()).catch(() => ""),
+				execFileAsync("git", ["status", "--short"], { cwd: worktreePath }).then(r => r.stdout.trim()).catch(() => ""),
+			]);
+			const result = [stat, status].filter(Boolean).join("\n") || "(no changes yet)";
+			diffCache.set(worktreePath, { ts: Date.now(), result });
+			return result;
+		} catch {
+			return "(git unavailable)";
+		}
+	}
+
+	/** Open the inspect overlay for a specific child index. */
+	async function openInspectOverlay(childIdx: number, ctx: ExtensionCommandContext): Promise<void> {
+		const cl = (sharedState as any).cleave;
+		const children: any[] = cl?.children ?? [];
+
+		let selected = Math.max(0, Math.min(childIdx, children.length - 1));
+		let diffText = children.length === 0 ? "" : "(loading…)";
+		let diffLoaded = false;
+
+		const loadDiff = async () => {
+			const child = children[selected];
+			if (!child?.worktreePath) { diffText = "(no worktree assigned)"; diffLoaded = true; return; }
+			diffText = await runGitDiff(child.worktreePath);
+			diffLoaded = true;
+		};
+		// Load diff async — don't block overlay open
+		loadDiff();
+
+		await ctx.ui.custom((tui, theme, _kb, done) => {
+			const component = {
+				render(width: number): string[] {
+					const lines: string[] = [];
+					const child = children[selected];
+					const divFill = (label: string) => {
+						const prefix = `  ╌╌ ${label} `;
+						return theme.fg("dim", prefix + "╌".repeat(Math.max(0, width - prefix.length)));
+					};
+
+					// ── Header ──────────────────────────────────────────────
+					const headerLabel = ` ⚡ cleave inspect `;
+					const headerFill = Math.max(0, width - headerLabel.length - 2);
+					lines.push(
+						theme.fg("dim", "──") +
+						theme.fg("accent", headerLabel) +
+						theme.fg("dim", "─".repeat(headerFill)),
+					);
+
+					if (children.length === 0) {
+						lines.push("");
+						lines.push(theme.fg("muted", "  No active cleave children."));
+						lines.push("");
+						lines.push(theme.fg("dim", "  q close"));
+						return lines;
+					}
+
+					// ── Child selector ───────────────────────────────────────
+					lines.push("");
+					for (let i = 0; i < children.length; i++) {
+						const c = children[i];
+						const icon =
+							c.status === "done" ? theme.fg("success", "✓") :
+							c.status === "failed" ? theme.fg("error", "✕") :
+							c.status === "running" ? theme.fg("warning", "⟳") :
+							theme.fg("dim", "○");
+						const elapsedSec = c.startedAt ? Math.floor((Date.now() - c.startedAt) / 1000) : null;
+						const elapsed = elapsedSec != null ? theme.fg("dim", `  ${elapsedSec}s`) : "";
+						const label = i === selected
+							? theme.bold(theme.fg("accent", `▶ ${c.label}`))
+							: theme.fg("muted", `  ${c.label}`);
+						lines.push(`  ${icon} ${label}${elapsed}`);
+					}
+
+					// ── Recent stdout ────────────────────────────────────────
+					lines.push("");
+					lines.push(divFill("activity"));
+					const recent: string[] = child?.recentLines ?? [];
+					if (recent.length === 0) {
+						lines.push(theme.fg("dim", "  (no output yet)"));
+					} else {
+						for (const l of recent.slice(-10)) {
+							lines.push(theme.fg("muted", `  ${l.slice(0, width - 4)}`));
+						}
+					}
+
+					// ── Git diff ─────────────────────────────────────────────
+					lines.push("");
+					lines.push(divFill("worktree diff"));
+					for (const l of diffText.split("\n").slice(0, 15)) {
+						lines.push(theme.fg("muted", `  ${l.slice(0, width - 4)}`));
+					}
+
+					// ── Footer ───────────────────────────────────────────────
+					lines.push("");
+					lines.push(theme.fg("dim", "  ↑↓ select child  ·  r refresh  ·  q close"));
+					return lines;
+				},
+				invalidate() {},
+				onKey(key: string) {
+					if (key === "escape" || key === "q") { done(undefined); return; }
+					if (key === "up" || key === "k") {
+						selected = Math.max(0, selected - 1);
+						diffLoaded = false; diffText = "(loading…)";
+						loadDiff().then(() => tui.requestRender());
+					}
+					if (key === "down" || key === "j") {
+						selected = Math.min(children.length - 1, selected + 1);
+						diffLoaded = false; diffText = "(loading…)";
+						loadDiff().then(() => tui.requestRender());
+					}
+					if (key === "r") {
+						const child = children[selected];
+						if (child?.worktreePath) diffCache.delete(child.worktreePath);
+						diffText = "(loading…)";
+						loadDiff().then(() => tui.requestRender());
+					}
+					tui.requestRender();
+				},
+			};
+			// Re-render when diff loads
+			const diffPoll = setInterval(() => {
+				if (diffLoaded) { clearInterval(diffPoll); tui.requestRender(); }
+			}, 100);
+			(component as any).dispose = () => clearInterval(diffPoll);
+			return component;
+		});
+	}
+
+	pi.registerCommand("cleave inspect", {
+		description: "Inspect a running cleave child — stdout ring buffer + live git diff",
+		handler: async (_args, ctx) => {
+			await openInspectOverlay(0, ctx);
+		},
+	});
+
+	// Register ctrl+i shortcut while any cleave run is active
+	let inspectShortcutActive = false;
+	pi.events.on(DASHBOARD_UPDATE_EVENT, (data: any) => {
+		const cl = (sharedState as any).cleave;
+		const isRunning = cl?.status === "running" || cl?.status === "dispatching";
+		if (isRunning && !inspectShortcutActive) {
+			inspectShortcutActive = true;
+			pi.registerShortcut("ctrl+i", {
+				description: "Inspect running cleave children",
+				handler: async (ctx) => {
+					await openInspectOverlay(0, ctx as any);
+				},
+			});
+		}
 	});
 }
