@@ -7,12 +7,12 @@
 		"primaryBright": "#6ecad8",
 		"fg":            "#c4d8e4",
 		"mutedFg":       "#607888",
-		"dimFg":         "#344858",
-		"bg":            "#06080e",
-		"cardBg":        "#0e1622",
-		"surfaceBg":     "#131e2e",
-		"borderColor":   "#1a3448",
-		"borderDim":     "#0e1e30",
+		"dimFg":         "#405870",
+		"bg":            "#0d1420",
+		"cardBg":        "#131d2c",
+		"surfaceBg":     "#192536",
+		"borderColor":   "#1e3a50",
+		"borderDim":     "#122030",
 		"green":         "#1ab878",
 		"red":           "#c83030",
 		"orange":        "#c86418",
@@ -78,8 +78,8 @@
 		"bashMode": "#b89020"
 	},
 	"export": {
-		"pageBg":  "#04060c",
-		"cardBg":  "#0a1220",
-		"infoBg":  "#0e1e30"
+		"pageBg":  "#0d1420",
+		"cardBg":  "#131d2c",
+		"infoBg":  "#122030"
 	}
 }

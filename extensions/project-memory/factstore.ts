@@ -860,6 +860,27 @@ export class FactStore {
     return row?.count ?? 0;
   }
 
+  /** Find facts whose content starts with a given prefix using a LIKE query (no FTS5, safe for special chars) */
+  findFactsByContentPrefix(prefix: string, mind?: string): Fact[] {
+    // Use LIKE with escaped pattern — only % and _ need escaping in LIKE
+    const escaped = prefix.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const pattern = `${escaped}%`;
+
+    if (mind) {
+      return this.db.prepare(`
+        SELECT * FROM facts
+        WHERE content LIKE ? ESCAPE '\\' AND mind = ? AND status = 'active'
+        ORDER BY created_at DESC
+      `).all(pattern, mind) as Fact[];
+    }
+
+    return this.db.prepare(`
+      SELECT * FROM facts
+      WHERE content LIKE ? ESCAPE '\\' AND status = 'active'
+      ORDER BY created_at DESC
+    `).all(pattern) as Fact[];
+  }
+
   /** Full-text search across all facts (all minds, all statuses) */
   searchFacts(query: string, mind?: string): Fact[] {
     // FTS5 match syntax

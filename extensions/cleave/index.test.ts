@@ -82,13 +82,15 @@ function runAssessSpecScenario(mode: "bridged" | "interactive" | "reopen") {
 	return runJsonScript(script);
 }
 
-function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkpoint" | "checkpoint-clipboard" | "generic" | "unknowns" | "checkpoint-post-dirty" | "checkpoint-commit-fail" | "checkpoint-empty-scope") {
+function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkpoint" | "checkpoint-clipboard" | "generic" | "unknowns" | "checkpoint-post-dirty" | "checkpoint-commit-fail" | "checkpoint-empty-scope" | "select-checkpoint" | "select-stash-unrelated" | "select-proceed-without-cleave" | "select-cancel" | "select-checkpoint-post-dirty") {
 	const script = String.raw`
 (async () => {
   const { runDirtyTreePreflight } = await import('./extensions/cleave/index.ts');
   const mode = ${JSON.stringify(mode)};
   const commands = [];
   const updates = [];
+
+  // ── Input-based action sequences (fallback path) ──────────────────────────────
   const answersByMode = {
     clean: [],
     'volatile-only': [],
@@ -106,8 +108,44 @@ function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkp
     'checkpoint-commit-fail': ['checkpoint', '', 'cancel'],
     // checkpoint-empty-scope: only untracked unknown file — explicit checkpoint commits it, then clean.
     'checkpoint-empty-scope': ['checkpoint', ''],
+    // select-* modes use select UI — no input-based action answers needed.
+    'select-checkpoint': [],
+    'select-stash-unrelated': [],
+    'select-proceed-without-cleave': [],
+    'select-cancel': [],
+    'select-checkpoint-post-dirty': [],
   };
-  const inputs = [...answersByMode[mode]];
+  const inputs = [...(answersByMode[mode] ?? [])];
+
+  // ── Select-based action sequences (modal path) ────────────────────────────────
+  // Each entry is either a labelled option string (as rendered) or the bare keyword — both work.
+  const selectActionsByMode = {
+    'select-checkpoint': [
+      'checkpoint        — commit related changes and continue  [use when work is ready to save before cleaving]',
+    ],
+    'select-stash-unrelated': [
+      'stash-unrelated   — stash unrelated/unknown files and continue  [use when dirty files are not part of this change]',
+    ],
+    'select-proceed-without-cleave': [
+      'proceed-without-cleave — skip cleave and continue working  [use when you want to defer parallel dispatch]',
+    ],
+    'select-cancel': [
+      'cancel            — abort cleave  [use to exit without making any changes]',
+    ],
+    // First call: checkpoint action; second call (post-dirty loop): stash-unrelated.
+    'select-checkpoint-post-dirty': [
+      'checkpoint        — commit related changes and continue  [use when work is ready to save before cleaving]',
+      'stash-unrelated   — stash unrelated/unknown files and continue  [use when dirty files are not part of this change]',
+    ],
+  };
+  const selectActions = [...(selectActionsByMode[mode] ?? [])];
+
+  // Commit-message approvals for select modes that trigger checkpoint.
+  const commitInputsByMode = {
+    'select-checkpoint': [''],
+    'select-checkpoint-post-dirty': [''],
+  };
+  const commitInputs = [...(commitInputsByMode[mode] ?? [])];
 
   // Stateful git status call counter — enables per-call sequence responses (W2).
   // Some modes need "dirty on call 1, clean on call 2" to exercise post-checkpoint re-verification.
@@ -130,6 +168,12 @@ function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkp
     'checkpoint-commit-fail': [dirtyCheckpointStatus],
     // empty-scope: only untracked docs file — checkpoint now commits it (call 0: dirty, call 1: clean)
     'checkpoint-empty-scope': ['?? docs/cleave-dirty-tree-checkpointing.md\n', ''],
+    // select modal modes
+    'select-checkpoint': [dirtyCheckpointStatus, ''],
+    'select-stash-unrelated': [' M openspec/changes/other-change/tasks.md\n?? scratch/notes.md\n'],
+    'select-proceed-without-cleave': [' M README.md\n'],
+    'select-cancel': [' M README.md\n'],
+    'select-checkpoint-post-dirty': [dirtyCheckpointStatus, '?? docs/cleave-dirty-tree-checkpointing.md\n'],
   };
 
   const pi = {
@@ -159,13 +203,35 @@ function runDirtyTreePreflightScenario(mode: "clean" | "volatile-only" | "checkp
   };
 
   const noUiModes = new Set(['clean', 'volatile-only']);
+  const isSelectMode = mode.startsWith('select-');
+
+  let ui;
+  if (noUiModes.has(mode)) {
+    ui = undefined;
+  } else if (isSelectMode) {
+    // Modal select path: select drives action choice; input handles commit-message approval.
+    const selectTitlesSeen = [];
+    const selectOptionsSeen = [];
+    ui = {
+      select: async (title, options) => {
+        selectTitlesSeen.push(title);
+        selectOptionsSeen.push(options);
+        return selectActions.shift();
+      },
+      input: async (_prompt, initial) => commitInputs.shift() ?? initial ?? '',
+    };
+    // Attach seen arrays to updates for test assertions.
+    updates.push({ selectTitlesSeen, selectOptionsSeen });
+  } else {
+    // Fallback input path (legacy / headless).
+    ui = { input: async (_prompt, initial) => inputs.shift() ?? initial ?? '' };
+  }
+
   const result = await runDirtyTreePreflight(pi, {
     repoPath: process.cwd(),
-    openspecChangePath: mode === 'generic' ? undefined : 'openspec/changes/cleave-dirty-tree-checkpointing',
+    openspecChangePath: (mode === 'generic' || mode === 'select-proceed-without-cleave' || mode === 'select-cancel') ? undefined : 'openspec/changes/cleave-dirty-tree-checkpointing',
     onUpdate: (payload) => updates.push(payload),
-    ui: noUiModes.has(mode)
-      ? undefined
-      : { input: async (_prompt, initial) => inputs.shift() ?? initial ?? '' },
+    ui,
   });
   process.stdout.write(JSON.stringify({ result, commands, updates }));
 })();
@@ -331,5 +397,74 @@ describe("dirty-tree preflight acceptance coverage", () => {
 		assert.ok(addCmd, `expected git add; commands: ${JSON.stringify(gitCommands)}`);
 		const commitCmd = gitCommands.find((c: string[]) => c[1] === "commit");
 		assert.ok(commitCmd, `expected git commit; commands: ${JSON.stringify(gitCommands)}`);
+	});
+});
+
+describe("dirty-tree preflight — modal select UI path", () => {
+	it("invokes select with a descriptive title and all five labelled options", () => {
+		const result = runDirtyTreePreflightScenario("select-proceed-without-cleave");
+		// The first entry pushed to updates is the select metadata object.
+		const selectMeta = result.updates[0];
+		assert.ok(selectMeta?.selectTitlesSeen?.length >= 1, "expected select to be called once");
+		const title: string = selectMeta.selectTitlesSeen[0];
+		assert.match(title, /dirty tree/i);
+		const options: string[] = selectMeta.selectOptionsSeen[0];
+		assert.equal(options.length, 5, "expected exactly 5 preflight options");
+		const optionText = options.join("\n");
+		assert.match(optionText, /checkpoint/);
+		assert.match(optionText, /stash-unrelated/);
+		assert.match(optionText, /stash-volatile/);
+		assert.match(optionText, /proceed-without-cleave/);
+		assert.match(optionText, /cancel/);
+	});
+
+	it("each option includes a description and a when-to-use note", () => {
+		const result = runDirtyTreePreflightScenario("select-proceed-without-cleave");
+		const selectMeta = result.updates[0];
+		const options: string[] = selectMeta.selectOptionsSeen[0];
+		for (const opt of options) {
+			assert.match(opt, / — .+\[use when/i, `option missing description/note: "${opt}"`);
+		}
+	});
+
+	it("select checkpoint — stages and commits related files then returns continue", () => {
+		const result = runDirtyTreePreflightScenario("select-checkpoint");
+		assert.equal(result.result, "continue");
+		const gitCmds = result.commands.filter((c: string[]) => c[0] === "git");
+		assert.ok(gitCmds.find((c: string[]) => c[1] === "add"), "expected git add");
+		assert.ok(gitCmds.find((c: string[]) => c[1] === "commit"), "expected git commit");
+	});
+
+	it("select stash-unrelated — stashes unrelated files and returns continue", () => {
+		const result = runDirtyTreePreflightScenario("select-stash-unrelated");
+		assert.equal(result.result, "continue");
+		assert.ok(result.commands.find((c: string[]) => c[1] === "stash"), "expected git stash");
+		assert.equal(result.commands.some((c: string[]) => c[1] === "commit"), false);
+	});
+
+	it("select proceed-without-cleave — returns skip_cleave without modifying the tree", () => {
+		const result = runDirtyTreePreflightScenario("select-proceed-without-cleave");
+		assert.equal(result.result, "skip_cleave");
+		assert.equal(result.commands.filter((c: string[]) => c[0] === "git" && c[1] !== "status").length, 0);
+	});
+
+	it("select cancel — returns cancelled without modifying the tree", () => {
+		const result = runDirtyTreePreflightScenario("select-cancel");
+		assert.equal(result.result, "cancelled");
+		assert.equal(result.commands.filter((c: string[]) => c[0] === "git" && c[1] !== "status").length, 0);
+	});
+
+	it("select checkpoint loop — re-prompts via select after partial checkpoint leaves remaining files dirty", () => {
+		const result = runDirtyTreePreflightScenario("select-checkpoint-post-dirty");
+		// select must have been called twice (once per loop iteration)
+		const selectMeta = result.updates[0];
+		assert.equal(selectMeta.selectTitlesSeen.length, 2, "expected select called twice");
+		assert.equal(result.result, "continue");
+	});
+
+	it("falls back to input-based action when select is not provided", () => {
+		// The 'generic' mode uses input-only ui — must still work via the fallback path.
+		const result = runDirtyTreePreflightScenario("generic");
+		assert.equal(result.result, "skip_cleave");
 	});
 });

@@ -189,6 +189,60 @@ describe("FactStore", () => {
     assert.equal(archived[0].status, "archived");
   });
 
+  // --- findFactsByContentPrefix ---
+
+  it("findFactsByContentPrefix returns facts starting with given prefix", () => {
+    store.storeFact({ section: "Architecture", content: "SQLite database for storage" });
+    store.storeFact({ section: "Decisions", content: "Chose PostgreSQL for production" });
+
+    const results = store.findFactsByContentPrefix("SQLite");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].content, "SQLite database for storage");
+  });
+
+  it("findFactsByContentPrefix handles brackets and special FTS5 chars safely", () => {
+    store.storeFact({ section: "Architecture", content: "[tag] fact with brackets" });
+    store.storeFact({ section: "Architecture", content: "(paren) fact with parens" });
+    store.storeFact({ section: "Architecture", content: "normal fact" });
+
+    const bracketResults = store.findFactsByContentPrefix("[tag]");
+    assert.equal(bracketResults.length, 1);
+    assert.equal(bracketResults[0].content, "[tag] fact with brackets");
+
+    const parenResults = store.findFactsByContentPrefix("(paren)");
+    assert.equal(parenResults.length, 1);
+    assert.equal(parenResults[0].content, "(paren) fact with parens");
+  });
+
+  it("findFactsByContentPrefix handles LIKE special chars (% and _)", () => {
+    store.storeFact({ section: "Architecture", content: "100% complete" });
+    store.storeFact({ section: "Architecture", content: "100x complete" });
+
+    const results = store.findFactsByContentPrefix("100%");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].content, "100% complete");
+  });
+
+  it("findFactsByContentPrefix scopes by mind", () => {
+    store.createMind("other", "test mind");
+    store.storeFact({ section: "Architecture", content: "[tag] default mind fact" });
+    store.storeFact({ mind: "other", section: "Architecture", content: "[tag] other mind fact" });
+
+    const results = store.findFactsByContentPrefix("[tag]", "default");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].content, "[tag] default mind fact");
+  });
+
+  it("findFactsByContentPrefix only returns active facts", () => {
+    const { id } = store.storeFact({ section: "Architecture", content: "[archived] old fact" });
+    store.archiveFact(id);
+    store.storeFact({ section: "Architecture", content: "[archived] new fact" });
+
+    const results = store.findFactsByContentPrefix("[archived]");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].content, "[archived] new fact");
+  });
+
   it("cross-mind search works", () => {
     store.createMind("other", "test mind");
     store.storeFact({ section: "Architecture", content: "Default fact about SQLite" });

@@ -1,7 +1,7 @@
 ---
 id: alpharius-terminal-themes
 title: Alpharius Terminal Theme Export — Kitty and ANSI palette alignment
-status: exploring
+status: implemented
 parent: alpharius-theme
 open_questions:
   - "How should the Alpharius palette be exported to terminal emulator themes (Kitty, etc.) so the background and ANSI palette align with pi's rendering?"

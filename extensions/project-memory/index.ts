@@ -1548,12 +1548,10 @@ export default function (pi: ExtensionAPI) {
     const mind = activeMind();
     for (const contentPrefix of queue) {
       try {
-        // Search for facts whose content starts with this prefix and archive them
-        const results = store.searchFacts(contentPrefix, mind);
+        // Use prefix lookup (LIKE) instead of FTS5 to avoid syntax errors with special chars like '[', '(', etc.
+        const results = store.findFactsByContentPrefix(contentPrefix, mind);
         for (const fact of results) {
-          if (fact.content.startsWith(contentPrefix)) {
-            store.archiveFact(fact.id);
-          }
+          store.archiveFact(fact.id);
         }
       } catch (error) {
         console.error("[project-memory] Failed to archive fact by prefix:", error);

@@ -209,7 +209,30 @@ interface DirtyTreePreflightOptions {
 	repoPath: string;
 	openspecChangePath?: string;
 	onUpdate?: AgentToolUpdateCallback<Record<string, unknown>>;
-	ui?: { input?: (prompt: string, initial?: string) => Promise<string | undefined> };
+	ui?: {
+		/** Text input — used for commit-message approval in the checkpoint flow. */
+		input?: (prompt: string, initial?: string) => Promise<string | undefined>;
+		/** Modal select — used to choose the preflight action. Falls back to input when absent. */
+		select?: (title: string, options: string[]) => Promise<string | undefined>;
+	};
+}
+
+/** Labelled preflight actions shown in the modal select UI. */
+const PREFLIGHT_ACTION_OPTIONS = [
+	"checkpoint        — commit related changes and continue  [use when work is ready to save before cleaving]",
+	"stash-unrelated   — stash unrelated/unknown files and continue  [use when dirty files are not part of this change]",
+	"stash-volatile    — stash volatile artifacts only  [use when only build/cache artifacts are dirty]",
+	"proceed-without-cleave — skip cleave and continue working  [use when you want to defer parallel dispatch]",
+	"cancel            — abort cleave  [use when you want to exit without making any changes]",
+] as const;
+
+/** Extract the action keyword from a labelled option string (text before first whitespace run ending in ' — '). */
+function parsePreflightAction(selected: string | undefined): string | undefined {
+	if (!selected) return undefined;
+	const normalized = normalizePreflightInput(selected);
+	if (!normalized) return undefined;
+	// Trim leading spaces then grab the first non-space token.
+	return normalized.trim().split(/\s+/)[0]?.toLowerCase();
 }
 
 const TRANSIENT_CLIPBOARD_ATTACHMENT_PATH =
@@ -357,7 +380,9 @@ export async function runDirtyTreePreflight(pi: ExtensionAPI, options: DirtyTree
 		return "continue";
 	}
 
-	if (typeof options.ui?.input !== "function") {
+	const hasSelect = typeof options.ui?.select === "function";
+	const hasInput = typeof options.ui?.input === "function";
+	if (!hasSelect && !hasInput) {
 		throw new Error(summary + "\n\nInteractive input is unavailable, so cleave cannot resolve the dirty tree automatically.");
 	}
 
@@ -365,9 +390,20 @@ export async function runDirtyTreePreflight(pi: ExtensionAPI, options: DirtyTree
 	let currentClassification = classification;
 
 	while (true) {
-		const answer = normalizePreflightInput(await options.ui.input(
-			"Dirty tree action [checkpoint|stash-unrelated|stash-volatile|proceed-without-cleave|cancel]:",
-		))?.toLowerCase();
+		let answer: string | undefined;
+		if (hasSelect) {
+			// Preferred path: show a modal select with labelled options and descriptions.
+			const selected = await options.ui!.select!(
+				"Dirty tree detected — choose a preflight action to proceed:",
+				[...PREFLIGHT_ACTION_OPTIONS],
+			);
+			answer = parsePreflightAction(selected);
+		} else {
+			// Fallback: raw text input (headless / test environments).
+			answer = normalizePreflightInput(
+				await options.ui!.input!("Dirty tree action [checkpoint|stash-unrelated|stash-volatile|proceed-without-cleave|cancel]:"),
+			)?.toLowerCase();
+		}
 		try {
 			switch (answer) {
 				case "checkpoint": {
@@ -2467,12 +2503,20 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			}
 
 			// ── PREFLIGHT ──────────────────────────────────────────────
-			const toolUi = (ctx as { ui?: { input?: (prompt: string, initial?: string) => Promise<string | undefined> } }).ui;
+			const toolUi = (ctx as {
+				ui?: {
+					input?: (prompt: string, initial?: string) => Promise<string | undefined>;
+					select?: (title: string, options: string[]) => Promise<string | undefined>;
+				};
+			}).ui;
 			const preflightOutcome = await runDirtyTreePreflight(pi, {
 				repoPath,
 				openspecChangePath: params.openspec_change_path,
 				onUpdate,
-				ui: typeof toolUi?.input === "function" ? { input: toolUi.input.bind(toolUi) } : undefined,
+				ui: (toolUi?.input || toolUi?.select) ? {
+					...(typeof toolUi.input === "function" ? { input: toolUi.input.bind(toolUi) } : {}),
+					...(typeof toolUi.select === "function" ? { select: toolUi.select.bind(toolUi) } : {}),
+				} : undefined,
 			});
 			if (preflightOutcome === "skip_cleave") {
 				const message = "Dirty-tree preflight resolved to proceed without cleave. Worktree creation and dispatch were skipped.";
