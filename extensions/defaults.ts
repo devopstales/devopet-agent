@@ -40,8 +40,39 @@ function contentHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
 }
 
+/**
+ * Alpharius palette anchor values — must stay in sync with themes/alpharius.json vars.
+ * Emitted via OSC 10/11 to clamp the terminal's native fg/bg so that pi-tui's full
+ * \x1b[0m line-resets fall through to Alpharius colors rather than the user's terminal theme.
+ *
+ * OSC 10 = set default foreground color
+ * OSC 11 = set default background color
+ * OSC 110/111 = restore saved fg/bg (most terminals support this as a reset)
+ *
+ * Kitty ignores OSC 10/11 (uses its own theme system) — we cover Kitty via alpharius.conf.
+ * All other modern terminals (iTerm2, WezTerm, Alacritty, foot, VTE, xterm) respect these.
+ */
+const ALPHARIUS_FG = "#c4d8e4";
+const ALPHARIUS_BG = "#0d1420";
+
+function emitOsc10_11(fg: string, bg: string): void {
+  process.stdout.write(`\x1b]10;${fg}\x07\x1b]11;${bg}\x07`);
+}
+
+function restoreTerminalColors(): void {
+  // OSC 110 = restore saved default foreground, OSC 111 = restore saved default background
+  process.stdout.write("\x1b]110\x07\x1b]111\x07");
+}
+
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
+    // --- Terminal color anchoring (OSC 10/11) ---
+    // Clamp the terminal's native fg/bg to Alpharius values so that pi-tui's \x1b[0m
+    // line-resets (hardcoded in pi-tui applyLineResets) don't bleed through a
+    // lighter/different terminal background. This runs unconditionally — terminals
+    // that don't support OSC 10/11 (e.g. Kitty) silently ignore the sequences.
+    emitOsc10_11(ALPHARIUS_FG, ALPHARIUS_BG);
+
     // --- Terminal tab title branding ---
     // Replace the core π symbol with Ω in the terminal tab title.
     // This fires after the core title is set, so it overwrites it.
@@ -153,5 +184,11 @@ export default function (pi: ExtensionAPI) {
     } catch {
       // Best effort — don't break startup
     }
+  });
+
+  pi.on("session_shutdown", async () => {
+    // Restore the terminal's original fg/bg on exit so the user's shell prompt
+    // and other programs see their own configured colors again.
+    restoreTerminalColors();
   });
 }
