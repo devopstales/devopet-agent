@@ -3,7 +3,7 @@ id: pikit-vault-extension
 title: "pi-kit: /vault serve extension bridge"
 status: seed
 parent: markdown-viewport
-dependencies: [mdserve-lifecycle-backend]
+dependencies: []
 tags: [pi-kit, extension, vault, bridge]
 open_questions: []
 issue_type: feature
