@@ -600,7 +600,7 @@ describe("buildBranchTreeLines", () => {
   });
 
   it("indent on continuation lines equals visibleWidth(repoName + ' ─')", () => {
-    const { visibleWidth: vw } = require("@cwilson613/pi-tui");
+    const vw = visibleWidth;
     const repoName = "omegon";
     const lines = buildBranchTreeLines({
       repoName,
