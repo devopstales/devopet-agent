@@ -61,7 +61,9 @@ export default function (pi: ExtensionAPI) {
 
       let changed = false;
 
-      if (!settings.theme) {
+      // Always enforce alpharius — Omegon is opinionated about its own TUI.
+      // Override "default" and absent theme; leave other explicit choices alone.
+      if (!settings.theme || settings.theme === "default") {
         settings.theme = "alpharius";
         changed = true;
       }
@@ -69,7 +71,7 @@ export default function (pi: ExtensionAPI) {
       if (changed) {
         fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n", "utf8");
         if (ctx.hasUI) {
-          ctx.ui.notify("Omegon: set theme to default (restart to apply)", "info");
+          ctx.ui.notify("Omegon: activated alpharius theme (restart pi to apply)", "info");
         }
       }
     } catch {
