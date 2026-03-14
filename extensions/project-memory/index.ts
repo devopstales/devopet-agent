@@ -791,27 +791,32 @@ export default function (pi: ExtensionAPI) {
             // Skip Recent Work — decay sweep handles it (fast decay, no LLM needed)
             if (section === "Recent Work") continue;
 
+            // Single query — all subsequent phases operate on this in-memory list.
+            // getFactsBySection already computes confidence via computeConfidence
+            // (canonical formula from core.ts), so sorted.confidence is correct.
             const facts = store!.getFactsBySection(mind, section);
             const excess = count - SECTION_CEILING;
             let archived = 0;
+            const archivedIds = new Set<string>();
 
-            // Phase 2a: Deterministic cull — archive lowest-confidence facts first.
-            // No LLM needed for facts that are obviously lowest-value.
-            // This handles the case where sections grow to 600+ facts and the LLM
-            // can't process them all in one prompt.
+            // Phase 2a: Deterministic cull — archive only facts with confidence
+            // below a hard floor. This protects semantically important facts that
+            // happen to have low confidence purely due to age. Facts above the
+            // floor are sent to the LLM for judgment (phase 2b).
+            const CONFIDENCE_FLOOR = 0.25;
             const sorted = [...facts].sort((a, b) => a.confidence - b.confidence);
-            const deterministicCull = Math.min(Math.floor(excess * 0.6), sorted.length);
-            if (deterministicCull > 0) {
-              const cullCandidates = sorted.slice(0, deterministicCull);
-              for (const f of cullCandidates) {
-                store!.archiveFact(f.id);
-                archived++;
-              }
+            for (const f of sorted) {
+              if (archived >= excess) break;        // enough culled
+              if (f.confidence > CONFIDENCE_FLOOR) break; // above floor → LLM decides
+              store!.archiveFact(f.id);
+              archivedIds.add(f.id);
+              archived++;
             }
 
             // Phase 2b: LLM-assisted pruning for the remaining excess.
-            // Only send a manageable batch (up to 80 facts) to the LLM for judgment.
-            const remaining = store!.getFactsBySection(mind, section);
+            // Filter the in-memory array (no re-query) and send a manageable
+            // batch (up to 80 facts) to the LLM for nuanced review.
+            const remaining = facts.filter(f => !archivedIds.has(f.id));
             const stillExcess = remaining.length - SECTION_CEILING;
             if (stillExcess > 0) {
               // Send the bottom 80 by confidence for LLM review

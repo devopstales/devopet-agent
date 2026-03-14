@@ -212,6 +212,15 @@ const SECTION_DECAY_OVERRIDES: Partial<Record<string, typeof RECENT_WORK_DECAY>>
 /** Delegates to core.ts::computeConfidence — single source of truth. */
 export const computeConfidence = coreComputeConfidence;
 
+/**
+ * Determine the decay profile name for a section.
+ * Recent Work → "recent_work" (halfLife=2d). All others → undefined (uses storeFact's default "standard").
+ * Centralizes the mapping so it's not duplicated across processExtraction call sites.
+ */
+function decayProfileForSection(section: string): DecayProfileName | undefined {
+  return section === "Recent Work" ? "recent_work" : undefined;
+}
+
 // --- FactStore ---
 
 export class FactStore {
@@ -231,7 +240,7 @@ export class FactStore {
   }
 
   /** Current schema version — bump when adding migrations */
-  static readonly SCHEMA_VERSION = 3;
+  static readonly SCHEMA_VERSION = 4;
 
   private getSchemaVersion(): number {
     try {
@@ -348,6 +357,19 @@ export class FactStore {
         ALTER TABLE episodes_vec ADD COLUMN model_name TEXT NOT NULL DEFAULT '';
       `);
       this.setSchemaVersion(3);
+    }
+
+    // --- Schema v4: Fix existing Recent Work facts with wrong decay_profile ---
+    // Before this fix, all Recent Work facts were stored with decay_profile='standard'
+    // (halfLife=14d) instead of 'recent_work' (halfLife=2d). This made Recent Work
+    // facts persist 7× longer than intended and disagree with SECTION_DECAY_OVERRIDES
+    // (which correctly applied RECENT_WORK_DECAY at read time by section name).
+    // This migration aligns the stored column with the read-time behaviour.
+    if (current < 4) {
+      this.db.prepare(
+        `UPDATE facts SET decay_profile = 'recent_work' WHERE section = 'Recent Work' AND decay_profile = 'standard'`
+      ).run();
+      this.setSchemaVersion(4);
     }
   }
 
@@ -619,8 +641,7 @@ export class FactStore {
                 content: action.content,
                 source: "extraction",
                 session,
-                // Recent Work facts get a fast-decay profile (halfLife=2d, no reinforcement extension)
-                decayProfile: action.section === "Recent Work" ? "recent_work" : undefined,
+                decayProfile: decayProfileForSection(action.section),
               });
               if (!result.duplicate) newFactIds.push(result.id);
               added++;
@@ -644,7 +665,7 @@ export class FactStore {
                 content: action.content,
                 source: "extraction",
                 session,
-                decayProfile: action.section === "Recent Work" ? "recent_work" : undefined,
+                decayProfile: decayProfileForSection(action.section),
                 supersedes: action.id,
               });
               if (!result.duplicate) newFactIds.push(result.id);
@@ -686,21 +707,28 @@ export class FactStore {
    * This converts passive decay (lower confidence on read) into active archival.
    * Without this sweep, decayed facts remain status='active' forever — inflating
    * fact counts, consuming vector storage, and cluttering section ceiling checks.
+   *
+   * Uses getActiveFacts() which already:
+   *   1. Computes confidence via computeConfidence (canonical formula from core.ts)
+   *   2. Exempts NO_DECAY_SECTIONS (Specs → confidence = 1.0, never archived)
+   *   3. Applies SECTION_DECAY_OVERRIDES (Recent Work → RECENT_WORK_DECAY)
+   * So fact.confidence is the correct, already-computed value — no re-derivation.
+   *
+   * Profile resolution uses SECTION_DECAY_OVERRIDES (same as getActiveFacts) so
+   * the minimumConfidence threshold is consistent with the confidence computation.
    */
   sweepDecayedFacts(mind: string): number {
     const facts = this.getActiveFacts(mind);
-    const now = Date.now();
     let swept = 0;
 
     for (const fact of facts) {
-      const profile = resolveDecayProfile(fact.decay_profile);
-      const lastReinforced = new Date(fact.last_reinforced).getTime();
-      const daysSince = (now - lastReinforced) / 86_400_000;
-      const effectiveRate = profile.baseRate /
-        (1 + profile.reinforcementFactor * Math.log(1 + fact.reinforcement_count));
-      const confidence = fact.confidence * Math.exp(-effectiveRate * daysSince);
+      // Resolve profile the same way getActiveFacts does — by section override
+      // first, then per-fact decay_profile column. This ensures the minimum
+      // confidence threshold matches the formula that computed fact.confidence.
+      const profile = SECTION_DECAY_OVERRIDES[fact.section]
+        ?? resolveDecayProfile(fact.decay_profile);
 
-      if (confidence <= profile.minimumConfidence) {
+      if (fact.confidence <= profile.minimumConfidence) {
         this.archiveFact(fact.id);
         swept++;
       }

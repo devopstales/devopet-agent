@@ -667,4 +667,200 @@ describe("JSONL Import Dedup (merge=union resilience)", () => {
     const export2 = store.exportToJsonl();
     assert.equal(export1, export2, "Two consecutive exports should be byte-identical");
   });
+
+  // --- sweepDecayedFacts ---
+
+  describe("sweepDecayedFacts", () => {
+    it("archives a standard-profile fact that has decayed below minimumConfidence", () => {
+      // standard profile: halfLife=14d, minimumConfidence=0.1
+      // After 100 days with 1 reinforcement, confidence is deeply below 0.1
+      const { id } = store.storeFact({ section: "Architecture", content: "Old fact" });
+      const oldDate = new Date(Date.now() - 100 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(oldDate, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 1);
+      const fact = store.getFact(id);
+      assert.equal(fact?.status, "archived");
+    });
+
+    it("does NOT archive a fact still above minimumConfidence", () => {
+      // After 5 days with standard profile, confidence is well above 0.1
+      const { id } = store.storeFact({ section: "Architecture", content: "Recent fact" });
+      const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(recentDate, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 0);
+      assert.equal(store.getFact(id)?.status, "active");
+    });
+
+    it("never archives Specs facts (NO_DECAY_SECTIONS exemption)", () => {
+      const { id } = store.storeFact({ section: "Specs" as any, content: "Spec requirement" });
+      // Backdate to 365 days — should still survive
+      const veryOld = new Date(Date.now() - 365 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(veryOld, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 0);
+      assert.equal(store.getFact(id)?.status, "active");
+    });
+
+    it("uses recent_work profile for Recent Work facts (minimumConfidence=0.01)", () => {
+      // Recent Work with recent_work profile: halfLife=2d
+      // After 30 days with 1 reinforcement, confidence is deeply below 0.01
+      const { id } = store.storeFact({
+        section: "Recent Work" as any,
+        content: "Edited foo.ts",
+        decayProfile: "recent_work",
+      });
+      const oldDate = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(oldDate, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 1);
+    });
+
+    it("uses SECTION_DECAY_OVERRIDES for Recent Work facts even with wrong decay_profile column", () => {
+      // Simulate pre-migration fact: section=Recent Work but decay_profile=standard
+      // SECTION_DECAY_OVERRIDES should take precedence, applying recent_work profile
+      const { id } = store.storeFact({
+        section: "Recent Work" as any,
+        content: "Old-style recent work fact",
+        // decayProfile defaults to "standard" — simulating the pre-fix behaviour
+      });
+      // 30 days old — recent_work minimumConfidence=0.01, standard minimumConfidence=0.1
+      // With recent_work profile (halfLife=2d), 30 days → confidence ≈ 0
+      // With standard profile (halfLife=14d), 30 days → confidence ≈ 0.23 (above 0.1)
+      const oldDate = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(oldDate, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 1, "Should archive via SECTION_DECAY_OVERRIDES even though column says 'standard'");
+    });
+
+    it("uses computeConfidence (canonical formula) — not a different formula", () => {
+      // Verify the sweep's archival threshold matches what computeConfidence produces.
+      // standard profile: halfLife=14d, minimumConfidence=0.1
+      // computeConfidence(60, 1) ≈ e^(-ln2 * 60/14) ≈ 0.051 — below 0.1, should sweep
+      // computeConfidence(20, 1) ≈ e^(-ln2 * 20/14) ≈ 0.370 — above 0.1, should keep
+      const { id: willSweep } = store.storeFact({ section: "Architecture", content: "60 day old" });
+      const { id: willKeep } = store.storeFact({ section: "Decisions", content: "20 day old" });
+
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`)
+        .run(new Date(Date.now() - 60 * 86_400_000).toISOString(), willSweep);
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`)
+        .run(new Date(Date.now() - 20 * 86_400_000).toISOString(), willKeep);
+
+      // Pre-check: computeConfidence agrees
+      const conf60 = computeConfidence(60, 1);
+      const conf20 = computeConfidence(20, 1);
+      assert.ok(conf60 < 0.1, `60-day confidence should be <0.1, got ${conf60}`);
+      assert.ok(conf20 > 0.1, `20-day confidence should be >0.1, got ${conf20}`);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 1);
+      assert.equal(store.getFact(willSweep)?.status, "archived");
+      assert.equal(store.getFact(willKeep)?.status, "active");
+    });
+
+    it("high reinforcement_count extends half-life and prevents premature archival", () => {
+      const { id } = store.storeFact({ section: "Architecture", content: "Highly reinforced" });
+      // Reinforce 10 times to extend half-life
+      for (let i = 0; i < 10; i++) store.reinforceFact(id);
+      // Backdate 60 days — would be swept at 1 reinforcement, but 11 reinforcements
+      // dramatically extends half-life (capped at 90 days)
+      const oldDate = new Date(Date.now() - 60 * 86_400_000).toISOString();
+      (store as any).db.prepare(`UPDATE facts SET last_reinforced = ? WHERE id = ?`).run(oldDate, id);
+
+      const swept = store.sweepDecayedFacts("default");
+      assert.equal(swept, 0, "Highly reinforced fact should survive 60 days");
+    });
+  });
+
+  // --- processExtraction decayProfile assignment ---
+
+  describe("processExtraction decayProfile", () => {
+    it("assigns recent_work decay profile to new Recent Work facts", () => {
+      store.processExtraction("default", [
+        { type: "observe", section: "Recent Work" as any, content: "Edited bar.ts" },
+      ]);
+      const facts = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Recent Work' AND status = 'active'`
+      ).all();
+      assert.equal(facts.length, 1);
+      assert.equal(facts[0].decay_profile, "recent_work");
+    });
+
+    it("assigns standard decay profile to non-Recent-Work facts", () => {
+      store.processExtraction("default", [
+        { type: "observe", section: "Architecture", content: "New arch fact" },
+      ]);
+      const facts = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Architecture' AND status = 'active'`
+      ).all();
+      assert.equal(facts.length, 1);
+      assert.equal(facts[0].decay_profile, "standard");
+    });
+
+    it("assigns recent_work profile on supersede for Recent Work section", () => {
+      const { id } = store.storeFact({
+        section: "Recent Work" as any,
+        content: "Old recent work",
+        decayProfile: "recent_work",
+      });
+      store.processExtraction("default", [
+        { type: "supersede", id, section: "Recent Work" as any, content: "Updated recent work" },
+      ]);
+      const facts = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Recent Work' AND status = 'active'`
+      ).all();
+      assert.equal(facts.length, 1);
+      assert.equal(facts[0].decay_profile, "recent_work");
+    });
+  });
+
+  // --- Schema v4 migration ---
+
+  describe("schema v4 migration", () => {
+    it("fixes existing Recent Work facts with wrong decay_profile", () => {
+      // Store a Recent Work fact with the old default profile
+      store.storeFact({
+        section: "Recent Work" as any,
+        content: "Pre-migration recent work fact",
+        // decayProfile not passed — defaults to "standard" (simulating old behaviour)
+      });
+
+      // Verify it was stored with 'standard'
+      const before = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Recent Work'`
+      ).get();
+      assert.equal(before.decay_profile, "standard");
+
+      // Force re-run of migration by resetting schema version and re-opening
+      (store as any).db.prepare(`DELETE FROM schema_version WHERE version = 4`).run();
+      store.close();
+
+      // Re-open triggers migration
+      store = new FactStore(dir);
+      const after = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Recent Work'`
+      ).get();
+      assert.equal(after.decay_profile, "recent_work");
+    });
+
+    it("does not change non-Recent-Work facts during v4 migration", () => {
+      store.storeFact({ section: "Architecture", content: "Arch fact" });
+
+      // Force re-run
+      (store as any).db.prepare(`DELETE FROM schema_version WHERE version = 4`).run();
+      store.close();
+      store = new FactStore(dir);
+
+      const fact = (store as any).db.prepare(
+        `SELECT decay_profile FROM facts WHERE section = 'Architecture'`
+      ).get();
+      assert.equal(fact.decay_profile, "standard");
+    });
+  });
 });
