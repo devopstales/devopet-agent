@@ -24,6 +24,14 @@
 	],
 	"author": "cwilson613",
 	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/styrene-lab/omegon.git"
+	},
+	"bugs": {
+		"url": "https://github.com/styrene-lab/omegon/issues"
+	},
+	"homepage": "https://github.com/styrene-lab/omegon#readme",
 	"pi": {
 		"extensions": [
 			"./extensions/bootstrap",

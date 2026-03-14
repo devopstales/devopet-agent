@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_OWNER = "cwilson613";
+const REPO_OWNER = "styrene-lab";
 const REPO_NAME = "omegon";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const FETCH_TIMEOUT_MS = 10_000;
