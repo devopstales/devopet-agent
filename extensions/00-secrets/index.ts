@@ -16,7 +16,8 @@
 
 import type { ExtensionAPI } from "@cwilson613/pi-coding-agent";
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync } from "fs";
-import { join, resolve } from "path";
+import { dirname, join, resolve } from "path";
+import { fileURLToPath } from "url";
 import { homedir } from "os";
 import { execSync, execFileSync } from "child_process";
 
@@ -56,6 +57,14 @@ function scanAnnotations(): {
     join(homedir(), ".pi", "agent", "extensions"),
     join(homedir(), ".pi", "agent", "git"),  // Omegon and other git packages
   ];
+
+  // Scan the package's own extensions/ directory (where this file lives).
+  // Covers both dev (repo checkout) and npm-installed modes.
+  try {
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    const pkgExtDir = resolve(thisDir, "..");  // 00-secrets/ → extensions/
+    if (existsSync(pkgExtDir)) extensionDirs.push(pkgExtDir);
+  } catch {}
 
   // Also scan project-local extensions
   try {

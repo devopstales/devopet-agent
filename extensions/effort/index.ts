@@ -346,9 +346,9 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      // Remediation hints for unconfigured providers that could fill empty tiers
-      const emptyTiers = summary.tiers.filter(t => t.status === "unavailable");
-      if (emptyTiers.length > 0 && summary.unauthProviders.length > 0) {
+      // Remediation hints for unconfigured providers that could improve coverage
+      const impairedTiers = summary.tiers.filter(t => t.status === "unavailable" || t.status === "degraded");
+      if (impairedTiers.length > 0 && summary.unauthProviders.length > 0) {
         lines.push("**To configure providers:**");
         const shown = new Set<string>();
         for (const provider of summary.unauthProviders) {
