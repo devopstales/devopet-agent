@@ -501,6 +501,20 @@ export default function (pi: ExtensionAPI) {
     if (indexed > 0 || failed > 0) {
       const finalVecs = store.countFactVectors(mind);
       const finalCoverage = totalActive > 0 ? Math.round((finalVecs / totalActive) * 100) : 100;
+      if (ctx.hasUI) {
+        if (failed > 0 && consecutiveFailures >= 5) {
+          ctx.ui.notify(
+            `Embedding indexer stopped: ${indexed} indexed, ${failed} failed (provider may be down). Coverage: ${finalCoverage}%`,
+            "warning",
+          );
+        } else if (indexed > 5) {
+          // Only notify if we indexed a meaningful batch — don't spam for 1-2 new facts
+          ctx.ui.notify(
+            `Indexed ${indexed} facts for semantic search (${finalCoverage}% coverage)`,
+            "info",
+          );
+        }
+      }
       if (failed > 0) {
         console.warn(`[project-memory] background indexing: ${indexed} indexed, ${failed} failed, coverage ${finalCoverage}%`);
       }
@@ -725,6 +739,16 @@ export default function (pi: ExtensionAPI) {
         backgroundIndexFacts(ctx).catch((err) => {
           console.error(`[project-memory] background indexer error:`, err?.message ?? err);
         });
+      } else if (ctx.hasUI) {
+        // Tell the user semantic search is unavailable so they know what to expect.
+        // Common causes: Ollama not running, embedding model not pulled, no cloud API key.
+        const providerHint = config.embeddingProvider === "ollama"
+          ? " (is Ollama running? try: ollama pull qwen3-embedding:0.6b)"
+          : ` (${config.embeddingProvider} — check API key)`;
+        ctx.ui.notify(
+          `Semantic search unavailable${providerHint} — using keyword search`,
+          "warning",
+        );
       }
     } catch {
       embeddingAvailable = false;
