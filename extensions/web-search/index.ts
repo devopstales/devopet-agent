@@ -176,7 +176,7 @@ Only providers with configured API keys are available.`,
         "info"
       );
     } else {
-      const { sharedState } = await import("../shared-state.ts");
+      const { sharedState } = await import("../lib/shared-state.ts");
       if (!sharedState.bootstrapPending) {
         ctx.ui.notify("Web Search: No API keys configured", "warning");
       }

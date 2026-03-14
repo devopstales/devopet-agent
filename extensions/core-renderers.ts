@@ -9,7 +9,7 @@
  * Expanded views fall through to the built-in renderer.
  */
 import type { ExtensionAPI } from "@cwilson613/pi-coding-agent";
-import { sciCall, sciOk, sciErr, sciLoading } from "./sci-ui.ts";
+import { sciCall, sciOk, sciErr, sciLoading } from "./lib/sci-ui.ts";
 
 /** Shorten a file path for display — keep last 2-3 segments. */
 function shortenPath(p: string | null | undefined, maxLen = 55): string {
@@ -22,6 +22,12 @@ function shortenPath(p: string | null | undefined, maxLen = 55): string {
 }
 
 export default function coreRenderers(pi: ExtensionAPI): void {
+	// registerToolRenderer was added in pi-mono 0965ae87 — gracefully skip
+	// if the published pi version doesn't have it yet.
+	if (typeof (pi as any).registerToolRenderer !== "function") {
+		return;
+	}
+
 	// ── Read ──────────────────────────────────────────────────────────────
 	pi.registerToolRenderer("read", {
 		renderCall(args: any, theme: any) {

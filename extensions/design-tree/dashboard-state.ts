@@ -5,11 +5,11 @@ import type { ExtensionAPI } from "@cwilson613/pi-coding-agent";
 
 import type { DesignNode, DesignTree } from "./types.ts";
 import { getAllOpenQuestions, countAcceptanceCriteria } from "./tree.ts";
-import { sharedState, DASHBOARD_UPDATE_EVENT } from "../shared-state.ts";
-import type { DesignTreeDashboardState } from "../shared-state.ts";
+import { sharedState, DASHBOARD_UPDATE_EVENT } from "../lib/shared-state.ts";
+import type { DesignTreeDashboardState } from "../lib/shared-state.ts";
 import type { DesignAssessmentResult, DesignPipelineCounts } from "../dashboard/types.ts";
 import type { DesignSpecBinding } from "../openspec/archive-gate.ts";
-import { debug } from "../debug.ts";
+import { debug } from "../lib/debug.ts";
 
 /** Read assessment.json from openspec/design/<id>/assessment.json if it exists. */
 function readAssessmentResult(cwd: string, nodeId: string): DesignAssessmentResult | null {

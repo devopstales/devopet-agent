@@ -45,7 +45,7 @@ import * as os from "node:os";
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext, SessionMessageEntry } from "@cwilson613/pi-coding-agent";
 import { DynamicBorder } from "@cwilson613/pi-coding-agent";
 import { sciCall, sciOk, sciErr, sciExpanded, sciLoading } from "./sci-renderers.ts";
-import { sciExitCard, type ExitCardData } from "../sci-ui.ts";
+import { sciExitCard, type ExitCardData } from "../lib/sci-ui.ts";
 import { StringEnum } from "../lib/typebox-helpers";
 import { Type } from "@sinclair/typebox";
 import { Container, type SelectItem, SelectList, Text } from "@cwilson613/pi-tui";
@@ -70,7 +70,7 @@ import { runExtractionV2, runGlobalExtraction, killActiveExtraction, killAllSubp
 import { migrateToFactStore, needsMigration, markMigrated } from "./migration.ts";
 import { SECTIONS } from "./template.ts";
 import { serializeConversation, convertToLlm } from "@cwilson613/pi-coding-agent";
-import { sharedState } from "../shared-state.ts";
+import { sharedState } from "../lib/shared-state.ts";
 import {
   ingestLifecycleCandidate,
   ingestLifecycleCandidatesBatch,

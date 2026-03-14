@@ -33,7 +33,7 @@ import {
 	type OperatorCapabilityProfile,
 	type OperatorProfileCandidate,
 } from "../lib/operator-profile.ts";
-import { sharedState } from "../shared-state.ts";
+import { sharedState } from "../lib/shared-state.ts";
 import { getDefaultPolicy, type ProviderRoutingPolicy } from "../lib/model-routing.ts";
 import { DEPS, checkAll, formatReport, bestInstallCmd, sortByRequires, type DepStatus, type DepTier } from "./deps.ts";
 

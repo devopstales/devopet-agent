@@ -25,10 +25,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { shouldRefreshDesignTreeForPath } from "../dashboard/file-watch.ts";
-import { sharedState } from "../shared-state.ts";
+import { sharedState } from "../lib/shared-state.ts";
 
 import { emitDesignTreeState } from "./dashboard-state.ts";
-import { sciCall, sciLoading, sciOk, sciErr, sciExpanded, sciBanner } from "../sci-ui.ts";
+import { sciCall, sciLoading, sciOk, sciErr, sciExpanded, sciBanner } from "../lib/sci-ui.ts";
 import { SciDesignCard, buildCardDetails } from "./design-card.ts";
 import type { DesignCardDetails } from "./design-card.ts";
 import { emitConstraintCandidates, emitDecisionCandidates } from "./lifecycle-emitter.ts";

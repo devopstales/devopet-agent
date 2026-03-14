@@ -23,7 +23,7 @@ import { join } from "node:path";
 import type { EffortLevel, EffortState, EffortModelTier, ThinkingLevel } from "./types.ts";
 import { EFFORT_NAMES } from "./types.ts";
 import { tierConfig, parseTierName, DEFAULT_EFFORT_LEVEL, TIER_NAMES } from "./tiers.ts";
-import { sharedState, DASHBOARD_UPDATE_EVENT } from "../shared-state.ts";
+import { sharedState, DASHBOARD_UPDATE_EVENT } from "../lib/shared-state.ts";
 import {
   resolveTier,
   getTierDisplayLabel,
@@ -251,7 +251,25 @@ export default function (pi: ExtensionAPI) {
     // current startup model rather than warning about an unusable session when
     // a working driver is already present.
     const restoredModel = await restoreLastUsedModel(pi, ctx);
-    const switchedDriver = restoredModel ? null : await switchDriverModel(pi, ctx, state.driver);
+    let switchedDriver = restoredModel ? null : await switchDriverModel(pi, ctx, state.driver);
+
+    // Degradation cascade: if the preferred tier failed, try adjacent tiers
+    // before settling on whatever pi defaulted to (which may be deprecated).
+    // Order: victory→gloriana→retribution, gloriana→victory, retribution→victory.
+    if (!restoredModel && !switchedDriver) {
+      const DEGRADATION_CASCADE: Record<string, ModelTier[]> = {
+        victory: ["gloriana", "retribution"],
+        gloriana: ["victory"],
+        retribution: ["victory"],
+        local: [],
+      };
+      const fallbacks = DEGRADATION_CASCADE[state.driver] ?? [];
+      for (const fallbackTier of fallbacks) {
+        switchedDriver = await switchDriverModel(pi, ctx, fallbackTier);
+        if (switchedDriver) break;
+      }
+    }
+
     const retainedModel = !restoredModel && !switchedDriver && ctx.model ? ctx.model : null;
 
     // Set thinking level, respecting candidate ceilings when the effort-driven
