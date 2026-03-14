@@ -173,9 +173,17 @@ const ANTHROPIC_TIER_PREFIXES: Record<Exclude<ModelTier, "local">, string[]> = {
   gloriana: ["claude-opus"],
 };
 
+// Deprecated models that should never be selected even if the provider
+// still lists them. Prevents routing to dead or EOL endpoints.
+const DEPRECATED_MODELS = new Set([
+  "gpt-4o", "gpt-4o-mini",
+  "gpt-4-turbo", "gpt-4",
+  "gpt-3.5-turbo",
+]);
+
 const OPENAI_TIER_MODELS: Record<Exclude<ModelTier, "local">, string[]> = {
-  retribution: ["gpt-5.1-codex", "gpt-4o-mini", "gpt-4.1-mini"],
-  victory: ["gpt-5.3-codex-spark", "gpt-4.1", "gpt-4o"],
+  retribution: ["gpt-5.1-codex", "gpt-4.1-mini"],
+  victory: ["gpt-5.3-codex-spark", "gpt-4.1"],
   gloriana: ["gpt-5.4", "gpt-4.5", "o3"],
 };
 
@@ -218,18 +226,20 @@ function matchAnthropicTier(models: RegistryModel[], tier: Exclude<ModelTier, "l
 function matchOpenAITier(models: RegistryModel[], tier: Exclude<ModelTier, "local">): RegistryModel | undefined {
   const exactIds = OPENAI_TIER_MODELS[tier];
   for (const modelId of exactIds) {
+    if (DEPRECATED_MODELS.has(modelId)) continue;
     const match = models.find((m) => m.provider === "openai" && m.id === modelId);
     if (match) return match;
   }
   const exactIdSet = new Set(exactIds);
   const prefixFallbacks: Record<string, string[]> = {
-    retribution: ["gpt-4o-mini-", "gpt-4.1-mini-"],
-    victory: ["gpt-4o-", "gpt-4.1-"],
+    retribution: ["gpt-4.1-mini-"],
+    victory: ["gpt-4.1-", "gpt-5."],
     gloriana: ["gpt-4.5-", "o3-", "gpt-5."],
   };
   for (const prefix of prefixFallbacks[tier] ?? []) {
     const found = models.find(
-      (m) => m.provider === "openai" && m.id.startsWith(prefix) && !exactIdSet.has(m.id),
+      (m) => m.provider === "openai" && m.id.startsWith(prefix)
+        && !exactIdSet.has(m.id) && !DEPRECATED_MODELS.has(m.id),
     );
     if (found) return found;
   }

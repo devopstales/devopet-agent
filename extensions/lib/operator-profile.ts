@@ -88,7 +88,7 @@ const DEFAULT_PROFILE: OperatorCapabilityProfile = {
       { id: "gpt-5.1-codex", provider: "openai", source: "upstream", weight: "light", maxThinking: "low" },
     ],
     servitor: [
-      { id: "gpt-4o-mini", provider: "openai", source: "upstream", weight: "light", maxThinking: "minimal" },
+      { id: "gpt-4.1-mini", provider: "openai", source: "upstream", weight: "light", maxThinking: "minimal" },
       { id: "claude-haiku-3-5", provider: "anthropic", source: "upstream", weight: "light", maxThinking: "minimal" },
     ],
     servoskull: [
