@@ -175,16 +175,22 @@ const ANTHROPIC_TIER_PREFIXES: Record<Exclude<ModelTier, "local">, string[]> = {
 
 // Deprecated models that should never be selected even if the provider
 // still lists them. Prevents routing to dead or EOL endpoints.
+// Updated 2026-03-14: GPT-4.1, GPT-4.1 mini, o4-mini retired Feb 13 2026.
 const DEPRECATED_MODELS = new Set([
   "gpt-4o", "gpt-4o-mini",
   "gpt-4-turbo", "gpt-4",
   "gpt-3.5-turbo",
+  "gpt-4.1", "gpt-4.1-mini",
+  "o4-mini",
+  "gpt-5", "gpt-5-instant", "gpt-5-thinking",  // retired Feb 13 2026
 ]);
 
+// o3 is a specialized reasoning model — not suitable as a general-purpose
+// archmagos candidate. It belongs in a dedicated "reasoning" role if needed.
 const OPENAI_TIER_MODELS: Record<Exclude<ModelTier, "local">, string[]> = {
-  retribution: ["gpt-5.1-codex", "gpt-4.1-mini"],
-  victory: ["gpt-5.3-codex-spark", "gpt-4.1"],
-  gloriana: ["gpt-5.4", "gpt-4.5", "o3"],
+  retribution: ["gpt-5.1-codex", "gpt-5.1"],
+  victory: ["gpt-5.3-codex-spark", "gpt-5.3", "gpt-5.2-codex", "gpt-5.2"],
+  gloriana: ["gpt-5.4"],
 };
 
 // ---------------------------------------------------------------------------
@@ -232,9 +238,9 @@ function matchOpenAITier(models: RegistryModel[], tier: Exclude<ModelTier, "loca
   }
   const exactIdSet = new Set(exactIds);
   const prefixFallbacks: Record<string, string[]> = {
-    retribution: ["gpt-4.1-mini-"],
-    victory: ["gpt-4.1-", "gpt-5."],
-    gloriana: ["gpt-4.5-", "o3-", "gpt-5."],
+    retribution: ["gpt-5.1-"],
+    victory: ["gpt-5.2-", "gpt-5.3-"],
+    gloriana: ["gpt-5.4-"],
   };
   for (const prefix of prefixFallbacks[tier] ?? []) {
     const found = models.find(
