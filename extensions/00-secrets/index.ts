@@ -384,11 +384,17 @@ const SECRET_ACCESS_PATTERNS = [
   /\bvault\s+(read|kv\s+get)\b/i,
 
   // ── Environment variable dumping ──
-  // Targeted env access with secret-adjacent keywords
-  /\benv\b.*\b(key|token|secret|password|credential)/i,
-  /\bprintenv\b.*\b(key|token|secret|password|credential)/i,
-  // Echo/printf of known secret env vars
-  /\b(echo|printf)\s+.*\$[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i,
+  // Targeted env/printenv commands with secret-adjacent keywords.
+  // Match only the standalone `env` or `printenv` command, not the substring
+  // "env" in filenames like "env-api-keys.ts" or words like "environment".
+  /(?:^|\||\;|&&|\|\|)\s*env\s+.*\b(key|token|secret|password|credential)/i,
+  /(?:^|\||\;|&&|\|\|)\s*printenv\s+.*\b(key|token|secret|password|credential)/i,
+  // Bare `env` piped to grep/filter for secrets (full dump → filter pattern).
+  // Use looser keyword matching (no leading \b) since env var names use
+  // underscores: API_KEY, _TOKEN, etc. where \b won't match mid-identifier.
+  /(?:^|\||\;|&&|\|\|)\s*env\s*\|.*(key|token|secret|password|credential)/i,
+  // Echo/printf of known secret env vars (literal $VAR references, not prose)
+  /\b(echo|printf)\s+.*\$[A-Z_]*(API_KEY|_TOKEN|_SECRET|_PASSWORD|_CREDENTIAL)\b/i,
   // Full env dumps (these can leak all injected secrets)
   /\bnode\s+-e\s+.*process\.env/i,
   /\bpython[23]?\s+-c\s+.*os\.environ/i,
@@ -396,12 +402,18 @@ const SECRET_ACCESS_PATTERNS = [
   /\bperl\s+-e\s+.*%ENV/i,
 
   // ── File readers on sensitive paths ──
-  // cat/less/more/head/tail/bat on secret-adjacent files
-  /\b(cat|less|more|head|tail|bat|batcat)\b.*(secrets?\.json|\bcredentials?\b|\.env\b)/i,
+  // cat/less/more/head/tail/bat on actual secret/credential files.
+  // Match files like "secrets.json", "credentials", ".env" — but not source code
+  // files that happen to contain the word "credential" (e.g. provider-env.ts).
+  // The path must look like a config/data file, not a .ts/.js/.py source file.
+  /\b(cat|less|more|head|tail|bat|batcat)\s+\S*secrets?\.json\b/i,
+  /\b(cat|less|more|head|tail|bat|batcat)\s+\S*credentials\s*$/im,
+  /\b(cat|less|more|head|tail|bat|batcat)\s+\S*\.env(\.[a-z]+)?\s*$/im,
   // jq on secret files
-  /\bjq\b.*\b(secrets?\.json|credentials?)\b/i,
-  // sed/awk/grep reading secret files
-  /\b(sed|awk|grep)\b.*\b(secrets?\.json|credentials?)\b/i,
+  /\bjq\b.*\b(secrets?\.json)\b/i,
+  /\bjq\b\s+\S+\s+\S*credentials\s*$/im,
+  // sed/awk/grep on actual secret data files (not source code containing the word)
+  /\b(sed|awk|grep)\b.*\bsecrets?\.json\b/i,
   // Our own secrets file — match the specific path
   /\.pi\/agent\/secrets\.json/i,
   // Writing to secrets file (via tee, redirect, etc.)
@@ -410,8 +422,9 @@ const SECRET_ACCESS_PATTERNS = [
   /\b(cat|less|more|head|tail)\b.*\.(aws|gcloud)\/(credentials|config)/i,
 
   // ── Command wrapping (shell indirection) ──
-  // sh/bash/zsh -c wrapping with secret-adjacent content
-  /\b(sh|bash|zsh)\s+-c\s+.*\b(security|op\s+read|pass\s+show|vault\s+read|keychain|credential|secret)/i,
+  // sh/bash/zsh -c wrapping with actual secret store tool invocations.
+  // Narrow: only match specific tool commands, not prose containing "secret".
+  /\b(sh|bash|zsh)\s+-c\s+.*\b(security\s+find|op\s+(read|get|item)|pass\s+show|vault\s+(read|kv\s+get)|keychain)/i,
   // Python/Ruby/Node/Perl subprocess wrappers accessing secret stores
   /\b(python[23]?|ruby|node|perl)\b.*\b(security\s+find|op\s+read|find-generic-password|secrets?\.json)/i,
   // Base64 decode piped to shell (obfuscation technique)
