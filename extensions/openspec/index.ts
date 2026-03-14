@@ -833,16 +833,10 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 				return sciErr(msg, theme);
 			}
 
-			if (expanded) {
-				const first = result.content?.[0];
-				const full = (first && "text" in first ? first.text : null) || "Done";
-				const lines = full.split("\n");
-				return sciExpanded(lines.slice(0, -1), lines[lines.length - 1] ?? "done", theme);
-			}
-
-			// Collapsed: action-specific one-liner
+			// Build action-specific summary for both collapsed and expanded
 			const details = (result.details || {}) as Record<string, any>;
 			let summary = "";
+			let expandedLines: string[] = [];
 
 			if (details.changePath) {
 				// propose
@@ -850,51 +844,101 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 					? details.changePath.split("/").pop() ?? details.changePath
 					: "";
 				summary = `✓ proposed ${name}`;
+				expandedLines = [
+					theme.fg("accent", `Change: ${name}`),
+					theme.fg("dim", `Path: ${details.changePath}`),
+				];
 			} else if (details.specPath !== undefined && details.sections !== undefined) {
 				// add_spec
 				const specName = typeof details.specPath === "string"
 					? details.specPath.split("/").slice(-2).join("/")
 					: "spec";
+				const sections = Array.isArray(details.sections) ? details.sections : [];
 				summary = `✓ spec added ${specName}`;
+				expandedLines = [
+					theme.fg("accent", `Spec: ${specName}`),
+					...sections.map((s: any) =>
+						`  ${theme.fg("muted", s.title ?? s)} ${s.requirements ? theme.fg("dim", `· ${s.requirements} req${s.requirements !== 1 ? "s" : ""}`) : ""}`,
+					),
+				];
 			} else if (details.specPath !== undefined && details.generated) {
 				// generate_spec
 				const specName = typeof details.specPath === "string"
 					? details.specPath.split("/").slice(-2).join("/")
 					: "spec";
 				summary = `✓ spec generated ${specName}`;
+				expandedLines = [theme.fg("accent", `Generated: ${specName}`)];
 			} else if (details.files && !details.operations) {
 				// fast_forward
-				const files = Array.isArray(details.files) ? details.files.join(", ") : "files";
-				summary = `✓ fast-forwarded (${files})`;
+				const files = Array.isArray(details.files) ? details.files : [];
+				summary = `✓ fast-forwarded (${files.join(", ")})`;
+				expandedLines = files.map((f: string) => `  ${theme.fg("success", "✓")} ${theme.fg("muted", f)}`);
 			} else if (details.operations) {
 				// archive
+				const firstContent = result.content?.[0];
 				const name = details.transitionedNodes !== undefined
-					? (result.content?.[0] && "text" in result.content[0]
-						? result.content[0].text.match(/Archived '([^']+)'/)?.[1] ?? "change"
-						: "change")
+					? ((firstContent && "text" in firstContent ? firstContent.text : "").match(/Archived '([^']+)'/)?.[1] ?? "change")
 					: "change";
+				const ops = Array.isArray(details.operations) ? details.operations : [];
 				summary = `✓ archived ${name}`;
+				expandedLines = ops.map((op: string) => `  ${theme.fg("muted", op)}`);
+				if (details.transitionedNodes) {
+					expandedLines.push(theme.fg("dim", `  Design nodes transitioned: ${details.transitionedNodes}`));
+				}
 			} else if (details.changes) {
 				// status
-				const count = Array.isArray(details.changes) ? details.changes.length : 0;
+				const changes = Array.isArray(details.changes) ? details.changes : [];
+				const count = changes.length;
 				summary = count === 0 ? "no active changes" : `${count} change${count !== 1 ? "s" : ""}`;
+				const STAGE_ICONS: Record<string, string> = {
+					proposed: "◌", specced: "◐", planned: "●", ready: "★", complete: "✓",
+				};
+				expandedLines = changes.map((c: any) => {
+					const icon = STAGE_ICONS[c.stage] ?? "·";
+					return `  ${theme.fg("accent", icon)} ${theme.fg("muted", c.name)} ${theme.fg("dim", `(${c.stage})`)}`;
+				});
 			} else if (details.change) {
 				// get
-				const name = details.change?.name ?? "";
-				const stage = details.change?.stage ?? "";
+				const c = details.change;
+				const name = c?.name ?? "";
+				const stage = c?.stage ?? "";
 				summary = `${name} (${stage})`;
+				const STAGE_ICONS: Record<string, string> = {
+					proposed: "◌", specced: "◐", planned: "●", ready: "★", complete: "✓",
+				};
+				const icon = STAGE_ICONS[stage] ?? "·";
+				expandedLines = [
+					`${theme.fg("accent", icon)} ${theme.fg("muted", name)} ${theme.fg("dim", stage)}`,
+				];
+				if (c.specs && Array.isArray(c.specs)) {
+					expandedLines.push(theme.fg("dim", `  Specs: ${c.specs.length}`));
+					for (const s of c.specs.slice(0, 5)) {
+						expandedLines.push(`    ${theme.fg("muted", typeof s === "string" ? s : s.domain ?? s.path ?? "")}`);
+					}
+				}
 			} else if (details.reconcileCandidatesEmitted !== undefined) {
 				// reconcile_after_assess
 				const changeName = details.changeName
-					?? (result.content?.[0] && "text" in result.content[0]
-						? result.content[0].text.match(/reconciliation applied to '([^']+)'/)?.[1]
-						: null)
-					?? "change";
+					?? ((result.content?.[0] && "text" in result.content[0]
+						? result.content[0].text : "").match(/reconciliation applied to '([^']+)'/)?.[1]
+					?? "change");
 				const outcome = details.lifecycleSignals?.outcome ?? "";
 				summary = `✓ reconciled ${changeName}${outcome ? ` (${outcome})` : ""}`;
 			} else {
 				const first = result.content?.[0];
 				summary = (first && "text" in first ? first.text?.split("\n")[0] : null) || "done";
+			}
+
+			if (expanded && expandedLines.length > 0) {
+				return sciExpanded(expandedLines, summary, theme);
+			}
+
+			if (expanded) {
+				// Fallback: raw text
+				const first = result.content?.[0];
+				const full = (first && "text" in first ? first.text : null) || "Done";
+				const lines = full.split("\n");
+				return sciExpanded(lines, summary, theme);
 			}
 
 			return sciOk(summary, theme);

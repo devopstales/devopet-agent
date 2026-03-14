@@ -44,6 +44,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext, SessionMessageEntry } from "@cwilson613/pi-coding-agent";
 import { DynamicBorder } from "@cwilson613/pi-coding-agent";
+import { sciCall, sciOk, sciErr, sciExpanded, sciLoading } from "./sci-renderers.ts";
 import { StringEnum } from "../lib/typebox-helpers";
 import { Type } from "@sinclair/typebox";
 import { Container, type SelectItem, SelectList, Text } from "@cwilson613/pi-tui";
@@ -1985,6 +1986,33 @@ export default function (pi: ExtensionAPI) {
       "Use memory_episodes(query) to retrieve session narratives for context about past work",
     ],
     parameters: Type.Object({}),
+    renderCall(_args: any, theme: any) {
+      return sciCall("memory_query", "full read", theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      const d = result.details as { facts?: number; mind?: string } | undefined;
+      const n = d?.facts ?? 0;
+      const mind = d?.mind ?? "project";
+      const summary = `${n} facts · ${mind}`;
+
+      if (expanded) {
+        const text = result.content?.[0]?.text ?? "";
+        // Parse section headers from rendered output
+        const lines: string[] = [];
+        const sections = text.split(/\n## /).filter(Boolean);
+        for (const sec of sections) {
+          const heading = sec.split("\n")[0].replace(/^#+\s*/, "").trim();
+          const bullets = sec.split("\n").filter((l: string) => l.startsWith("- "));
+          if (heading && bullets.length > 0) {
+            lines.push(theme.fg("accent", heading) + theme.fg("dim", ` · ${bullets.length}`));
+          }
+        }
+        if (lines.length === 0) lines.push(theme.fg("muted", "empty"));
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, _params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return { content: [{ type: "text", text: "Project memory not initialized." }] };
@@ -2021,6 +2049,38 @@ export default function (pi: ExtensionAPI) {
         { description: "Optionally restrict search to a specific section" },
       )),
     }),
+    renderCall(args: any, theme: any) {
+      const q = args.query?.length > 50 ? args.query.slice(0, 47) + "…" : args.query;
+      const sec = args.section ? ` in:${args.section}` : "";
+      return sciCall("memory_recall", `"${q}"${sec}`, theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { method?: string; results?: number; episodes?: number; workingMemorySize?: number } | undefined;
+      const n = d?.results ?? 0;
+      const method = d?.method ?? "search";
+      const epis = d?.episodes ?? 0;
+      const summary = n === 0
+        ? "no matches"
+        : `${n} result${n !== 1 ? "s" : ""} via ${method}` + (epis > 0 ? ` + ${epis} episode${epis !== 1 ? "s" : ""}` : "");
+
+      if (expanded && n > 0) {
+        const text = result.content?.[0]?.text ?? "";
+        const lines = text.split("\n").filter(Boolean).slice(0, 12).map((line: string) => {
+          // Highlight match percentages
+          const m = line.match(/\((\d+)% match/);
+          if (m) {
+            const pct = parseInt(m[1]);
+            const color = pct >= 70 ? "success" : pct >= 40 ? "warning" : "muted";
+            return line.replace(`${m[1]}% match`, theme.fg(color as any, `${m[1]}%`));
+          }
+          return line;
+        });
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return n === 0 ? sciErr(summary, theme) : sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return { content: [{ type: "text", text: "Project memory not initialized." }], isError: true };
@@ -2107,6 +2167,29 @@ export default function (pi: ExtensionAPI) {
       query: Type.String({ description: "What you're looking for in past sessions" }),
       k: Type.Optional(Type.Number({ description: "Number of results (default: 5)" })),
     }),
+    renderCall(args: any, theme: any) {
+      const q = args.query?.length > 50 ? args.query.slice(0, 47) + "…" : args.query;
+      return sciCall("memory_episodes", `"${q}"`, theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { method?: string; results?: number } | undefined;
+      const n = d?.results ?? 0;
+      const method = d?.method ?? "recent";
+      const summary = n === 0 ? "no episodes" : `${n} episode${n !== 1 ? "s" : ""} (${method})`;
+
+      if (expanded && n > 0) {
+        const text = result.content?.[0]?.text ?? "";
+        // Extract session titles (bold date: title lines)
+        const lines = text.split("\n").filter((l: string) => l.match(/^\d+\.\s+\*\*/)).map((l: string) => {
+          const m = l.match(/\*\*(.+?)\*\*/);
+          return m ? theme.fg("accent", m[1]) : l;
+        }).slice(0, 8);
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return n === 0 ? sciErr(summary, theme) : sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return { content: [{ type: "text", text: "Project memory not initialized." }], isError: true };
@@ -2169,6 +2252,15 @@ export default function (pi: ExtensionAPI) {
         minItems: 1,
       }),
     }),
+    renderCall(args: any, theme: any) {
+      const n = Array.isArray(args.fact_ids) ? args.fact_ids.length : "?";
+      return sciCall("memory_focus", `pin ${n} fact${n !== 1 ? "s" : ""}`, theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      const d = result.details as { workingMemorySize?: number } | undefined;
+      const sz = d?.workingMemorySize ?? 0;
+      return sciOk(`${sz} facts in working memory`, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       addToWorkingMemory(...params.fact_ids);
       return {
@@ -2187,6 +2279,13 @@ export default function (pi: ExtensionAPI) {
     description: "Clear working memory buffer, releasing all pinned facts.",
     promptSnippet: "Clear working memory — release all pinned facts",
     parameters: Type.Object({}),
+    renderCall(_args: any, theme: any) {
+      return sciCall("memory_release", "clear", theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      const text = result.content?.[0]?.text ?? "cleared";
+      return sciOk(text, theme);
+    },
     async execute(_toolCallId: string, _params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       const released = workingMemory.size;
       workingMemory.clear();
@@ -2225,6 +2324,29 @@ export default function (pi: ExtensionAPI) {
         description: "Fact to add (single bullet point, self-contained)",
       }),
     }),
+    renderCall(args: any, theme: any) {
+      const sec = args.section ?? "?";
+      const preview = args.content?.length > 45 ? args.content.slice(0, 42) + "…" : args.content;
+      return sciCall("memory_store", `${sec} · ${preview}`, theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { section?: string; id?: string; reinforced?: boolean; facts?: number; conflicts?: boolean } | undefined;
+      const sec = d?.section ?? "?";
+      const reinforced = d?.reinforced ?? false;
+      const conflicts = d?.conflicts ?? false;
+      const icon = reinforced ? "↻" : conflicts ? "⚠" : "✓";
+      const verb = reinforced ? "reinforced" : "stored";
+      const summary = `${icon} ${verb} → ${sec}` + (d?.facts != null ? ` (${d.facts} total)` : "");
+
+      if (expanded && conflicts) {
+        const text = result.content?.[0]?.text ?? "";
+        const lines = text.split("\n").filter(Boolean);
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return {
@@ -2305,6 +2427,14 @@ export default function (pi: ExtensionAPI) {
         description: "New fact content (replaces the old fact)",
       }),
     }),
+    renderCall(args: any, theme: any) {
+      return sciCall("memory_supersede", `[${args.fact_id}] → ${args.section}`, theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { oldId?: string; newId?: string; section?: string; facts?: number } | undefined;
+      return sciOk(`[${d?.oldId}] → [${d?.newId}] in ${d?.section}` + (d?.facts != null ? ` (${d.facts} total)` : ""), theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return {
@@ -2342,6 +2472,24 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       query: Type.String({ description: "Search terms (file paths, symbol names, concepts)" }),
     }),
+    renderCall(args: any, theme: any) {
+      const q = args.query?.length > 50 ? args.query.slice(0, 47) + "…" : args.query;
+      return sciCall("memory_search_archive", `"${q}"`, theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      const d = result.details as { totalMatches?: number; crossMind?: boolean } | undefined;
+      const n = d?.totalMatches ?? 0;
+      const cross = d?.crossMind ? " (cross-mind)" : "";
+      const summary = n === 0 ? "no archived matches" : `${n} archived fact${n !== 1 ? "s" : ""}${cross}`;
+
+      if (expanded && n > 0) {
+        const text = result.content?.[0]?.text ?? "";
+        const lines = text.split("\n").filter(Boolean).slice(0, 10);
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return n === 0 ? sciErr(summary, theme) : sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return { content: [{ type: "text", text: "Project memory not initialized." }] };
@@ -2396,6 +2544,16 @@ export default function (pi: ExtensionAPI) {
       relation: Type.String({ description: "Short verb phrase: runs_on, depends_on, contradicts, etc." }),
       description: Type.String({ description: "Human-readable description of why these facts are connected" }),
     }),
+    renderCall(args: any, theme: any) {
+      return sciCall("memory_connect", `${args.source_fact_id} ─${args.relation}→ ${args.target_fact_id}`, theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { reinforced?: boolean; relation?: string } | undefined;
+      const verb = d?.reinforced ? "reinforced" : "connected";
+      const rel = d?.relation ?? "→";
+      return sciOk(`${verb} ─${rel}→`, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       // Resolve which store owns each fact — edges must connect facts in the same DB
       const sourceInProject = store?.getFact(params.source_fact_id);
@@ -2471,6 +2629,25 @@ export default function (pi: ExtensionAPI) {
         description: "Why these facts are being archived (logged, not shown to user)",
       })),
     }),
+    renderCall(args: any, theme: any) {
+      const n = Array.isArray(args.fact_ids) ? args.fact_ids.length : "?";
+      return sciCall("memory_archive", `${n} fact${n !== 1 ? "s" : ""}`, theme);
+    },
+    renderResult(result: any, { expanded }: any, theme: any) {
+      if ((result as any).isError) return sciErr(result.content?.[0]?.text ?? "Error", theme);
+      const d = result.details as { archived?: number; remaining?: number } | undefined;
+      const archived = d?.archived ?? 0;
+      const remaining = d?.remaining;
+      const summary = `${archived} archived` + (remaining != null ? ` · ${remaining} remaining` : "");
+
+      if (expanded) {
+        const text = result.content?.[0]?.text ?? "";
+        const lines = text.split("\n").filter(Boolean).slice(0, 10);
+        return sciExpanded(lines, summary, theme);
+      }
+
+      return sciOk(summary, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       if (!store) {
         return { content: [{ type: "text", text: "Project memory not initialized." }], isError: true };
@@ -2526,6 +2703,15 @@ export default function (pi: ExtensionAPI) {
         description: "Optional focus instructions for the compaction summary (e.g., 'preserve the architecture discussion')",
       })),
     }),
+    renderCall(_args: any, theme: any) {
+      return sciCall("memory_compact", "trigger", theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      const d = result.details as { percent?: string; tokensBefore?: number } | undefined;
+      const pct = d?.percent ?? "?";
+      const tokens = d?.tokensBefore != null ? `${(d.tokensBefore / 1000).toFixed(0)}k tokens` : "";
+      return sciOk(`compacting (was ${pct}${tokens ? `, ${tokens}` : ""})`, theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, ctx: any): Promise<any> {
       const usage = ctx.getContextUsage();
       const pct = usage?.percent != null ? `${Math.round(usage.percent)}%` : "unknown";
@@ -2861,6 +3047,16 @@ export default function (pi: ExtensionAPI) {
         description: "Optional fact ID to supersede",
       })),
     }),
+    renderCall(args: any, theme: any) {
+      return sciCall("memory_ingest_lifecycle", `${args.source_kind} (${args.authority})`, theme);
+    },
+    renderResult(result: any, _opts: any, theme: any) {
+      const d = result.details as { autoStored?: boolean; duplicate?: boolean; factId?: string; reason?: string } | undefined;
+      if (d?.autoStored) {
+        return sciOk(d.duplicate ? `↻ reinforced [${d.factId}]` : `✓ stored [${d.factId}]`, theme);
+      }
+      return sciErr(d?.reason ?? "not stored", theme);
+    },
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, _ctx: any): Promise<any> {
       const candidate: LifecycleCandidate = {
         sourceKind: params.source_kind,

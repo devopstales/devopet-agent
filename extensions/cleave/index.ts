@@ -1785,38 +1785,45 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded }, theme) {
-			const d = result.details as { score?: number; complexity?: number; decision?: string } | undefined;
+			const d = result.details as {
+				score?: number; complexity?: number; decision?: string;
+				systems?: number; modifiers?: string[]; pattern?: string; method?: string;
+			} | undefined;
 			const score = d?.score ?? d?.complexity;
 			const decision = d?.decision;
+			const scoreStr = score != null ? `complexity ${score.toFixed(1)}` : "";
+			const decisionStr = decision ? `→ ${decision}` : "";
+			const summary = [scoreStr, decisionStr].filter(Boolean).join("  ");
 
 			if (expanded) {
-				const lines = ((result.content?.[0] && "text" in result.content[0] ? result.content[0].text : null) ?? "").split("\n");
-				const footer = decision ? `→ ${decision}` + (score != null ? ` (${score.toFixed(1)})` : "") : "";
-				return sciExpanded(lines, footer, theme);
+				const lines: string[] = [];
+				// Structured breakdown
+				if (d?.pattern) lines.push(`${theme.fg("accent", "Pattern")} ${theme.fg("muted", d.pattern)}`);
+				if (d?.method) lines.push(`${theme.fg("accent", "Method")} ${theme.fg("muted", d.method)}`);
+				if (d?.systems != null) lines.push(`${theme.fg("accent", "Systems")} ${theme.fg("muted", String(d.systems))}`);
+				if (d?.modifiers?.length) lines.push(`${theme.fg("accent", "Modifiers")} ${theme.fg("muted", d.modifiers.join(", "))}`);
+				if (score != null) {
+					const color = score >= 2.0 ? "warning" : "success";
+					lines.push(`${theme.fg("accent", "Score")} ${theme.fg(color as any, score.toFixed(1))}`);
+				}
+				if (decision) {
+					const color = decision === "cleave" ? "warning" : "success";
+					lines.push(`${theme.fg("accent", "Decision")} ${theme.fg(color as any, decision)}`);
+				}
+				if (lines.length === 0) {
+					// Fallback to raw text
+					const text = (result.content?.[0] && "text" in result.content[0] ? result.content[0].text : "") ?? "";
+					lines.push(...text.split("\n"));
+				}
+				return sciExpanded(lines, summary, theme);
 			}
 
-			if (!decision) {
+			if (!summary) {
 				const first = result.content?.[0];
-				const line = (first && "text" in first ? first.text : null) ?? "";
-				return sciOk(line.split("\n")[0].slice(0, 80), theme);
+				return sciOk(((first && "text" in first ? first.text : null) ?? "").split("\n")[0].slice(0, 80), theme);
 			}
 
-			const scoreStr = score != null ? `complexity ${score.toFixed(1)}  ` : "";
-			let decisionStr: string;
-			if (decision === "execute") {
-				decisionStr = "→ execute";
-			} else if (decision === "cleave") {
-				decisionStr = "→ cleave";
-			} else {
-				decisionStr = "→ " + decision;
-			}
-			if (decision === "execute") {
-				return sciOk(scoreStr + decisionStr, theme);
-			} else if (decision === "cleave") {
-				return sciOk(scoreStr + decisionStr, theme);
-			} else {
-				return sciOk(scoreStr + decisionStr, theme);
-			}
+			return sciOk(summary, theme);
 		},
 
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -2390,29 +2397,31 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded, isPartial }, theme) {
-			if (expanded) {
-				const lines = ((result.content?.[0] && "text" in result.content[0] ? result.content[0].text : null) ?? "").split("\n");
-				return sciExpanded(lines, "cleave_run", theme);
-			}
-
 			if (isPartial) {
 				// Phase-aware child table from details
 				const d = result?.details as {
-					children?: Array<{ label: string; status: string }>;
+					children?: Array<{ label: string; status: string; branch?: string }>;
 					phase?: string;
 				} | undefined;
 				const children = d?.children ?? [];
 				if (children.length === 0) {
 					const msg = result.content?.[0];
 					const txt = (msg && "text" in msg ? msg.text : null) ?? "running…";
-					return sciOk(txt.split("\n")[0].slice(0, 70), theme);
+					const phase = d?.phase ? theme.fg("dim", ` [${d.phase}]`) : "";
+					return sciOk(txt.split("\n")[0].slice(0, 60) + phase, theme);
 				}
 				const done = children.filter((c) => c.status === "completed").length;
 				const failed = children.filter((c) => c.status === "failed").length;
+				const running = children.filter((c) => c.status === "running").length;
 				const total = children.length;
-				const footer = failed > 0 ? `${done}/${total} done  ${failed} failed` : `${done}/${total} done`;
+				const phase = d?.phase ?? "running";
 
-				const rows = children.slice(0, 8).map((c) => {
+				const parts = [`${done}/${total} done`];
+				if (running > 0) parts.push(`${running} running`);
+				if (failed > 0) parts.push(theme.fg("error", `${failed} failed`));
+				const footer = parts.join("  ") + theme.fg("dim", ` · ${phase}`);
+
+				const rows = children.slice(0, 10).map((c) => {
 					const icon =
 						c.status === "completed" ? theme.fg("success", "✓")
 						: c.status === "running" ? theme.fg("warning", "⟳")
@@ -2420,22 +2429,65 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 						: theme.fg("muted", "○");
 					const label = c.status === "running"
 						? theme.fg("accent", c.label)
+						: c.status === "failed"
+						? theme.fg("error", c.label)
 						: theme.fg("dim", c.label);
 					return `${icon} ${label}`;
 				});
-				if (children.length > 8) {
-					rows.push(theme.fg("muted", `… ${children.length - 8} more`));
+				if (children.length > 10) {
+					rows.push(theme.fg("muted", `… ${children.length - 10} more`));
 				}
 				return sciExpanded(rows, footer, theme);
 			}
 
-			// Final result — read from content text
+			// Final result
 			const first = result.content?.[0];
 			const text = (first && "text" in first ? first.text : null) ?? "";
-			const firstLine = text.split("\n")[0];
-			const hasConflicts = text.toLowerCase().includes("conflict");
 			const isError = (result as any).isError;
+			const hasConflicts = text.toLowerCase().includes("conflict");
 
+			// Extract structured info from details for expanded view
+			const d = result?.details as {
+				children?: Array<{ label: string; status: string }>;
+				merged?: number; failed?: number; conflicts?: number;
+				duration?: number; filesChanged?: number;
+			} | undefined;
+
+			if (expanded) {
+				const lines: string[] = [];
+				const children = d?.children ?? [];
+				if (children.length > 0) {
+					for (const c of children.slice(0, 12)) {
+						const icon =
+							c.status === "completed" ? theme.fg("success", "✓")
+							: c.status === "failed" ? theme.fg("error", "✕")
+							: theme.fg("muted", "○");
+						const label = c.status === "failed"
+							? theme.fg("error", c.label)
+							: theme.fg("muted", c.label);
+						lines.push(`${icon} ${label}`);
+					}
+					if (children.length > 12) {
+						lines.push(theme.fg("muted", `… ${children.length - 12} more`));
+					}
+				} else {
+					// Fall back to raw text
+					lines.push(...text.split("\n").slice(0, 15));
+				}
+
+				const merged = d?.merged ?? children.filter(c => c.status === "completed").length;
+				const failed = d?.failed ?? children.filter(c => c.status === "failed").length;
+				const total = children.length || "?";
+				const dur = d?.duration != null ? ` · ${(d.duration / 1000).toFixed(0)}s` : "";
+				const footer = failed > 0
+					? `${merged}/${total} merged  ${theme.fg("error", `${failed} failed`)}${dur}`
+					: `${merged}/${total} merged${dur}`;
+
+				return sciExpanded(lines, footer, theme);
+			}
+
+			// Collapsed
+			const firstLine = text.split("\n")[0];
 			if (isError) {
 				return sciErr("✕ " + firstLine.slice(0, 70), theme);
 			} else if (hasConflicts) {
