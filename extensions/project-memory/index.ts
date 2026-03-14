@@ -356,6 +356,8 @@ export default function (pi: ExtensionAPI) {
   let sessionActive = false;
   /** Set by /exit handler when episode generation is done pre-goodbye */
   let exitEpisodeDone = false;
+  /** Pending embed promises — tracked so shutdown can await them before DB close */
+  const pendingEmbeds = new Set<Promise<unknown>>();
   let consecutiveExtractionFailures = 0;
   let memoryDir = "";
 
@@ -424,6 +426,15 @@ export default function (pi: ExtensionAPI) {
       provider: config.embeddingProvider,
       model: embeddingModel,
     };
+  }
+
+  /**
+   * Fire-and-forget embed with tracking. The promise is added to pendingEmbeds
+   * and auto-removed on completion. Shutdown awaits all pending before DB close.
+   */
+  function trackEmbed(p: Promise<unknown>): void {
+    pendingEmbeds.add(p);
+    p.finally(() => pendingEmbeds.delete(p));
   }
 
   /** Embed a single text, returning the vector or null if unavailable */
@@ -1093,6 +1104,19 @@ export default function (pi: ExtensionAPI) {
       }
     }
 
+    // Drain pending embed promises before JSONL export + DB close.
+    // These are fire-and-forget embedFact/embedText calls from extraction,
+    // memory_store, and /exit episode generation. Timeout after 5s to avoid
+    // blocking shutdown if Ollama is hung.
+    if (pendingEmbeds.size > 0) {
+      try {
+        await Promise.race([
+          Promise.allSettled([...pendingEmbeds]),
+          new Promise(r => setTimeout(r, 5_000)),
+        ]);
+      } catch { /* best effort */ }
+    }
+
     // JSONL export + DB close (fast — synchronous I/O, ~50ms)
     if (store) {
       try {
@@ -1264,10 +1288,10 @@ export default function (pi: ExtensionAPI) {
     if (actions.length > 0) {
       const result = store.processExtraction(mind, actions);
 
-      // Embed newly created facts (fire-and-forget)
+      // Embed newly created facts (tracked fire-and-forget — shutdown awaits these)
       if (result.newFactIds.length > 0 && embeddingAvailable) {
         for (const id of result.newFactIds) {
-          embedFact(id).catch(() => {});
+          trackEmbed(embedFact(id).catch(() => {}));
         }
       }
 
@@ -2205,7 +2229,7 @@ export default function (pi: ExtensionAPI) {
       if (precomputedVec && embeddingModel) {
         store.storeFactVector(result.id, precomputedVec, embeddingModel);
       } else {
-        embedFact(result.id).catch(() => {}); // fallback fire-and-forget
+        trackEmbed(embedFact(result.id).catch(() => {})); // tracked fire-and-forget
       }
 
       addToWorkingMemory(result.id);
@@ -3109,11 +3133,13 @@ export default function (pi: ExtensionAPI) {
               factIds: sessionFactIds.filter(id => store!.getFact(id)?.status === "active"),
             });
 
-            // Embed episode vector (non-blocking — runs during summary display)
+            // Embed episode vector (tracked — shutdown awaits before DB close)
             if (embeddingAvailable) {
-              embedText(`${episodeOutput.title} ${episodeOutput.narrative}`)
-                .then(vec => { if (vec && store) store.storeEpisodeVector(episodeId, vec, embeddingModel!); })
-                .catch(() => {});
+              trackEmbed(
+                embedText(`${episodeOutput.title} ${episodeOutput.narrative}`)
+                  .then(vec => { if (vec && store) store.storeEpisodeVector(episodeId, vec, embeddingModel!); })
+                  .catch(() => {}),
+              );
             }
           }
           exitEpisodeDone = true;
@@ -3151,10 +3177,15 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      // Memory
+      // Memory + embedding coverage
+      const vecCount = store ? store.countFactVectors(mind) : 0;
+      const coveragePct = factsAfter > 0 ? Math.round((vecCount / factsAfter) * 100) : 100;
+      const embeddingInfo = embeddingAvailable
+        ? ` · ${coveragePct}% indexed`
+        : " · semantic search off";
       const memLine = delta > 0
-        ? `🧠 ${factsAfter} facts (+${delta} new)`
-        : `🧠 ${factsAfter} facts`;
+        ? `🧠 ${factsAfter} facts (+${delta} new)${embeddingInfo}`
+        : `🧠 ${factsAfter} facts${embeddingInfo}`;
       summaryLines.push(memLine);
 
       if (summaryLines.length > 0) {
