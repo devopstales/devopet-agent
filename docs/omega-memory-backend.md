@@ -1,7 +1,7 @@
 ---
 id: omega-memory-backend
 title: Omega memory backend — Rust-native fact store and retrieval engine
-status: exploring
+status: decided
 parent: omega
 tags: [rust, memory, sqlite, embeddings, architecture]
 open_questions: []
@@ -151,9 +151,76 @@ Multiple Omega instances opening ~/.pi/memory/global.db simultaneously (differen
 **Status:** decided
 **Rationale:** extensions/project-memory/api-types.ts defines all /api/memory/* HTTP request/response envelope types. Field names are snake_case to match Rust serde conventions. The Rust structs derive Serialize+Deserialize with field names identical to these TypeScript interfaces. Any deviation is a bug in the Rust port. The file also defines JsonlRecord (JSONL wire format discriminated union), EmbeddingMetadata, and ExtractionAction — the full set of types crossing the TS/Rust boundary.
 
+### Decision: Access reinforcement via last_accessed column — soft decay timer reset on retrieval
+
+**Status:** decided
+**Rationale:** The decay model previously only considered time-since-last-reinforced and explicit reinforcement_count. But when memory_recall returns a fact, that's a strong signal of active relevance — the fact shouldn't decay during the current work session. Fix: semanticSearch calls touchFact(id) on returned results, setting last_accessed to now. The confidence computation uses max(last_reinforced, last_accessed) as the effective time anchor. This doesn't increment reinforcement_count (avoids inflating the long-term persistence signal), just resets the decay timer. In Rust: last_accessed: Option<DateTime<Utc>>.
+
+### Decision: Context injection is budget-aware — Omega renders to a max_chars limit with priority ordering
+
+**Status:** decided
+**Rationale:** renderForInjection currently always renders up to section caps regardless of available context budget. In the Omega model, GET /api/memory/context accepts max_chars and stops adding facts when the budget would be exceeded, respecting priority ordering: working_memory (pinned) > semantic_hits > recent_architecture_facts. The TS bridge tells Omega 'give me N chars' and receives a pre-measured block. This prevents memory injection from consuming context needed for the task itself.
+
+### Decision: Global DB uses advisory file lock for concurrent migration safety
+
+**Status:** decided
+**Rationale:** Multiple Omega instances (one per project) share ~/.pi/memory/global.db. If two instances start simultaneously and both find schema version < expected, both attempt migrations — second one fails or corrupts. Fix: acquire advisory fcntl file lock on ~/.pi/memory/global.lock before checking PRAGMA user_version. Released after migration completes. Hold time is milliseconds. Rust: fs2::FileExt::lock_exclusive(). Standard POSIX semantics, works across processes.
+
 ## Open Questions
 
 *No open questions.*
+
+## Acceptance Criteria
+
+### Scenarios
+
+#### All original open questions resolved with decided decisions
+Given the omega-memory-backend node was created with 2 open questions (JSONL format compat, vector store strategy)
+When design analysis completes
+Then each question is removed and replaced by a decided decision with quantitative rationale
+
+#### TS preparatory fixes implemented and type-checked
+Given 3 correctness failures require schema changes (decay_profile, Lamport version, embedding_metadata)
+When schema v3 migration is written
+Then `npm run typecheck` passes with zero errors
+And existing facts receive safe defaults (decay_profile='standard', version=0, last_accessed=NULL)
+And new mutations (store, reinforce, archive, supersede) increment the Lamport clock via MAX(version)+1
+
+#### Wire protocol contract defined
+Given the memory system has two separable concerns (storage engine vs. tool registration)
+When the TS/Rust boundary is defined
+Then api-types.ts exists with typed request/response interfaces for all /api/memory/* endpoints
+And field names use snake_case matching Rust serde conventions
+And every FactRecord includes version (Lamport), decay_profile, and last_accessed fields
+
+#### Pure computation core is dependency-free
+Given computeConfidence, cosineSimilarity, vectorToBlob, contentHash are the Rust port targets
+When core.ts is extracted
+Then the module has zero imports from factstore, index, pi API, or Node builtins
+And factstore.ts and embeddings.ts delegate to core.ts (no duplicated implementations)
+
+#### Vector store strategy justified quantitatively
+Given three vector store options were evaluated (SQLite BLOB, sqlite-vec, HNSW)
+When scan time is computed against embedding generation latency
+Then the decision records concrete numbers (scan time at current scale, break-even fact count)
+And the composite scoring function requirement (similarity × decay-adjusted confidence) is addressed as a disqualifier for HNSW/sqlite-vec
+
+### Falsifiability
+
+- If any open question remains unresolved, the node cannot be decided
+- If api-types.ts is missing or incomplete (fewer than 10 endpoint types), the wire protocol is not defined
+- If schema v3 migration fails to add decay_profile, version, or last_accessed columns, the correctness fixes are incomplete
+- If semanticSearch still uses the store-wide decay profile instead of per-fact decay_profile, the wrong-profile bug persists
+- If storeFact/reinforceFact/archiveFact do not increment the Lamport clock, git-sync conflict resolution remains broken
+
+### Constraints
+
+- JSONL format must remain backward-compatible — new fields additive with defaults on import
+- Lamport version is MAX(version)+1 per mutation — never wall-clock
+- Per-fact decay_profile must be used at read-time, not the store-wide default
+- Dimension mismatch must produce a logged warning, not a silent skip
+- embedding_metadata table must be populated on first storeFactVector call
+- cosine_similarity in Rust must produce bit-identical results to TS for same inputs
 
 ## Implementation Notes
 
@@ -169,6 +236,9 @@ Multiple Omega instances opening ~/.pi/memory/global.db simultaneously (differen
 - `src/memory/search.rs` (new) — FTS5 full-text search, semantic search with typed params, dimension mismatch as typed error
 - `src/memory/api.rs` (new) — Axum routes: /api/memory/* — fact CRUD, context rendering, recall, export/import, episodes
 - `src/memory/jsonl.rs` (new) — JSONL import/export for git sync — serde_json, identical field names to current facts.jsonl
+- `extensions/project-memory/api-types.ts` (new) — Canonical Omega /api/memory/* wire protocol types — source of truth for TS bridge and Rust Axum handlers
+- `extensions/project-memory/factstore.ts` (modified) — Schema v3 migration (decay_profile, version, last_accessed, embedding_metadata); storeFact/reinforceFact/archiveFact write Lamport version; semanticSearch uses per-fact decay_profile and touchFact for access reinforcement; storeFactVector registers model in embedding_metadata
+- `extensions/project-memory/core.ts` (modified) — Pure computation module — zero deps, direct Rust port target (computeConfidence, cosineSimilarity, vectorToBlob/blobToVector, contentHash, DecayProfileName, resolveDecayProfile)
 
 ### Constraints
 
@@ -178,3 +248,8 @@ Multiple Omega instances opening ~/.pi/memory/global.db simultaneously (differen
 - facts_vec gains model_name TEXT FK to embedding_metadata — allows multi-model coexistence
 - cosine_similarity in Rust must produce bit-identical results to TS implementation for same inputs (verified by cross-impl test)
 - Dimension mismatch must return EmbeddingDimensionMismatch error, not silently skip
+- JSONL format must remain backward-compatible — new fields are additive with defaults on import
+- Lamport version is MAX(version)+1 per mutation — never use wall-clock as version
+- Dimension mismatch must produce a logged warning, not a silent skip
+- Per-fact decay_profile must be used at read-time, not store-wide default
+- embedding_metadata table must be populated on first storeFactVector call
