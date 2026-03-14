@@ -46,9 +46,46 @@ function hasCmd(cmd: string): boolean {
 	}
 }
 
+/**
+ * Detect immutable/atomic Linux distros (Bazzite, Silverblue, Kinoite, etc.)
+ * where dnf/apt are unavailable or aliased to guides. These distros typically
+ * use Homebrew (Linuxbrew) or Flatpak for user-space packages.
+ */
+function isImmutableLinux(): boolean {
+	if (process.platform !== "linux") return false;
+	try {
+		const osRelease = execSync("cat /etc/os-release 2>/dev/null", { encoding: "utf-8" });
+		// Bazzite, Silverblue, Kinoite, Aurora, Bluefin — all Fedora Atomic variants
+		return /VARIANT_ID=.*(silverblue|kinoite|bazzite|aurora|bluefin|atomic)/i.test(osRelease)
+			|| /ostree/i.test(osRelease);
+	} catch {
+		return false;
+	}
+}
+
+/** Cached immutable Linux detection */
+const _isImmutable = isImmutableLinux();
+
 /** Get the best install command for the current platform */
 export function bestInstallCmd(dep: Dep): string | undefined {
 	const plat = process.platform === "darwin" ? "darwin" : "linux";
+
+	// On immutable Linux (Bazzite, Silverblue, etc.), dnf/apt are unavailable
+	// or aliased to documentation guides. Prefer brew commands.
+	// On regular Linux, prefer non-brew (apt/dnf) unless brew is the only option.
+	const hasBrew = hasCmd("brew");
+	if (plat === "linux" && (_isImmutable || !hasBrew)) {
+		// Immutable: must use brew (skip apt/dnf). Regular without brew: skip brew commands.
+		const candidates = dep.install.filter((o) => o.platform === plat || o.platform === "any");
+		if (_isImmutable && hasBrew) {
+			const brewCmd = candidates.find((o) => o.cmd.startsWith("brew "));
+			if (brewCmd) return brewCmd.cmd;
+		} else if (!_isImmutable) {
+			const nonBrew = candidates.find((o) => !o.cmd.startsWith("brew "));
+			if (nonBrew) return nonBrew.cmd;
+		}
+	}
+
 	return (
 		dep.install.find((o) => o.platform === plat)?.cmd ??
 		dep.install.find((o) => o.platform === "any")?.cmd ??
@@ -108,6 +145,7 @@ export const DEPS: Dep[] = [
 		check: () => hasCmd("gh"),
 		install: [
 			{ platform: "darwin", cmd: "brew install gh" },
+			{ platform: "linux", cmd: "brew install gh" },
 			{ platform: "linux", cmd: "sudo apt install gh || sudo dnf install gh" },
 		],
 		url: "https://cli.github.com",
@@ -163,6 +201,7 @@ export const DEPS: Dep[] = [
 		check: () => hasCmd("rsvg-convert"),
 		install: [
 			{ platform: "darwin", cmd: "brew install librsvg" },
+			{ platform: "linux", cmd: "brew install librsvg" },
 			{ platform: "linux", cmd: "sudo apt install librsvg2-bin" },
 		],
 	},
@@ -175,6 +214,7 @@ export const DEPS: Dep[] = [
 		check: () => hasCmd("pdftoppm"),
 		install: [
 			{ platform: "darwin", cmd: "brew install poppler" },
+			{ platform: "linux", cmd: "brew install poppler" },
 			{ platform: "linux", cmd: "sudo apt install poppler-utils" },
 		],
 	},
@@ -200,6 +240,7 @@ export const DEPS: Dep[] = [
 		check: () => hasCmd("aws"),
 		install: [
 			{ platform: "darwin", cmd: "brew install awscli" },
+			{ platform: "linux", cmd: "brew install awscli" },
 			{ platform: "linux", cmd: "sudo apt install awscli" },
 		],
 	},
@@ -212,6 +253,7 @@ export const DEPS: Dep[] = [
 		check: () => hasCmd("kubectl"),
 		install: [
 			{ platform: "darwin", cmd: "brew install kubectl" },
+			{ platform: "linux", cmd: "brew install kubectl" },
 			{ platform: "linux", cmd: "sudo apt install kubectl" },
 		],
 	},
