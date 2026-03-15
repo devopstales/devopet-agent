@@ -304,9 +304,10 @@ export function ingestLifecycleCandidatesBatch(
     factIds: [],
   };
   
-  // Use transaction for batch processing
-  const tx = (store as any).db.transaction(() => {
-    for (const candidate of candidates) {
+  // Process candidates individually (no batch transaction) to minimize write-lock
+  // hold time and avoid SQLITE_BUSY when concurrent processes share the DB.
+  for (const candidate of candidates) {
+    try {
       const candidateResult = ingestLifecycleCandidate(store, mind, candidate);
       
       if (candidateResult.autoStored) {
@@ -323,9 +324,17 @@ export function ingestLifecycleCandidatesBatch(
       } else {
         result.rejected++;
       }
+    } catch (err: any) {
+      // SQLITE_BUSY: another process holds the write lock. Skip this candidate
+      // rather than failing the entire batch — it will be re-extracted next cycle.
+      if (err?.code === "SQLITE_BUSY") {
+        result.rejected++;
+        console.warn(`[project-memory] lifecycle ingest skipped (DB busy): ${candidate.content.slice(0, 60)}`);
+      } else {
+        throw err; // Re-throw non-contention errors
+      }
     }
-  });
+  }
   
-  tx();
   return result;
 }

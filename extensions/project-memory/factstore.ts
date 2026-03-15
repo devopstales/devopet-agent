@@ -258,7 +258,7 @@ export class FactStore {
     fs.mkdirSync(memoryDir, { recursive: true });
     this.db = new Database(this.dbPath);
     this.db.pragma("journal_mode = WAL");
-    this.db.pragma("busy_timeout = 5000");
+    this.db.pragma("busy_timeout = 10000");
     this.db.pragma("foreign_keys = ON");
     this.initSchema();
     this.runMigrations();

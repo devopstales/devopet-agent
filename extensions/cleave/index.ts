@@ -20,7 +20,7 @@ import { truncateTail, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "
 import { Text } from "@styrene-lab/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { spawn, execFile } from "node:child_process";
-import { registerCleaveProc, deregisterCleaveProc, killCleaveProc, killAllCleaveSubprocesses } from "./subprocess-tracker.ts";
+import { registerCleaveProc, deregisterCleaveProc, killCleaveProc, killAllCleaveSubprocesses, cleanupOrphanedProcesses } from "./subprocess-tracker.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -1647,6 +1647,21 @@ export function createAssessStructuredExecutors(pi: ExtensionAPI, overrides?: As
 // ─── Extension ──────────────────────────────────────────────────────────────
 
 export default function cleaveExtension(pi: ExtensionAPI) {
+	// ── Guard: skip cleave in child processes ───────────────────────
+	// Cleave children are spawned with PI_CHILD=1. If we load cleave
+	// in children, they can spawn NESTED children — exponential process
+	// growth. Children should never invoke cleave tools.
+	if (process.env.PI_CHILD) return;
+
+	// ── Kill orphaned children from previous sessions ───────────────
+	// If a previous omegon session was killed (SIGKILL, crash, machine
+	// reboot), its detached children may still be alive. Clean them up
+	// before doing anything else.
+	const orphansKilled = cleanupOrphanedProcesses();
+	if (orphansKilled > 0) {
+		console.warn(`[cleave] killed ${orphansKilled} orphaned subprocess(es) from a previous session`);
+	}
+
 	// ── Initialize dashboard state ──────────────────────────────────
 	emitCleaveState(pi, "idle");
 
