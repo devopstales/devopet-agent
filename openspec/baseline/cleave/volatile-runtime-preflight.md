@@ -1,4 +1,4 @@
-## ADDED Requirements
+# Spec
 
 ### Requirement: Cleave preflight ignores volatile runtime operator profile churn
 Cleave dirty-tree preflight MUST classify runtime operator profile churn as volatile so dispatch is not blocked by session-local state.

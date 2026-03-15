@@ -1,4 +1,4 @@
-## ADDED Requirements
+# Spec
 
 ### Requirement: Memory injection stays within a tighter routine-turn budget
 Omegon MUST reduce routine project-memory prompt injection so normal turns do not prepend an oversized memory block by default.

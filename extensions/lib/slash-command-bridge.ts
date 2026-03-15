@@ -218,6 +218,15 @@ export class SlashCommandBridge {
   }
 }
 
+export function parseBridgedArgs(args: string, ctx: { bridgeInvocation?: boolean }): string[] {
+  const trimmed = (args || "").trim();
+  if (!trimmed) return [];
+  if (ctx.bridgeInvocation) {
+    try { return JSON.parse(trimmed); } catch { return [trimmed]; }
+  }
+  return trimmed.split(/\s+/).filter(Boolean);
+}
+
 export function createSlashCommandBridge(): SlashCommandBridge {
   return new SlashCommandBridge();
 }

@@ -1,7 +1,7 @@
 ---
 id: singular-package-runtime-boundary
 title: Singular package runtime boundary and ownership
-status: resolved
+status: implemented
 parent: singular-package-update-lifecycle
 open_questions: []
 ---

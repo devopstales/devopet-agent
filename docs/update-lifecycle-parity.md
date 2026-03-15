@@ -1,7 +1,7 @@
 ---
 id: update-lifecycle-parity
 title: Update lifecycle parity and restart boundary
-status: resolved
+status: implemented
 parent: singular-package-update-lifecycle
 open_questions: []
 ---

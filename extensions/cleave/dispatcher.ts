@@ -27,6 +27,7 @@ import { executeWithReview, type ReviewConfig, type ReviewExecutor, DEFAULT_REVI
 import { saveState } from "./workspace.ts";
 import { resolveTier, getDefaultPolicy, getViableModels, type ProviderRoutingPolicy, type RegistryModel } from "../lib/model-routing.ts";
 import { resolveOmegonSubprocess } from "../lib/omegon-subprocess.ts";
+import { registerCleaveProc, deregisterCleaveProc, killCleaveProc } from "./subprocess-tracker.ts";
 
 // ─── Large-run threshold ────────────────────────────────────────────────────
 
@@ -385,6 +386,7 @@ async function spawnChild(
 		const proc = spawn(omegon.command, args, {
 			cwd,
 			stdio: ["pipe", "pipe", "pipe"],
+			detached: true,
 			env: {
 				...process.env,
 				// Prevent nested detection issues
@@ -393,6 +395,7 @@ async function spawnChild(
 				I_AM: "alpharius",
 			},
 		});
+		registerCleaveProc(proc);
 
 		// Write prompt to stdin
 		if (proc.stdin) {
@@ -417,24 +420,43 @@ async function spawnChild(
 		});
 		proc.stderr?.on("data", (data) => { stderr += data.toString(); });
 
+		// SIGKILL escalation helper — sends SIGKILL by process group with fallback
+		let escalationTimer: ReturnType<typeof setTimeout> | undefined;
+		const scheduleEscalation = () => {
+			escalationTimer = setTimeout(() => {
+				if (!proc.killed) {
+					try {
+						if (proc.pid) process.kill(-proc.pid, "SIGKILL");
+					} catch {
+						try { proc.kill("SIGKILL"); } catch { /* already dead */ }
+					}
+				}
+			}, 5_000);
+		};
+
 		// Timeout enforcement
 		const timer = setTimeout(() => {
 			killed = true;
-			proc.kill("SIGTERM");
-			setTimeout(() => {
-				if (!proc.killed) proc.kill("SIGKILL");
-			}, 5_000);
+			killCleaveProc(proc);
+			scheduleEscalation();
 		}, timeoutMs);
 
-		// Abort signal support
+		// Abort signal support (with SIGKILL escalation — detached processes
+		// won't receive SIGHUP on parent exit, so SIGTERM alone is insufficient)
 		const onAbort = () => {
 			killed = true;
-			proc.kill("SIGTERM");
+			killCleaveProc(proc);
+			scheduleEscalation();
 		};
 		signal?.addEventListener("abort", onAbort, { once: true });
 
+		let settled = false;
 		proc.on("close", (code) => {
+			if (settled) return;
+			settled = true;
+			deregisterCleaveProc(proc);
 			clearTimeout(timer);
+			clearTimeout(escalationTimer);
 			signal?.removeEventListener("abort", onAbort);
 			resolve({
 				exitCode: killed ? -1 : (code ?? 1),
@@ -444,7 +466,11 @@ async function spawnChild(
 		});
 
 		proc.on("error", (err) => {
+			if (settled) return;
+			settled = true;
+			deregisterCleaveProc(proc);
 			clearTimeout(timer);
+			clearTimeout(escalationTimer);
 			signal?.removeEventListener("abort", onAbort);
 			resolve({
 				exitCode: 1,

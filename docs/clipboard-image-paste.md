@@ -1,7 +1,7 @@
 ---
 id: clipboard-image-paste
 title: "Clipboard image paste into chat/messages"
-status: resolved
+status: implemented
 parent: markdown-viewport
 tags: [ux, clipboard, images, attachments, chat]
 open_questions: []

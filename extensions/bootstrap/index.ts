@@ -22,6 +22,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir, tmpdir } from "node:os";
 import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
 import { checkAllProviders, type AuthResult } from "../01-auth/auth.ts";
@@ -388,7 +389,8 @@ export default function (pi: ExtensionAPI) {
 		description: "Run the authoritative Omegon update lifecycle, then hand off to restart",
 		handler: async (args, ctx) => {
 			const dryRun = args.trim() === "--dry-run";
-			const omegonRoot = process.env.PI_CODING_AGENT_DIR ?? join(import.meta.dirname ?? ".", "..");
+			const here = dirname(fileURLToPath(import.meta.url));
+		const omegonRoot = join(here, "..", "..");
 			const isDevMode = existsSync(join(omegonRoot, ".git"));
 
 			if (isDevMode) {

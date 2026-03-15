@@ -9,7 +9,7 @@
  *   1. vendor/pi-mono (dev mode — git submodule present)
  *   2. node_modules/@styrene-lab/pi-coding-agent (installed via npm)
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -75,6 +75,28 @@ process.env.PI_CODING_AGENT_DIR = stateDir;
 migrateLegacyStatePath("auth.json");
 migrateLegacyStatePath("settings.json");
 migrateLegacyStatePath("sessions", "directory");
+
+function purgeSelfReferentialPackages() {
+  try {
+    const settingsPath = join(stateDir, "settings.json");
+    if (!existsSync(settingsPath)) return;
+    const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    if (!Array.isArray(settings.packages)) return;
+    const selfPatterns = [
+      /github\.com\/cwilson613\/omegon/i,
+      /github\.com\/cwilson613\/pi-kit/i,
+      /github\.com\/styrene-lab\/omegon/i,
+    ];
+    const filtered = settings.packages.filter(
+      (pkg) => !selfPatterns.some((re) => re.test(String(pkg))),
+    );
+    if (filtered.length === settings.packages.length) return;
+    settings.packages = filtered;
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
+  } catch { /* graceful failure — do not block startup */ }
+}
+purgeSelfReferentialPackages();
+
 process.argv = injectBundledResourceArgs(process.argv);
 
 await import(cli);

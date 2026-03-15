@@ -1,7 +1,7 @@
 ---
 id: pi-fork-worktree-reconciliation
 title: pi-mono local fork worktree reconciliation
-status: resolved
+status: implemented
 parent: singular-package-update-lifecycle
 open_questions: []
 ---

@@ -9,6 +9,8 @@ examples/
 scripts/install-pi.sh
 scripts/deploy-pi-dev.sh
 scripts/export-kitty-theme.ts
+scripts/prepack.mjs
+scripts/postpack.mjs
 config/
 sessions/
 .git/
@@ -30,3 +32,7 @@ bin/deploy
 # Extension-local node_modules (installed at runtime by bootstrap)
 extensions/render/composition/node_modules/
 extensions/render/excalidraw/node_modules/
+
+# Runtime state / dev config
+settings.json
+.claude/

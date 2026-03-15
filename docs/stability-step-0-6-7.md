@@ -1,12 +1,11 @@
 ---
 id: stability-step-0-6-7
 title: 0.6.7 stability step — memory injection budget discipline and Node runtime compatibility
-status: implementing
+status: implemented
 parent: pi-fork-update-flow
 tags: [release, stability, memory, context, node, runtime, unicode]
 open_questions: []
 branches: ["feature/stability-step-0-6-7"]
-openspec_change: stability-step-0-6-7
 issue_type: bug
 priority: 1
 ---

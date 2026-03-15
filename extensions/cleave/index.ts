@@ -20,6 +20,7 @@ import { truncateTail, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "
 import { Text } from "@styrene-lab/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { spawn, execFile } from "node:child_process";
+import { registerCleaveProc, deregisterCleaveProc, killCleaveProc, killAllCleaveSubprocesses } from "./subprocess-tracker.ts";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -29,7 +30,7 @@ import { sharedState, DASHBOARD_UPDATE_EVENT } from "../lib/shared-state.ts";
 import { sciCall, sciOk, sciErr, sciExpanded } from "../lib/sci-ui.ts";
 import { debug } from "../lib/debug.ts";
 import { emitOpenSpecState } from "../openspec/dashboard-state.ts";
-import { getSharedBridge, buildSlashCommandResult } from "../lib/slash-command-bridge.ts";
+import { getSharedBridge, buildSlashCommandResult, parseBridgedArgs } from "../lib/slash-command-bridge.ts";
 import { buildAssessBridgeResult } from "./bridge.ts";
 import { resolveOmegonSubprocess } from "../lib/omegon-subprocess.ts";
 import { scanDesignDocs, getNodeSections } from "../design-tree/tree.ts";
@@ -766,12 +767,14 @@ async function runSpecAssessmentSubprocess(
 			cwd: input.repoPath,
 			shell: false,
 			stdio: ["pipe", "pipe", "pipe"],
+			detached: true,
 			env: {
 				...process.env,
 				PI_CHILD: "1",
 				TERM: process.env.TERM ?? "dumb",
 			},
 		});
+		registerCleaveProc(proc);
 		let stdout = "";
 		let stderr = "";
 		let buffer = "";
@@ -789,10 +792,17 @@ async function runSpecAssessmentSubprocess(
 			clearTimeout(timer);
 			resolve(value);
 		};
+		let escalationTimer: ReturnType<typeof setTimeout> | undefined;
 		const timer = setTimeout(() => {
-			proc.kill("SIGTERM");
-			setTimeout(() => {
-				if (!proc.killed) proc.kill("SIGKILL");
+			killCleaveProc(proc);
+			escalationTimer = setTimeout(() => {
+				if (!proc.killed) {
+					try {
+						if (proc.pid) process.kill(-proc.pid, "SIGKILL");
+					} catch {
+						try { proc.kill("SIGKILL"); } catch { /* already dead */ }
+					}
+				}
 			}, 5_000);
 			settleReject(new Error(`Timed out after 120s while assessing ${input.changeName}.`));
 		}, 120_000);
@@ -823,9 +833,13 @@ async function runSpecAssessmentSubprocess(
 			stderr += data.toString();
 		});
 		proc.on("error", (error) => {
+			deregisterCleaveProc(proc);
+			clearTimeout(escalationTimer);
 			settleReject(error);
 		});
 		proc.on("close", (code) => {
+			deregisterCleaveProc(proc);
+			clearTimeout(escalationTimer);
 			if (buffer.trim()) processLine(buffer.trim());
 			if ((code ?? 1) !== 0) {
 				settleReject(new Error(stderr.trim() || `Assessment subprocess exited with code ${code ?? 1}.`));
@@ -1688,6 +1702,10 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 		}
 	});
 
+	// ── Subprocess cleanup on session exit ───────────────────────────────
+	pi.on("session_shutdown", () => {
+		killAllCleaveSubprocesses();
+	});
 
 	// ── cleave_assess tool ───────────────────────────────────────────────
 	pi.registerTool({
@@ -1811,8 +1829,8 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			return null;
 		},
 		structuredExecutor: async (args, ctx) => {
-			const trimmed = (args || "").trim();
-			if (!trimmed) {
+			const parts = parseBridgedArgs(args, ctx);
+			if (parts.length === 0) {
 				return buildSlashCommandResult("assess", [], {
 					ok: false,
 					summary: "/assess requires an explicit bridged subcommand",
@@ -1823,7 +1841,6 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				});
 			}
 
-			const parts = trimmed.split(/\s+/);
 			const sub = parts[0] || "";
 			const rest = parts.slice(1).join(" ");
 			const assessCtx: AssessExecutionContext = {

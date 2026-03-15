@@ -1,4 +1,4 @@
-## ADDED Requirements
+# Spec
 
 ### Requirement: Design assessment must produce deterministic results without nested subprocess fragility
 `/assess design` MUST complete even when nested subprocess extension loading would conflict.
