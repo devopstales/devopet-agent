@@ -1,6 +1,6 @@
 {
 	"name": "omegon",
-	"version": "0.6.34",
+	"version": "0.6.35",
 	"description": "Omegon — an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
 	"bin": {
 		"omegon": "bin/omegon.mjs",
@@ -90,13 +90,13 @@
 		]
 	},
 	"dependencies": {
-		"@styrene-lab/pi-coding-agent": "file:./vendor/pi-mono/packages/coding-agent",
-		"@styrene-lab/pi-agent-core": "file:./vendor/pi-mono/packages/agent",
-		"@styrene-lab/pi-ai": "file:./vendor/pi-mono/packages/ai",
-		"@styrene-lab/pi-tui": "file:./vendor/pi-mono/packages/tui",
-		"@modelcontextprotocol/sdk": "^1.12.1",
+		"@modelcontextprotocol/sdk": "^1.27.1",
 		"@resvg/resvg-js": "^2.6.2",
 		"@sinclair/typebox": "^0.34.48",
+		"@styrene-lab/pi-agent-core": "file:./vendor/pi-mono/packages/agent",
+		"@styrene-lab/pi-ai": "file:./vendor/pi-mono/packages/ai",
+		"@styrene-lab/pi-coding-agent": "file:./vendor/pi-mono/packages/coding-agent",
+		"@styrene-lab/pi-tui": "file:./vendor/pi-mono/packages/tui",
 		"better-sqlite3": "^12.6.2"
 	},
 	"devDependencies": {

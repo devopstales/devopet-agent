@@ -496,8 +496,10 @@ function restartOmegon(): never {
 		if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
 			process.stdin.setRawMode(false);
 		}
-		// Also reset via stty — timeout guards against blocking on contested stdin
-		spawnSync("stty", ["sane"], { stdio: "inherit", timeout: 2000 });
+		// Also reset via stty — timeout guards against blocking on contested stdin.
+		// Use /dev/null for stdout/stderr to prevent any stray output (including
+		// terminal bells) from reaching the user's terminal during the transition.
+		spawnSync("stty", ["sane"], { stdio: ["inherit", "ignore", "ignore"], timeout: 2000 });
 	} catch { /* best-effort */ }
 
 	// Spawn restart script detached (survives parent exit) but with SIGHUP
