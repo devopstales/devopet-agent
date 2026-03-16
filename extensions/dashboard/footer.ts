@@ -92,7 +92,7 @@ const CLEAVE_STALE_MS = 30_000;
 /** Recovery notices auto-suppress in compact mode after this many ms with no new error. */
 const RECOVERY_STALE_MS = 45_000;
 const RAISED_NARROW_WIDTH = 100;
-const RAISED_WIDE_WIDTH = 140;
+const RAISED_WIDE_WIDTH = 160;
 
 type PrioritySegment = {
   text: string;
@@ -810,24 +810,28 @@ export class DashboardFooter implements Component {
 
   private formatModelTopologyLine(summary: DashboardModelRoleSummary, width: number, compact = false): string {
     const theme = this.theme;
-    const sourceBadge = summary.source === "local"
-      ? theme.fg("accent", "local")
-      : summary.source === "cloud"
-        ? theme.fg("muted", "cloud")
-        : theme.fg("dim", summary.source);
-    const stateBadge = summary.state === "active"
-      ? theme.fg("success", "active")
-      : summary.state === "offline"
-        ? theme.fg("warning", "offline")
-        : summary.state === "fallback"
-          ? theme.fg("warning", "fallback")
-          : theme.fg("dim", summary.state);
+    // In compact mode, use single-char glyphs to save space
+    const sourceBadge = compact
+      ? (summary.source === "local" ? theme.fg("accent", "⌂") : summary.source === "cloud" ? theme.fg("muted", "☁") : theme.fg("dim", "?"))
+      : (summary.source === "local"
+        ? theme.fg("accent", "local")
+        : summary.source === "cloud"
+          ? theme.fg("muted", "cloud")
+          : theme.fg("dim", summary.source));
+    const stateBadge = compact
+      ? "" // state is implicit in compact mode — icon color carries meaning
+      : (summary.state === "active"
+        ? theme.fg("success", "active")
+        : summary.state === "offline"
+          ? theme.fg("warning", "offline")
+          : summary.state === "fallback"
+            ? theme.fg("warning", "fallback")
+            : theme.fg("dim", summary.state));
     const normalized = normalizeLocalModelLabel(summary.model);
-    const alias = normalized.alias ? theme.fg("dim", `alias ${normalized.alias}`) : "";
-    const primary = compact
-      ? `${theme.fg("accent", summary.label)} ${theme.fg("muted", normalized.canonical)}`
-      : `${theme.fg("accent", summary.label)} ${theme.fg("dim", "·")} ${theme.fg("muted", normalized.canonical)}`;
-    return truncateToWidth(composePrimaryMetaLine(width, primary, [sourceBadge, stateBadge, summary.detail ? theme.fg("dim", summary.detail) : "", alias]), width, "…");
+    const alias = compact ? "" : (normalized.alias ? theme.fg("dim", `alias ${normalized.alias}`) : "");
+    const sep = compact ? " " : ` ${theme.fg("dim", "·")} `;
+    const primary = `${theme.fg("accent", summary.label)}${sep}${theme.fg("muted", normalized.canonical)}`;
+    return truncateToWidth(composePrimaryMetaLine(width, primary, [sourceBadge, stateBadge, summary.detail ? theme.fg("dim", summary.detail) : "", alias].filter(Boolean)), width, "…");
   }
 
   private buildSummaryCard(title: string, lines: string[], width: number): string[] {
@@ -841,7 +845,7 @@ export class DashboardFooter implements Component {
     const contextCard = this.buildSummaryCard("context", this.buildHudContextLines(Math.max(1, width - 2)).map((l) => l.trimStart()), width);
     const modelCard = this.buildSummaryCard(
       "models",
-      this.buildModelTopologySummaries().map((s) => this.formatModelTopologyLine(s, Math.max(1, width - 2), width < 70)),
+      this.buildModelTopologySummaries().map((s) => this.formatModelTopologyLine(s, Math.max(1, width - 2), width < 120)),
       width,
     );
     const memoryCard = this.buildSummaryCard("memory", (() => {
@@ -862,6 +866,7 @@ export class DashboardFooter implements Component {
     }
 
     if (width < RAISED_WIDE_WIDTH) {
+      // Two columns: context+memory on left, models+system on right
       const left = [...contextCard, ...memoryCard];
       const right = [...modelCard, ...(recoveryCard.length > 0 ? recoveryCard : []), ...systemCard];
       const colWidth = Math.floor((width - 1) / 2);
@@ -869,19 +874,16 @@ export class DashboardFooter implements Component {
       return mergeColumns(left, right, colWidth, rightWidth, this.theme.fg("dim", BOX.v));
     }
 
-    const cards = [contextCard, modelCard, memoryCard, recoveryCard.length > 0 ? recoveryCard : systemCard];
-    const totalCols = cards.length;
-    const colWidth = Math.floor((width - (totalCols - 1)) / totalCols);
+    // Wide: three columns — context+memory | models | system+recovery
+    // Gives each column ~50 chars at 160 cols, enough to avoid truncation.
+    const leftCard = [...contextCard, ...memoryCard];
+    const midCard = modelCard;
+    const rightCard = [...(recoveryCard.length > 0 ? recoveryCard : []), ...systemCard];
+    const colW = Math.floor((width - 2) / 3);
+    const lastColW = width - colW * 2 - 2;
     const divider = this.theme.fg("dim", BOX.v);
-    let merged = cards[0] ?? [];
-    let usedWidth = colWidth;
-    for (let i = 1; i < cards.length; i++) {
-      const remainingCols = totalCols - i;
-      const nextWidth = i === cards.length - 1 ? width - usedWidth - 1 : colWidth;
-      merged = mergeColumns(merged, cards[i] ?? [], usedWidth, nextWidth, divider);
-      usedWidth += 1 + nextWidth;
-    }
-    return merged;
+    const leftMid = mergeColumns(leftCard, midCard, colW, colW, divider);
+    return mergeColumns(leftMid, rightCard, colW * 2 + 1, lastColW, divider);
   }
 
   // ── Section builders (shared by stacked + wide layouts) ───────
