@@ -432,28 +432,66 @@ export default function (pi: ExtensionAPI) {
 /**
  * Replace the current Omegon process with a fresh instance.
  *
- * Spawns a new detached Omegon process with inherited stdio, then exits
- * the current process. The user sees the terminal briefly reset and the
- * new session starts automatically — no manual re-launch needed.
+ * Resets terminal state (exits raw mode, alternate screen, mouse capture),
+ * then uses shell `exec` to replace the process in-place. This avoids the
+ * race between old-process TUI teardown and new-process TUI startup that
+ * causes ANSI garbage when using detach+exit.
  */
 function restartOmegon(): never {
 	const { command, argvPrefix } = resolveOmegonSubprocess();
-	// Pass through any user-facing args from the original invocation
-	// (skip argv[0]=node, argv[1]=omegon.mjs which argvPrefix covers)
 	const userArgs = process.argv.slice(2).filter(a =>
-		// Strip injected resource flags — the new process injects its own
 		!a.startsWith("--extensions-dir=") &&
 		!a.startsWith("--themes-dir=") &&
 		!a.startsWith("--skills-dir=") &&
-		!a.startsWith("--prompts-dir=")
+		!a.startsWith("--prompts-dir=") &&
+		!a.startsWith("--extension=") && !a.startsWith("--extension ") &&
+		!a.startsWith("--skill=") && !a.startsWith("--skill ") &&
+		!a.startsWith("--prompt-template=") && !a.startsWith("--prompt-template ") &&
+		!a.startsWith("--theme=") && !a.startsWith("--theme ") &&
+		!a.startsWith("--no-skills") &&
+		!a.startsWith("--no-prompt-templates") &&
+		!a.startsWith("--no-themes") &&
+		!a.startsWith("--no-extensions")
 	);
-	const child = spawn(command, [...argvPrefix, ...userArgs], {
+
+	// Reset terminal to sane state before exec replaces us
+	const reset = [
+		"\x1b[?1049l",  // exit alternate screen buffer
+		"\x1b[?1000l",  // disable mouse click tracking
+		"\x1b[?1002l",  // disable mouse drag tracking
+		"\x1b[?1006l",  // disable SGR mouse mode
+		"\x1b[?25h",    // show cursor
+		"\x1b[0m",      // reset attributes
+		"\x1bc",        // full terminal reset (RIS)
+	].join("");
+	process.stdout.write(reset);
+
+	// Exit raw mode if active
+	if (process.stdin.isTTY && process.stdin.isRaw) {
+		process.stdin.setRawMode(false);
+	}
+
+	// Build the exec command — shell `exec` replaces the process entirely,
+	// no orphan child, no race between old and new TUI.
+	const parts = [command, ...argvPrefix, ...userArgs].map(shellEscape);
+	const child = spawn("sh", ["-c", `exec ${parts.join(" ")}`], {
 		stdio: "inherit",
-		detached: true,
 		env: process.env,
 	});
+	// If exec fails for some reason, exit when the child does
+	child.on("close", (code) => process.exit(code ?? 1));
+	// Prevent Node from keeping the event loop alive for other reasons
 	child.unref();
-	process.exit(0);
+
+	// The sh -c exec should have replaced us. If we're still here,
+	// just wait for the child.
+	return undefined as never;
+}
+
+/** Escape a string for POSIX shell */
+function shellEscape(s: string): string {
+	if (/^[a-zA-Z0-9_./:=-]+$/.test(s)) return s;
+	return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 /** Run a command, collect stdout+stderr, resolve with exit code. */
