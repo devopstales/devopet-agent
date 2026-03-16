@@ -73,13 +73,17 @@
 			"./extensions/tool-profile",
 			"./extensions/vault",
 			"./extensions/version-check.ts",
-			"./extensions/web-ui"
+			"./extensions/web-ui",
+			"./extensions/clipboard-diag/index.ts"
 		],
 		"skills": [
 			"./skills"
 		],
 		"prompts": [
 			"./prompts"
+		],
+		"themes": [
+			"./themes"
 		]
 	},
 	"dependencies": {

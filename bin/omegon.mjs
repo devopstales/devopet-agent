@@ -52,10 +52,14 @@ function injectBundledResourceArgs(argv) {
     }
   };
 
+  // Omegon is the sole authority for bundled resources.
+  // Suppress pi's auto-discovery of skills, prompts, and themes (which scans
+  // ~/.pi/agent/*, installed packages, and project .pi/ dirs) so only our
+  // manifest-declared resources load. The --no-* flags disable discovery
+  // but still allow CLI-injected paths (our --extension manifest).
+  // Extensions are NOT suppressed — project-local .pi/extensions/ should still work.
+  injected.push("--no-skills", "--no-prompt-templates", "--no-themes");
   pushPair("--extension", omegonRoot);
-  pushPair("--skill", join(omegonRoot, "skills"));
-  pushPair("--prompt-template", join(omegonRoot, "prompts"));
-  pushPair("--theme", join(omegonRoot, "themes"));
   return injected;
 }
 

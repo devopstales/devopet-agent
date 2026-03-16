@@ -1023,6 +1023,21 @@ function patchPathForCargo(): void {
 	}
 }
 
+/** After Determinate Nix install, add nix to PATH so subsequent installs work. */
+function patchPathForNix(): void {
+	const nixPaths = [
+		"/nix/var/nix/profiles/default/bin",
+		join(homedir(), ".nix-profile", "bin"),
+	];
+	const current = process.env.PATH ?? "";
+	const parts = current.split(":");
+	for (const nixBin of nixPaths) {
+		if (existsSync(nixBin) && !parts.includes(nixBin)) {
+			process.env.PATH = `${nixBin}:${process.env.PATH}`;
+		}
+	}
+}
+
 async function installDeps(ctx: CommandContext, deps: DepStatus[]): Promise<void> {
 	// Sort so prerequisites come first (e.g., cargo before mdserve)
 	const sorted = sortByRequires(deps);
@@ -1058,8 +1073,11 @@ async function installDeps(ctx: CommandContext, deps: DepStatus[]): Promise<void
 			(line) => ctx.ui.notify(line),
 		);
 
-		// Rustup installs to ~/.cargo/bin — patch PATH immediately so the rest
-		// of the install sequence (e.g. mdserve) can find cargo.
+		// Patch PATH immediately after installing bootstrapping deps so the rest
+		// of the install sequence can find them without a new shell.
+		if (dep.id === "nix" && exitCode === 0) {
+			patchPathForNix();
+		}
 		if (dep.id === "cargo" && exitCode === 0) {
 			patchPathForCargo();
 		}

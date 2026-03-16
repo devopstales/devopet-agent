@@ -46,46 +46,9 @@ function hasCmd(cmd: string): boolean {
 	}
 }
 
-/**
- * Detect immutable/atomic Linux distros (Bazzite, Silverblue, Kinoite, etc.)
- * where dnf/apt are unavailable or aliased to guides. These distros typically
- * use Homebrew (Linuxbrew) or Flatpak for user-space packages.
- */
-function isImmutableLinux(): boolean {
-	if (process.platform !== "linux") return false;
-	try {
-		const osRelease = execSync("cat /etc/os-release 2>/dev/null", { encoding: "utf-8" });
-		// Bazzite, Silverblue, Kinoite, Aurora, Bluefin — all Fedora Atomic variants
-		return /VARIANT_ID=.*(silverblue|kinoite|bazzite|aurora|bluefin|atomic)/i.test(osRelease)
-			|| /ostree/i.test(osRelease);
-	} catch {
-		return false;
-	}
-}
-
-/** Cached immutable Linux detection */
-const _isImmutable = isImmutableLinux();
-
 /** Get the best install command for the current platform */
 export function bestInstallCmd(dep: Dep): string | undefined {
 	const plat = process.platform === "darwin" ? "darwin" : "linux";
-
-	// On immutable Linux (Bazzite, Silverblue, etc.), dnf/apt are unavailable
-	// or aliased to documentation guides. Prefer brew commands.
-	// On regular Linux, prefer non-brew (apt/dnf) unless brew is the only option.
-	const hasBrew = hasCmd("brew");
-	if (plat === "linux" && (_isImmutable || !hasBrew)) {
-		// Immutable: must use brew (skip apt/dnf). Regular without brew: skip brew commands.
-		const candidates = dep.install.filter((o) => o.platform === plat || o.platform === "any");
-		if (_isImmutable && hasBrew) {
-			const brewCmd = candidates.find((o) => o.cmd.startsWith("brew "));
-			if (brewCmd) return brewCmd.cmd;
-		} else if (!_isImmutable) {
-			const nonBrew = candidates.find((o) => !o.cmd.startsWith("brew "));
-			if (nonBrew) return nonBrew.cmd;
-		}
-	}
-
 	return (
 		dep.install.find((o) => o.platform === plat)?.cmd ??
 		dep.install.find((o) => o.platform === "any")?.cmd ??
@@ -109,15 +72,27 @@ export function installHints(dep: Dep): string[] {
 export const DEPS: Dep[] = [
 	// --- Core: most users want these ---
 	{
+		id: "nix",
+		name: "Nix",
+		purpose: "Universal package manager — installs all other dependencies on any OS",
+		usedBy: ["bootstrap"],
+		tier: "core",
+		check: () => hasCmd("nix"),
+		install: [
+			{ platform: "any", cmd: "curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install" },
+		],
+		url: "https://zero-to-nix.com",
+	},
+	{
 		id: "ollama",
 		name: "Ollama",
 		purpose: "Local model inference, embeddings for semantic memory search",
 		usedBy: ["local-inference", "project-memory", "cleave", "offline-driver"],
 		tier: "core",
 		check: () => hasCmd("ollama"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install ollama" },
-			{ platform: "linux", cmd: "curl -fsSL https://ollama.com/install.sh | sh" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#ollama" },
 		],
 		url: "https://ollama.com",
 	},
@@ -128,9 +103,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["render", "view"],
 		tier: "core",
 		check: () => hasCmd("d2"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install d2" },
-			{ platform: "linux", cmd: "curl -fsSL https://d2lang.com/install.sh | sh" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#d2" },
 		],
 		url: "https://d2lang.com",
 	},
@@ -143,10 +118,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["01-auth"],
 		tier: "recommended",
 		check: () => hasCmd("gh"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install gh" },
-			{ platform: "linux", cmd: "brew install gh" },
-			{ platform: "linux", cmd: "sudo apt install gh || sudo dnf install gh" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#gh" },
 		],
 		url: "https://cli.github.com",
 	},
@@ -157,9 +131,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["view"],
 		tier: "recommended",
 		check: () => hasCmd("pandoc"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install pandoc" },
-			{ platform: "linux", cmd: "sudo apt install pandoc || sudo dnf install pandoc" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#pandoc" },
 		],
 		url: "https://pandoc.org",
 	},
@@ -171,9 +145,7 @@ export const DEPS: Dep[] = [
 		tier: "recommended",
 		check: () => hasCmd("cargo"),
 		install: [
-			// -s -- -y passes -y to rustup-init, suppressing the interactive
-			// "1) Proceed / 2) Customise / 3) Cancel" prompt that otherwise hangs.
-			{ platform: "any", cmd: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#rustup && rustup default stable" },
 		],
 		url: "https://rustup.rs",
 	},
@@ -199,10 +171,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["view"],
 		tier: "optional",
 		check: () => hasCmd("rsvg-convert"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install librsvg" },
-			{ platform: "linux", cmd: "brew install librsvg" },
-			{ platform: "linux", cmd: "sudo apt install librsvg2-bin" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#librsvg" },
 		],
 	},
 	{
@@ -212,10 +183,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["view"],
 		tier: "optional",
 		check: () => hasCmd("pdftoppm"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install poppler" },
-			{ platform: "linux", cmd: "brew install poppler" },
-			{ platform: "linux", cmd: "sudo apt install poppler-utils" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#poppler_utils" },
 		],
 	},
 	{
@@ -225,9 +195,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["render"],
 		tier: "optional",
 		check: () => hasCmd("uv"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install uv" },
-			{ platform: "any", cmd: "curl -LsSf https://astral.sh/uv/install.sh | sh" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#uv" },
 		],
 		url: "https://docs.astral.sh/uv/",
 	},
@@ -238,10 +208,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["01-auth"],
 		tier: "optional",
 		check: () => hasCmd("aws"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install awscli" },
-			{ platform: "linux", cmd: "brew install awscli" },
-			{ platform: "linux", cmd: "sudo apt install awscli" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#awscli2" },
 		],
 	},
 	{
@@ -251,10 +220,9 @@ export const DEPS: Dep[] = [
 		usedBy: ["01-auth"],
 		tier: "optional",
 		check: () => hasCmd("kubectl"),
+		requires: ["nix"],
 		install: [
-			{ platform: "darwin", cmd: "brew install kubectl" },
-			{ platform: "linux", cmd: "brew install kubectl" },
-			{ platform: "linux", cmd: "sudo apt install kubectl" },
+			{ platform: "any", cmd: "nix profile install nixpkgs#kubectl" },
 		],
 	},
 ];
