@@ -319,7 +319,10 @@ export default function (pi: ExtensionAPI) {
     setTimeout(async () => {
       try {
         const { DEPS } = await import("../bootstrap/deps.ts");
-        const probed = DEPS.filter(d => d.tier === "core" || d.tier === "recommended");
+        // Probe runtime deps only — skip install-time bootstrapping tools (nix)
+        // that Omegon doesn't call directly at runtime.
+        const INSTALL_ONLY = new Set(["nix"]);
+        const probed = DEPS.filter(d => (d.tier === "core" || d.tier === "recommended") && !INSTALL_ONLY.has(d.id));
         const missing = probed.filter(d => !d.check());
         if (missing.length === 0) return;
 

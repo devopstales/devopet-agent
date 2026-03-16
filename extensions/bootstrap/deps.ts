@@ -79,7 +79,7 @@ export const DEPS: Dep[] = [
 		tier: "core",
 		check: () => hasCmd("nix"),
 		install: [
-			{ platform: "any", cmd: "curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install" },
+			{ platform: "any", cmd: "curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm" },
 		],
 		url: "https://zero-to-nix.com",
 	},
