@@ -11,6 +11,7 @@
 
 import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
 import type { Component, TUI } from "@styrene-lab/pi-tui";
+import { truncateToWidth } from "@styrene-lab/pi-tui";
 import {
   LOGO_LINES,
   LINE_WIDTH,
@@ -157,7 +158,7 @@ class SplashHeader implements Component {
 
     lines.push(""); // top spacer
     for (const row of logoFrame) {
-      lines.push(padStr + row);
+      lines.push(truncateToWidth(padStr + row, width));
     }
 
     // Checklist
@@ -186,13 +187,11 @@ class SplashHeader implements Component {
     const pad = Math.max(0, Math.floor((width - contentWidth) / 2));
     line += " ".repeat(pad);
 
-    for (const item of state.items) {
+    for (const item of visibleItems) {
       let indicator: string;
       let labelColor: string;
 
       switch (item.state) {
-        case "hidden":
-          continue;
         case "pending":
           indicator = `${DIM}${PENDING_GLYPH}${RESET}`;
           labelColor = DIM;
@@ -209,12 +208,16 @@ class SplashHeader implements Component {
           indicator = `${ERROR_CLR}${FAIL_GLYPH}${RESET}`;
           labelColor = ERROR_CLR;
           break;
+        default:
+          indicator = `${DIM}${PENDING_GLYPH}${RESET}`;
+          labelColor = DIM;
+          break;
       }
 
       line += `${indicator}${labelColor}${item.label}${RESET}  `;
     }
 
-    lines.push(line);
+    lines.push(truncateToWidth(line, width));
     return lines;
   }
 
@@ -250,7 +253,7 @@ class BrandedHeader implements Component {
     const logo = `${BOLD}${PRIMARY}omegon${RESET} ${DIM}v${this.version}${RESET}`;
     const help = `${DIM}/ commands  ${PRIMARY}esc${RESET}${DIM} interrupt  ${PRIMARY}ctrl+c${RESET}${DIM} clear/exit${RESET}`;
     lines.push("");
-    lines.push(` ${logo}   ${help}`);
+    lines.push(truncateToWidth(` ${logo}   ${help}`, width));
     lines.push("");
 
     this.cachedLines = lines;
@@ -286,7 +289,11 @@ export default function splashExtension(pi: ExtensionAPI): void {
     } catch { /* best effort */ }
     if (!ctx.hasUI) return;
 
-    // Set the animated splash header (skip animation on narrow terminals)
+    // Set the animated splash header (skip animation on narrow terminals).
+    // NOTE: setHeader() only replaces the builtInHeader slot in pi's
+    // headerContainer. If a changelog notification was added (only happens
+    // after a version update), it renders as a one-liner below the splash.
+    // This is acceptable — it only appears once per update.
     const termWidth = process.stdout.columns ?? 80;
     if (termWidth < LINE_WIDTH + 4) {
       // Too narrow for the ASCII art — use minimal header immediately
