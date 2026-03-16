@@ -2,8 +2,8 @@
  * Custom footer component for the unified dashboard.
  *
  * Implements two rendering modes:
- *   Layer 0 (compact): 1 line — dashboard summary only
- *   Layer 1 (raised):  uncapped — section details, branch tree, and footer metadata
+ *   Layer 0 (compact): persistent runtime HUD with compact telemetry cards
+ *   Layer 1 (raised):  uncapped workspace + lifecycle surfaces above the HUD
  *
  * Reads sharedState for design-tree, openspec, and cleave data.
  * Reads footerData for git branch, extension statuses, provider count.
@@ -218,148 +218,9 @@ export class DashboardFooter implements Component {
   // ── Compact Mode (Layer 0) ────────────────────────────────────
 
   private renderCompact(width: number): string[] {
-    const theme = this.theme;
-    const lines: string[] = [];
-
-    // Width breakpoints — expand details as space allows
-    const wide = width >= 120;
-    const ultraWide = width >= 160;
-
-    // Line 1: Dashboard summary + context gauge
-    const dashParts: PrioritySegment[] = [];
-
-    // Design tree summary — responsive expansion
-    const dt = sharedState.designTree;
-    if (dt && dt.nodeCount > 0) {
-      if (ultraWide && dt.focusedNode) {
-        // Ultra-wide: show focused node title inline
-        const statusIcon = dt.focusedNode.status === "resolved" ? "◉"
-          : dt.focusedNode.status === "decided" ? "●"
-          : dt.focusedNode.status === "implementing" ? "⚙"
-          : dt.focusedNode.status === "exploring" ? "◐"
-          : "○";
-        const qSuffix = dt.focusedNode.questions.length > 0
-          ? theme.fg("dim", ` (${dt.focusedNode.questions.length}?)`)
-          : "";
-        dashParts.push({
-          text: theme.fg("accent", `◈ ${dt.decidedCount}/${dt.nodeCount}`) +
-            ` ${statusIcon} ${dt.focusedNode.title}${qSuffix}`,
-        });
-      } else if (wide) {
-        // Wide: spell out counts, no node IDs (visible in raised mode)
-        const parts = [`${dt.decidedCount} decided`];
-        if (dt.exploringCount > 0) parts.push(`${dt.exploringCount} exploring`);
-        if (dt.implementingCount > 0) parts.push(`${dt.implementingCount} impl`);
-        if (dt.openQuestionCount > 0) parts.push(`${dt.openQuestionCount}?`);
-        dashParts.push({ text: theme.fg("accent", `◈ Design`) + theme.fg("dim", ` ${parts.join(", ")}`) });
-      } else {
-        // Narrow: terse
-        let dtSummary = `◈ D:${dt.decidedCount}`;
-        if (dt.implementingCount > 0) dtSummary += ` I:${dt.implementingCount}`;
-        dtSummary += `/${dt.nodeCount}`;
-        dashParts.push({ text: theme.fg("accent", dtSummary) });
-      }
-    }
-
-    // OpenSpec summary — responsive expansion
-    const os = sharedState.openspec;
-    if (os && os.changes.length > 0) {
-      const active = os.changes.filter(c => c.stage !== "archived");
-      if (active.length > 0) {
-        if (wide) {
-          // Wide: aggregate progress only — individual changes visible in raised mode
-          const totalDone = active.reduce((s, c) => s + c.tasksDone, 0);
-          const totalAll = active.reduce((s, c) => s + c.tasksTotal, 0);
-          const allDone = totalAll > 0 && totalDone >= totalAll;
-          const progress = totalAll > 0
-            ? theme.fg(allDone ? "success" : "dim", ` ${totalDone}/${totalAll}`)
-            : "";
-          const icon = allDone ? theme.fg("success", " ✓") : "";
-          dashParts.push({
-            text: theme.fg("accent", `◎ Impl`) +
-              theme.fg("dim", ` ${active.length} change${active.length > 1 ? "s" : ""}`) +
-              progress + icon,
-          });
-        } else {
-          dashParts.push({ text: theme.fg("accent", `◎ Impl:${active.length}`) });
-        }
-      }
-    }
-
-    // Cleave summary — responsive expansion
-    const cl = sharedState.cleave;
-    if (cl) {
-      if (cl.status === "idle") {
-        dashParts.push({ text: theme.fg("dim", "⚡ idle") });
-      } else if (cl.status === "done") {
-        const childInfo = wide && cl.children
-          ? ` ${cl.children.filter(c => c.status === "done").length}/${cl.children.length}`
-          : "";
-        dashParts.push({ text: theme.fg("success", `⚡ done${childInfo}`) });
-      } else if (cl.status === "failed") {
-        dashParts.push({ text: theme.fg("error", "⚡ fail") });
-      } else {
-        // Active dispatch — show child progress + lastLine activity hint
-        if (wide && cl.children && cl.children.length > 0) {
-          const done = cl.children.filter(c => c.status === "done").length;
-          const running = cl.children.filter(c => c.status === "running").length;
-          // Show the last active line from whichever running child has one
-          const activeChild = cl.children.find(c => c.status === "running" && c.lastLine);
-          const activityHint = activeChild?.lastLine
-            ? theme.fg("dim", `  ${activeChild.lastLine.slice(0, 40)}…`)
-            : "";
-          dashParts.push({
-            text: theme.fg("warning", `⚡ ${cl.status}`) +
-              theme.fg("dim", ` ${done}✓ ${running}⟳ /${cl.children.length}`) +
-              activityHint,
-          });
-        } else {
-          dashParts.push({ text: theme.fg("warning", `⚡ ${cl.status}`) });
-        }
-      }
-    }
-
-    const recoveryLine = this.buildRecoveryCompactSummary(width, wide);
-    if (recoveryLine) {
-      dashParts.push({ text: recoveryLine });
-    }
-
-    // Context gauge — wider bar at wider terminals
-    const barWidth = ultraWide ? 24 : wide ? 20 : 16;
-    const gauge = this.buildContextGauge(barWidth);
-    if (gauge) {
-      dashParts.push({ text: gauge });
-    }
-
-    // Compact mode should stay dashboard-first, but still expose the active
-    // provider/model in a terse way so multi-provider routing is visible.
-    const ctx = this.ctxRef;
-    const model = ctx?.model;
-    if (model && wide) {
-      const multiProvider = this.footerData.getAvailableProviderCount() > 1;
-      const driverLabel = multiProvider ? model.provider : "default";
-      const modelLabel = multiProvider ? `${driverLabel}/${model.id}` : model.id;
-      dashParts.push({
-        text: theme.fg("dim", "Model ") + theme.fg("muted", modelLabel),
-        priority: "low",
-      });
-    }
-
-    // Append /dash hint for discoverability (varies by mode)
-    const dashHint = this.dashState.mode === "panel"
-      ? theme.fg("dim", "/dashboard to close")
-      : theme.fg("dim", "/dash to expand");
-
-    const compactLine = joinPrioritySegments(width, [
-      ...dashParts,
-      { text: dashHint, priority: "low" },
-    ]);
-    lines.push(compactLine || truncateToWidth(dashHint, width, "…"));
-
-    // Compact mode is intentionally dashboard-only. Detailed footer metadata
-    // stays in raised mode so the compact footer does not look like the built-in
-    // footer is still leaking through.
-    return lines;
+    // Compact mode is the persistent runtime HUD. Raised mode should reveal the
+    // work surfaces above it, not replace it with a different footer grammar.
+    return this.buildFooterZone(width, width, true);
   }
 
   // ── Raised Mode (Layer 1) ─────────────────────────────────────
@@ -368,6 +229,55 @@ export class DashboardFooter implements Component {
     if (width < RAISED_NARROW_WIDTH) return this.renderRaisedNarrow(width);
     if (width < RAISED_WIDE_WIDTH) return this.renderRaisedMedium(width);
     return this.renderRaisedWide(width);
+  }
+
+  private buildRaisedHeaderSummary(width: number): string {
+    const theme = this.theme;
+    const summary: string[] = [];
+    const dt = sharedState.designTree;
+    const os = sharedState.openspec;
+    const cl = sharedState.cleave;
+
+    if (dt) {
+      const parts: string[] = [];
+      if (dt.decidedCount > 0) parts.push(theme.fg("success", `${dt.decidedCount} decided`));
+      if (dt.implementingCount > 0) parts.push(theme.fg("accent", `${dt.implementingCount} implementing`));
+      if (dt.exploringCount > 0) parts.push(theme.fg("muted", `${dt.exploringCount} exploring`));
+      if (dt.openQuestionCount > 0) parts.push(theme.fg("dim", `${dt.openQuestionCount}?`));
+      if (parts.length > 0) summary.push(`${theme.fg("accent", "Design")} ${parts.join(theme.fg("dim", " · "))}`);
+    }
+
+    if (os) {
+      const active = os.changes.filter((c) => c.stage !== "archived");
+      if (active.length > 0) {
+        const totalDone = active.reduce((sum, c) => sum + c.tasksDone, 0);
+        const totalAll = active.reduce((sum, c) => sum + c.tasksTotal, 0);
+        const progress = totalAll > 0 ? theme.fg("dim", `${totalDone}/${totalAll}`) : theme.fg("dim", `${active.length}`);
+        summary.push(`${theme.fg("accent", "Impl")} ${progress}`);
+      }
+    }
+
+    if (cl && cl.status !== "idle") {
+      const children = cl.children ?? [];
+      const doneCount = children.filter((c) => c.status === "done").length;
+      const failCount = children.filter((c) => c.status === "failed").length;
+      const parts = [theme.fg(cl.status === "done" ? "success" : cl.status === "failed" ? "error" : "warning", cl.status)];
+      if (children.length > 0) parts.push(theme.fg("dim", `${doneCount}/${children.length}`));
+      if (failCount > 0) parts.push(theme.fg("error", `${failCount}✕`));
+      summary.push(`${theme.fg("accent", "Cleave")} ${parts.join(theme.fg("dim", " · "))}`);
+    }
+
+    return joinPrioritySegments(width, summary.map((text) => ({ text, priority: "low" as const })), "   ");
+  }
+
+  private buildRaisedBodySeparator(width: number): string {
+    return this.theme.fg("dim", BOX.h.repeat(Math.max(0, width)));
+  }
+
+  private buildRaisedTopLine(topLine: string, innerWidth: number): string {
+    const summaryWidth = Math.max(0, innerWidth - visibleWidth(topLine) - 1);
+    const headerSummary = this.buildRaisedHeaderSummary(summaryWidth);
+    return headerSummary ? leftRight(topLine, headerSummary, innerWidth - 1) : topLine;
   }
 
   /**
@@ -491,7 +401,7 @@ export class DashboardFooter implements Component {
     // Render at natural content height — the box grows upward from the footer
     // as branches/specs/cleave tasks are added.  Full-screen expansion lives
     // in the /dashboard overlay (overlay.ts), not here.
-    return this.renderBoxed(contentLines, this.buildFooterZone(innerWidth), topLine, width);
+    return this.renderBoxed(contentLines, this.buildFooterZone(innerWidth, width), topLine, width);
   }
 
   /**
@@ -499,63 +409,74 @@ export class DashboardFooter implements Component {
    */
   private renderRaisedMedium(width: number): string[] {
     const innerWidth = width - 4;
-    const leftColWidth = Math.floor((innerWidth - 1) / 2);
-    const rightColWidth = innerWidth - leftColWidth - 1;
+    const preferredLeftWidth = Math.floor((innerWidth - 1) * 0.6);
+    const preferredRightWidth = innerWidth - preferredLeftWidth - 1;
     const colDivider = this.theme.fg("dim", BOX.v);
 
     const branchLines = this.buildBranchTree(innerWidth);
     const [topLine = "", ...extraBranchLines] = branchLines;
-
-    // Same 1-char alignment correction as renderRaisedStacked.
     const alignedBranchLines = extraBranchLines.map((l) => " " + l);
 
-    const leftLines = [
-      ...this.buildDesignTreeLines(leftColWidth),
-      ...this.buildRecoveryLines(leftColWidth),
-      ...this.buildCleaveLines(leftColWidth),
+    const rightLines = [
+      ...this.buildOpenSpecLines(preferredRightWidth),
+      ...this.buildCleaveLines(preferredRightWidth),
+      ...this.buildRecoveryLines(preferredRightWidth),
     ];
-    const rightLines = this.buildOpenSpecLines(rightColWidth);
+    const useRail = rightLines.length > 0;
+    const leftLines = this.buildDesignTreeLines(useRail ? preferredLeftWidth : innerWidth);
 
     const contentLines: string[] = [
       ...alignedBranchLines,
-      ...(leftLines.length > 0 || rightLines.length > 0
-        ? mergeColumns(leftLines, rightLines, leftColWidth, rightColWidth, colDivider)
-        : []),
+      this.buildRaisedBodySeparator(innerWidth),
+      ...(useRail
+        ? mergeColumns(leftLines, rightLines, preferredLeftWidth, preferredRightWidth, colDivider)
+        : leftLines),
     ];
 
-    // Same as stacked: natural content height, grows up from footer as needed.
-    return this.renderBoxed(contentLines, this.buildFooterZone(innerWidth), topLine, width);
+    return this.renderBoxed(
+      contentLines,
+      this.buildFooterZone(innerWidth, width),
+      this.buildRaisedTopLine(topLine, innerWidth),
+      width,
+    );
   }
 
   /**
-   * Wide layout (140+ cols) keeps the same work summary above but gives the
-   * lower footer zone enough width to render distinct horizontal summary cards.
+   * Wide layout (140+ cols) prioritizes a design-dominant main workspace with a
+   * narrower contextual rail for implementation, cleave, and recovery state.
    */
   private renderRaisedWide(width: number): string[] {
     const innerWidth = width - 4;
-    const leftColWidth = Math.floor((innerWidth - 1) / 2);
-    const rightColWidth = innerWidth - leftColWidth - 1;
+    const preferredLeftWidth = Math.floor((innerWidth - 1) * 0.72);
+    const preferredRightWidth = innerWidth - preferredLeftWidth - 1;
     const colDivider = this.theme.fg("dim", BOX.v);
 
     const branchLines = this.buildBranchTree(innerWidth);
     const [topLine = "", ...extraBranchLines] = branchLines;
     const alignedBranchLines = extraBranchLines.map((l) => " " + l);
 
-    const leftLines = [
-      ...this.buildDesignTreeLines(leftColWidth),
-      ...this.buildRecoveryLines(leftColWidth),
-      ...this.buildCleaveLines(leftColWidth),
+    const rightLines = [
+      ...this.buildOpenSpecLines(preferredRightWidth),
+      ...this.buildCleaveLines(preferredRightWidth),
+      ...this.buildRecoveryLines(preferredRightWidth),
     ];
-    const rightLines = this.buildOpenSpecLines(rightColWidth);
+    const useRail = rightLines.length > 0;
+    const leftLines = this.buildDesignTreeLines(useRail ? preferredLeftWidth : innerWidth);
 
     const contentLines: string[] = [
       ...alignedBranchLines,
-      ...(leftLines.length > 0 || rightLines.length > 0
-        ? mergeColumns(leftLines, rightLines, leftColWidth, rightColWidth, colDivider)
-        : []),
+      this.buildRaisedBodySeparator(innerWidth),
+      ...(useRail
+        ? mergeColumns(leftLines, rightLines, preferredLeftWidth, preferredRightWidth, colDivider)
+        : leftLines),
     ];
 
-    return this.renderBoxed(contentLines, this.buildFooterZone(innerWidth), topLine, width);
+    return this.renderBoxed(
+      contentLines,
+      this.buildFooterZone(innerWidth),
+      this.buildRaisedTopLine(topLine, innerWidth),
+      width,
+    );
   }
 
   // ── HUD Footer Zone (raised mode) ────────────────────────────
@@ -810,16 +731,17 @@ export class DashboardFooter implements Component {
 
   private formatModelTopologyLine(summary: DashboardModelRoleSummary, width: number, compact = false): string {
     const theme = this.theme;
-    // In compact mode, use single-char glyphs to save space
-    const sourceBadge = compact
+    const forceCompact = compact || width < 40;
+    // In compact mode, use single-char glyphs to save space.
+    const sourceBadge = forceCompact
       ? (summary.source === "local" ? theme.fg("accent", "⌂") : summary.source === "cloud" ? theme.fg("muted", "☁") : theme.fg("dim", "?"))
       : (summary.source === "local"
         ? theme.fg("accent", "local")
         : summary.source === "cloud"
           ? theme.fg("muted", "cloud")
           : theme.fg("dim", summary.source));
-    const stateBadge = compact
-      ? "" // state is implicit in compact mode — icon color carries meaning
+    const stateBadge = forceCompact
+      ? ""
       : (summary.state === "active"
         ? theme.fg("success", "active")
         : summary.state === "offline"
@@ -828,10 +750,18 @@ export class DashboardFooter implements Component {
             ? theme.fg("warning", "fallback")
             : theme.fg("dim", summary.state));
     const normalized = normalizeLocalModelLabel(summary.model);
-    const alias = compact ? "" : (normalized.alias ? theme.fg("dim", `alias ${normalized.alias}`) : "");
-    const sep = compact ? " " : ` ${theme.fg("dim", "·")} `;
-    const primary = `${theme.fg("accent", summary.label)}${sep}${theme.fg("muted", normalized.canonical)}`;
-    return truncateToWidth(composePrimaryMetaLine(width, primary, [sourceBadge, stateBadge, summary.detail ? theme.fg("dim", summary.detail) : "", alias].filter(Boolean)), width, "…");
+    const alias = forceCompact ? "" : (normalized.alias ? theme.fg("dim", `alias ${normalized.alias}`) : "");
+    const roleLabel = forceCompact ? summary.label.slice(0, 1) : summary.label;
+    const primary = `${theme.fg("accent", roleLabel)} ${theme.fg("muted", normalized.canonical)}`;
+    return truncateToWidth(
+      composePrimaryMetaLine(
+        width,
+        primary,
+        [sourceBadge, stateBadge, summary.detail ? theme.fg("dim", summary.detail) : "", alias].filter(Boolean),
+      ),
+      width,
+      "…",
+    );
   }
 
   private buildSummaryCard(title: string, lines: string[], width: number): string[] {
@@ -839,21 +769,48 @@ export class DashboardFooter implements Component {
     return [this.buildHudSectionDivider(title, width), ...lines.map((line) => truncateToWidth(`  ${line}`, width, "…"))];
   }
 
-  private buildFooterZone(width: number): string[] {
+  private buildSummaryCardForColumn(title: string, lines: string[], columnWidth: number, contentWidth: number): string[] {
+    if (lines.length === 0) return [];
+    return this.buildSummaryCard(title, lines, Math.max(1, columnWidth)).map((line) => truncateToWidth(line, Math.max(1, contentWidth), "…"));
+  }
+
+  private buildFooterHintLine(width: number): string {
+    const hint = this.dashState.mode === "panel"
+      ? "/dashboard to close"
+      : "/dash to expand  ·  /dashboard modal";
+    return truncateToWidth(this.theme.fg("dim", hint), Math.max(1, width), "…");
+  }
+
+  private buildFooterZone(width: number, totalWidth = width, compactPersistent = false): string[] {
     this._updateTokenCache();
 
-    const contextCard = this.buildSummaryCard("context", this.buildHudContextLines(Math.max(1, width - 2)).map((l) => l.trimStart()), width);
-    const modelCard = this.buildSummaryCard(
-      "models",
-      this.buildModelTopologySummaries().map((s) => this.formatModelTopologyLine(s, Math.max(1, width - 2), width < 120)),
-      width,
-    );
-    const memoryCard = this.buildSummaryCard("memory", (() => {
-      const line = this.buildHudMemoryLine(Math.max(1, width - 2));
-      return line ? [line.trimStart()] : [];
-    })(), width);
-    const systemCard = this.buildSummaryCard("system", this.buildHudSystemLines(Math.max(1, width - 2)).map((l) => l.trimStart()), width);
-    const recoveryCard = this.buildSummaryCard("recovery", this.buildRecoveryLines(Math.max(1, width - 2)).map((l) => l.trimStart()), width);
+    const buildCards = (cardWidth: number) => {
+      const safeWidth = Math.max(1, cardWidth);
+      return {
+        contextCard: this.buildSummaryCard("context", this.buildHudContextLines(Math.max(1, safeWidth - 2)).map((l) => l.trimStart()), safeWidth),
+        modelCard: this.buildSummaryCard(
+          "models",
+          this.buildModelTopologySummaries().map((s) => this.formatModelTopologyLine(s, Math.max(1, safeWidth - 2), safeWidth < 44)),
+          safeWidth,
+        ),
+        memoryCard: this.buildSummaryCard("memory", (() => {
+          const line = this.buildHudMemoryLine(Math.max(1, safeWidth - 2));
+          return line ? [line.trimStart()] : [];
+        })(), safeWidth),
+        systemCard: this.buildSummaryCard("system", this.buildHudSystemLines(Math.max(1, safeWidth - 2)).map((l) => l.trimStart()), safeWidth),
+        recoveryCard: this.buildSummaryCard(
+          "recovery",
+          (compactPersistent
+            ? this.buildRecoveryCompactLines(Math.max(1, safeWidth - 2))
+            : this.buildRecoveryLines(Math.max(1, safeWidth - 2))
+          ).map((l) => l.trimStart()),
+          safeWidth,
+        ),
+      };
+    };
+
+    const { contextCard, modelCard, memoryCard, systemCard, recoveryCard } = buildCards(width);
+    const footerHintLine = compactPersistent ? this.buildFooterHintLine(width) : undefined;
 
     if (width < RAISED_NARROW_WIDTH) {
       return [
@@ -862,6 +819,7 @@ export class DashboardFooter implements Component {
         ...memoryCard,
         ...(recoveryCard.length > 0 ? recoveryCard : []),
         ...systemCard,
+        ...(footerHintLine ? [footerHintLine] : []),
       ];
     }
 
@@ -871,34 +829,89 @@ export class DashboardFooter implements Component {
       const right = [...modelCard, ...(recoveryCard.length > 0 ? recoveryCard : []), ...systemCard];
       const colWidth = Math.floor((width - 1) / 2);
       const rightWidth = width - colWidth - 1;
-      return mergeColumns(left, right, colWidth, rightWidth, this.theme.fg("dim", BOX.v));
+      const merged = mergeColumns(left, right, colWidth, rightWidth, this.theme.fg("dim", BOX.v));
+      return footerHintLine ? [...merged, footerHintLine] : merged;
     }
 
-    // Wide: three columns — context+memory | models | system+recovery
-    // Gives each column ~50 chars at 160 cols, enough to avoid truncation.
-    const leftCard = [...contextCard, ...memoryCard];
-    const midCard = modelCard;
-    const rightCard = [...(recoveryCard.length > 0 ? recoveryCard : []), ...systemCard];
-    const colW = Math.floor((width - 2) / 3);
-    const lastColW = width - colW * 2 - 2;
+    // Wide/full-screen: keep the final memory|system divider running all the way
+    // to the box base, and align that divider with the raised body split above.
+    // In persistent compact mode there is no upper split, so use a balanced
+    // four-column HUD instead of the raised work-area proportions.
     const divider = this.theme.fg("dim", BOX.v);
-    const leftMid = mergeColumns(leftCard, midCard, colW, colW, divider);
-    return mergeColumns(leftMid, rightCard, colW * 2 + 1, lastColW, divider);
+    const mainSplit = compactPersistent
+      ? Math.floor((totalWidth - 1) * 0.75)
+      : Math.floor((totalWidth - 1) * 0.72);
+    const leftTelemetryWidth = Math.max(3, mainSplit - 2);
+    const rightTelemetryWidth = Math.max(1, totalWidth - mainSplit - 1);
+
+    const col1W = Math.max(1, Math.floor(leftTelemetryWidth * 0.35));
+    const col2W = Math.max(1, Math.floor(leftTelemetryWidth * 0.40));
+    const col3W = Math.max(1, leftTelemetryWidth - col1W - col2W);
+    const col4W = rightTelemetryWidth;
+    const wideCards = {
+      contextCard: this.buildSummaryCardForColumn("context", this.buildHudContextLines(Math.max(1, col1W - 2)).map((l) => l.trimStart()), col1W, col1W),
+      modelCard: this.buildSummaryCardForColumn(
+        "models",
+        this.buildModelTopologySummaries().map((s) => this.formatModelTopologyLine(s, Math.max(1, col2W - 2), col2W < 44)),
+        col2W,
+        col2W,
+      ),
+      memoryCard: this.buildSummaryCardForColumn("memory", (() => {
+        const line = this.buildHudMemoryLine(Math.max(1, col3W - 2));
+        return line ? [line.trimStart()] : [];
+      })(), col3W, col3W),
+      systemCard: this.buildSummaryCardForColumn("system", this.buildHudSystemLines(Math.max(1, col4W - 2)).map((l) => l.trimStart()), col4W, col4W),
+      recoveryCard: this.buildSummaryCardForColumn(
+        "recovery",
+        (compactPersistent
+          ? this.buildRecoveryCompactLines(Math.max(1, col4W - 2))
+          : this.buildRecoveryLines(Math.max(1, col4W - 2))
+        ).map((l) => l.trimStart()),
+        col4W,
+        col4W,
+      ),
+    };
+    const col1 = wideCards.contextCard;
+    const col2 = wideCards.modelCard;
+    const col3 = wideCards.memoryCard;
+    const col4 = [...(wideCards.recoveryCard.length > 0 ? wideCards.recoveryCard : []), ...wideCards.systemCard];
+
+    const rows = Math.max(col1.length, col2.length, col3.length, col4.length);
+    const merged: string[] = [];
+    for (let i = 0; i < rows; i++) {
+      const cell1 = i < col1.length
+        ? padRight(truncateToWidth(col1[i], col1W, "…"), col1W)
+        : " ".repeat(col1W);
+      const cell2 = i < col2.length
+        ? padRight(truncateToWidth(col2[i], col2W, "…"), col2W)
+        : " ".repeat(col2W);
+      const cell3 = i < col3.length
+        ? padRight(truncateToWidth(col3[i], col3W, "…"), col3W)
+        : " ".repeat(col3W);
+      const cell4 = i < col4.length
+        ? padRight(truncateToWidth(col4[i], col4W, "…"), col4W)
+        : " ".repeat(col4W);
+      merged.push(`${cell1}${divider}${cell2}${divider}${cell3}${divider}${cell4}`);
+    }
+    return footerHintLine ? [...merged, footerHintLine] : merged;
   }
 
   // ── Section builders (shared by stacked + wide layouts) ───────
 
-  private buildRecoveryCompactSummary(width: number, wide: boolean): string {
+  private buildRecoveryCompactLines(width: number): string[] {
     const theme = this.theme;
     const recovery = getRecoveryState();
-    if (!recovery) return "";
+    if (!recovery) return [];
 
     // Auto-suppress stale recovery notices in compact mode — they outlive their
     // usefulness quickly and crowd out model/driver/thinking info.
-    if (Date.now() - recovery.timestamp > RECOVERY_STALE_MS) return "";
+    if (Date.now() - recovery.timestamp > RECOVERY_STALE_MS) return [];
+
+    // Collapse non-actionable observational notices in compact mode.
+    if (recovery.action === "observe") return [];
 
     // Past-tense labels for auto-handled actions so they read as status, not
-    // directives.  'escalate' is the only case where the operator must act.
+    // directives. 'escalate' is the only case where the operator must act.
     const actionColor: ThemeColor = recovery.action === "retry" ? "warning"
       : recovery.action === "switch_candidate" || recovery.action === "switch_offline" ? "accent"
       : recovery.action === "cooldown" ? "warning"
@@ -911,18 +924,26 @@ export class DashboardFooter implements Component {
       : recovery.action === "escalate" ? "escalated"
       : "observed";
 
-    // Compact mode: terse badge.  Wide adds provider/model context.
-    // Escalate appends a dim command hint so the operator knows what to do.
-    const summary = wide ? `${recovery.provider}/${recovery.modelId}` : "";
+    // Compact mode stays terse: badge + cooldown, with an explicit command hint
+    // only when operator intervention is required.
     const cooldown = summarizeCooldown(recovery.cooldowns);
     const escalateHint = recovery.action === "escalate"
       ? theme.fg("dim", "→ /set-model-tier")
       : "";
     const icon = recovery.action === "escalate" ? "⚠" : "↺";
-    return composePrimaryMetaLine(width,
-      theme.fg(actionColor, `${icon} ${actionLabel}`),
-      [summary ? theme.fg("dim", summary) : "", cooldown ? theme.fg("dim", cooldown) : "", escalateHint].filter(Boolean),
+
+    const header = composePrimaryMetaLine(
+      width,
+      theme.fg("accent", `${icon} Recovery`) + theme.fg("dim", " · ") + theme.fg(actionColor, actionLabel),
+      [],
     );
+    const meta = [cooldown ? theme.fg("dim", cooldown) : "", escalateHint].filter(Boolean);
+    if (meta.length === 0) return [header];
+
+    return [
+      header,
+      composePrimaryMetaLine(width, "", meta),
+    ];
   }
 
   private buildRecoveryLines(width: number): string[] {
@@ -951,10 +972,10 @@ export class DashboardFooter implements Component {
       ? theme.fg("dim", "→ /set-model-tier to switch provider/driver")
       : "";
 
-    const headerParts = [theme.fg(actionColor, actionLabel), theme.fg("dim", recovery.classification)];
+    const headerParts = [theme.fg("dim", recovery.classification)];
     const lines = [composePrimaryMetaLine(
       width,
-      theme.fg("accent", `${recoveryIcon} Recovery`),
+      theme.fg("accent", `${recoveryIcon} Recovery`) + theme.fg("dim", " · ") + theme.fg(actionColor, actionLabel),
       headerParts,
     )];
     if (escalateHint) lines.push(escalateHint);

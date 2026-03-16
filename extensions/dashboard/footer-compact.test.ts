@@ -36,6 +36,10 @@ function makeContext() {
   };
 }
 
+function hasSectionLabel(lines: string[], label: string): boolean {
+  return lines.some((line) => line.includes(label));
+}
+
 describe("DashboardFooter compact mode", () => {
   beforeEach(() => {
     (sharedState as any).designTree = {
@@ -53,9 +57,20 @@ describe("DashboardFooter compact mode", () => {
       changes: [{ name: "x", stage: "implementing", tasksDone: 0, tasksTotal: 7 }],
     };
     (sharedState as any).cleave = { status: "idle", children: [] };
+    (sharedState as any).lastMemoryInjection = {
+      mode: "semantic",
+      projectFactCount: 30,
+      edgeCount: 0,
+      workingMemoryFactCount: 4,
+      semanticHitCount: 12,
+      episodeCount: 3,
+      globalFactCount: 15,
+      payloadChars: 4800,
+      estimatedTokens: 1200,
+    };
   });
 
-  it("renders a single dashboard-only line in compact mode", () => {
+  it("renders the persistent four-part runtime HUD in compact mode", () => {
     const footer = new DashboardFooter(
       {} as any,
       makeTheme() as any,
@@ -65,10 +80,13 @@ describe("DashboardFooter compact mode", () => {
     footer.setContext(makeContext() as any);
 
     const lines = footer.render(160);
-    assert.equal(lines.length, 1);
+    assert.ok(hasSectionLabel(lines, "context"), lines.join("\n"));
+    assert.ok(hasSectionLabel(lines, "models"), lines.join("\n"));
+    assert.ok(hasSectionLabel(lines, "memory"), lines.join("\n"));
+    assert.ok(hasSectionLabel(lines, "system"), lines.join("\n"));
   });
 
-  it("shows provider-aware model info inline in wide compact mode", () => {
+  it("shows provider-aware model info in the compact models card", () => {
     const footer = new DashboardFooter(
       {} as any,
       makeTheme() as any,
@@ -78,7 +96,26 @@ describe("DashboardFooter compact mode", () => {
     footer.setContext(makeContext() as any);
 
     const lines = footer.render(160);
-    assert.match(lines[0], /openai-codex\/gpt-5\.4/);
+    assert.ok(lines.some((line) => line.includes("gpt-5.4")), lines.join("\n"));
+  });
+
+  it("renders compact mode hints on the base row instead of inside the system card", () => {
+    const footer = new DashboardFooter(
+      {} as any,
+      makeTheme() as any,
+      makeFooterData() as any,
+      { mode: "compact", turns: 0 } satisfies DashboardState,
+    );
+    footer.setContext(makeContext() as any);
+
+    const lines = footer.render(160);
+    const joined = lines.join("\n");
+    const systemLine = lines.find((line) => line.includes("⌂"));
+    assert.ok(systemLine, joined);
+    assert.ok(!systemLine!.includes("/dash to expand"), joined);
+    assert.ok(!systemLine!.includes("/dashboard"), joined);
+    assert.ok(lines.at(-1)?.includes("/dash to expand"), joined);
+    assert.ok(lines.at(-1)?.includes("/dashboard modal"), joined);
   });
 
   it("preserves primary dashboard summaries before truncating low-priority metadata", () => {
@@ -114,11 +151,16 @@ describe("DashboardFooter compact mode", () => {
       },
     } as any);
 
-    const [line] = footer.render(95);
-    assert.ok(line.includes("◈"), line);
-    assert.ok(line.includes("◎"), line);
-    assert.ok(line.includes("⚡ idle"), line);
-    assert.ok(!line.includes("provider-with-a-very-long-name"), line);
-    assert.ok(!line.includes("model-with-a-very-long-identifier"), line);
+    const lines = footer.render(95);
+    const joined = lines.join("\n");
+    assert.ok(hasSectionLabel(lines, "context"), joined);
+    assert.ok(hasSectionLabel(lines, "models"), joined);
+    assert.ok(
+      joined.includes("D model-with-a-very-long-identifier") || joined.includes("Driver model-with-a-very-long-identifier"),
+      joined,
+    );
+    assert.ok(!joined.includes("◈"), joined);
+    assert.ok(!joined.includes("◎"), joined);
+    assert.ok(!joined.includes("⚡ idle"), joined);
   });
 });
