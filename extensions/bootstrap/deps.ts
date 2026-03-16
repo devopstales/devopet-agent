@@ -6,6 +6,9 @@
  */
 
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export type DepTier = "core" | "recommended" | "optional";
 
@@ -36,6 +39,29 @@ export interface InstallOption {
 	/** Shell command */
 	cmd: string;
 }
+
+/**
+ * Ensure well-known tool paths are on PATH before probing.
+ *
+ * Tools installed by Nix, Cargo, etc. land in directories that may not be
+ * in the inherited PATH (e.g. Omegon launched from a shell that predates
+ * the install). We patch once at module load so every hasCmd() call sees them.
+ */
+function ensureToolPaths(): void {
+	const home = homedir();
+	const dirs = [
+		"/nix/var/nix/profiles/default/bin",
+		join(home, ".nix-profile", "bin"),
+		join(home, ".cargo", "bin"),
+	];
+	const current = process.env.PATH ?? "";
+	const parts = current.split(":");
+	const missing = dirs.filter(d => existsSync(d) && !parts.includes(d));
+	if (missing.length > 0) {
+		process.env.PATH = [...missing, current].join(":");
+	}
+}
+ensureToolPaths();
 
 function hasCmd(cmd: string): boolean {
 	try {
