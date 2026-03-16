@@ -190,5 +190,12 @@ export function renderFrame(
 // ---------------------------------------------------------------------------
 // Pre-computed data for the default logo
 // ---------------------------------------------------------------------------
-export { LOGO_LINES, LINE_WIDTH, MARK_ROWS };
+/** Wordmark-only lines (spacer + 7 wordmark rows) for compact terminals. */
+const WORDMARK_LINES: string[] = LOGO_LINES.slice(MARK_ROWS + 1); // skip sigil + first spacer, keep second spacer + wordmark
+// Pad to same width
+for (let i = 0; i < WORDMARK_LINES.length; i++) {
+  WORDMARK_LINES[i] = WORDMARK_LINES[i].padEnd(LINE_WIDTH);
+}
+
+export { LOGO_LINES, WORDMARK_LINES, LINE_WIDTH, MARK_ROWS };
 export { PRIMARY, PRIMARY_DIM, DIM, BRIGHT, SUCCESS, ERROR_CLR, RESET, BOLD };

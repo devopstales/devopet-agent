@@ -14,6 +14,7 @@ import type { Component, TUI } from "@styrene-lab/pi-tui";
 import { truncateToWidth } from "@styrene-lab/pi-tui";
 import {
   LOGO_LINES,
+  WORDMARK_LINES,
   LINE_WIDTH,
   FRAME_INTERVAL_MS,
   TOTAL_FRAMES,
@@ -95,8 +96,9 @@ const PENDING_GLYPH = "· ";
 // ---------------------------------------------------------------------------
 class SplashHeader implements Component {
   private tui: TUI;
+  private lines: string[];
   private frame = 0;
-  private frameMap = assignUnlockFrames(LOGO_LINES, TOTAL_FRAMES, Date.now() & 0xffff);
+  private frameMap: ReturnType<typeof assignUnlockFrames>;
   private noiseSeed = (Date.now() * 7) & 0x7fffffff;
   private timer: ReturnType<typeof setInterval> | null = null;
   private scanFrame = 0;
@@ -107,9 +109,11 @@ class SplashHeader implements Component {
   private cachedLines: string[] | undefined;
   private cachedWidth: number | undefined;
 
-  constructor(tui: TUI, onTransition: () => void) {
+  constructor(tui: TUI, onTransition: () => void, lines: string[]) {
     this.tui = tui;
     this.onTransition = onTransition;
+    this.lines = lines;
+    this.frameMap = assignUnlockFrames(lines, TOTAL_FRAMES, Date.now() & 0xffff);
   }
 
   start(): void {
@@ -153,8 +157,8 @@ class SplashHeader implements Component {
 
     // Render logo frame
     const logoFrame = this.transitioned
-      ? renderFrame(TOTAL_FRAMES + 1, LOGO_LINES, this.frameMap, this.noiseSeed)
-      : renderFrame(Math.min(this.frame, TOTAL_FRAMES), LOGO_LINES, this.frameMap, this.noiseSeed);
+      ? renderFrame(TOTAL_FRAMES + 1, this.lines, this.frameMap, this.noiseSeed)
+      : renderFrame(Math.min(this.frame, TOTAL_FRAMES), this.lines, this.frameMap, this.noiseSeed);
 
     lines.push(""); // top spacer
     for (const row of logoFrame) {
@@ -296,15 +300,24 @@ export default function splashExtension(pi: ExtensionAPI): void {
     // This is acceptable — it only appears once per update.
     const termWidth = process.stdout.columns ?? 80;
     const termRows = process.stdout.rows ?? 24;
-    if (termWidth < LINE_WIDTH + 4 || termRows < LOGO_LINES.length + 6) {
-      // Too narrow or too short for the ASCII art — use minimal header immediately
+
+    // Three tiers based on terminal size:
+    //   Full (sigil + wordmark): needs ~46 rows and LINE_WIDTH+4 cols
+    //   Compact (wordmark only): needs ~14 rows and LINE_WIDTH+4 cols
+    //   Minimal (no animation):  everything else
+    const canFitFull = termWidth >= LINE_WIDTH + 4 && termRows >= LOGO_LINES.length + 6;
+    const canFitWordmark = termWidth >= LINE_WIDTH + 4 && termRows >= WORDMARK_LINES.length + 6;
+
+    if (!canFitWordmark) {
+      // Too small for any animation — minimal branded header
       ctx.ui.setHeader(() => new BrandedHeader(version));
     } else {
+      const artLines = canFitFull ? LOGO_LINES : WORDMARK_LINES;
       ctx.ui.setHeader((tui, _theme) => {
         const splash = new SplashHeader(tui, () => {
           // Transition to minimal branded header
           ctx.ui.setHeader((_, _t) => new BrandedHeader(version));
-        });
+        }, artLines);
         splash.start();
         return splash;
       });
