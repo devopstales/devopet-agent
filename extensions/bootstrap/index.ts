@@ -471,8 +471,9 @@ function restartOmegon(): never {
 		"done",
 		// Extra grace period for fd/terminal release
 		"sleep 0.2",
-		// Reset terminal to sane cooked state (stty sane is sufficient;
-		// avoid printf '\\033c' which nukes scrollback history)
+		// Pop kitty keyboard protocol and bracketed paste before resetting —
+		// stty sane only resets line discipline, not terminal protocol state
+		"printf '\\033[<u\\033[>4;0m\\033[?2004l' 2>/dev/null",
 		"stty sane 2>/dev/null",
 		// Clean up this script
 		`rm -f "${script}"`,
@@ -483,6 +484,15 @@ function restartOmegon(): never {
 	// Reset terminal to cooked mode BEFORE exiting so the restart script
 	// (and the user) aren't stuck with raw-mode terminal if something goes wrong.
 	try {
+		// Pop kitty keyboard protocol and disable bracketed paste BEFORE
+		// releasing raw mode — the terminal needs these escape sequences to
+		// stop encoding keystrokes in CSI-u format. Without this, the restart
+		// script (and any keystrokes during the wait) dump raw kitty sequences.
+		process.stdout.write(
+			"\x1b[<u" +        // Pop kitty keyboard protocol flags
+			"\x1b[>4;0m" +     // Disable modifyOtherKeys
+			"\x1b[?2004l"      // Disable bracketed paste
+		);
 		if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
 			process.stdin.setRawMode(false);
 		}
