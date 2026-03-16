@@ -470,11 +470,18 @@ function restartOmegon(): never {
 		'  [ "$_w" -ge 50 ] && break',
 		"done",
 		// Extra grace period for fd/terminal release
-		"sleep 0.2",
-		// Full terminal protocol reset — stty sane only resets line discipline,
-		// not terminal protocol state (kitty keyboard, bracketed paste, cursor, SGR)
-		"printf '\\033[<u\\033[>4;0m\\033[?2004l\\033[?25h\\033[0m\\033[r' 2>/dev/null",
+		"sleep 0.3",
+		// Hard terminal reset: RIS (Reset to Initial State) clears ALL protocol
+		// state — kitty keyboard protocol, bracketed paste, mouse tracking,
+		// modifyOtherKeys, SGR, scroll regions, alternate screen, everything.
+		// This is what `reset` does internally and has worked since the VT100.
+		"printf '\\033c' 2>/dev/null",
 		"stty sane 2>/dev/null",
+		// `reset` as belt-and-suspenders — reinitializes terminfo state.
+		// Some terminals (Kitty) maintain protocol state that RIS alone
+		// doesn't fully clear; reset queries terminfo and sends the full
+		// initialization sequence for the current TERM.
+		"reset 2>/dev/null",
 		// Clean up this script
 		`rm -f "${script}"`,
 		// Replace this shell with new omegon
@@ -484,26 +491,17 @@ function restartOmegon(): never {
 	// Reset terminal to cooked mode BEFORE exiting so the restart script
 	// (and the user) aren't stuck with raw-mode terminal if something goes wrong.
 	try {
-		// Full terminal protocol teardown: pop kitty keyboard protocol,
-		// disable modifyOtherKeys, disable bracketed paste, show cursor,
-		// reset SGR attributes, and clear any pending scroll region.
-		process.stdout.write(
-			"\x1b[<u" +        // Pop kitty keyboard protocol flags
-			"\x1b[>4;0m" +     // Disable modifyOtherKeys
-			"\x1b[?2004l" +    // Disable bracketed paste
-			"\x1b[?25h" +      // Show cursor
-			"\x1b[0m" +        // Reset all SGR attributes
-			"\x1b[r"           // Reset scroll region to full screen
-		);
+		// RIS (Reset to Initial State) — the only reliable way to ensure ALL
+		// terminal protocol state is cleared. Selective escape sequences are
+		// fragile and miss features we don't know about.
+		process.stdout.write("\x1bc");
 		// Pause stdin to prevent buffered input from being re-interpreted
 		// after raw mode is disabled (prevents Ctrl+D from closing parent shell).
 		process.stdin.pause();
 		if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
 			process.stdin.setRawMode(false);
 		}
-		// Also reset via stty — timeout guards against blocking on contested stdin.
-		// Use /dev/null for stdout/stderr to prevent any stray output (including
-		// terminal bells) from reaching the user's terminal during the transition.
+		// stty sane resets line discipline to known-good state.
 		spawnSync("stty", ["sane"], { stdio: ["inherit", "ignore", "ignore"], timeout: 2000 });
 	} catch { /* best-effort */ }
 
