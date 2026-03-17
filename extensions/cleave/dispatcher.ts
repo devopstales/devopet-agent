@@ -1172,9 +1172,6 @@ async function dispatchSingleChild(
 		// Opt-out: OMEGON_NATIVE_DISPATCH=0 disables native dispatch
 		&& process.env.OMEGON_NATIVE_DISPATCH !== "0";
 
-	// DEBUG: trace native dispatch decision
-	console.warn(`[cleave:debug] child=${child.label} effectiveTier=${effectiveTier} nativeAgent=${nativeAgent != null} nativeModelSpec=${nativeModelSpec} OMEGON_NATIVE_DISPATCH=${process.env.OMEGON_NATIVE_DISPATCH} → useNative=${useNative}`);
-
 	if (useNative) {
 		child.backend = "native";
 	}
