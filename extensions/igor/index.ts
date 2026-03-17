@@ -201,42 +201,48 @@ export default function(pi: ExtensionAPI) {
 
   function subscribeEscalations(client: IgorClient, ctx: any) {
     escalationSource?.close();
+    escalationSource = null;
 
     try {
-      // Node 18 EventSource doesn't support custom headers — use fetch-based polling
-      // for the initial implementation; proper SSE with auth follows in Phase 1.1.
-      // For localhost (no TLS), the key is in the URL auth header workaround.
-      // TODO: switch to undici EventSource (Node 22+) which supports headers.
-      const poll = async () => {
-        if (!connected) return;
-        try {
-          const res = await fetch(`${client.baseUrl}/api/escalations/history`, {
-            headers: { "Authorization": `Bearer ${client.apiKey}` },
-            signal: AbortSignal.timeout(3000),
-          });
-          if (res.ok) {
-            const escalations = await res.json() as Array<{ id: string; reason: string; combined_score: number; acknowledged: boolean }>;
-            const unacked = escalations.filter(e => !e.acknowledged);
-            if (unacked.length > 0) {
-              const e = unacked[0];
-              ctx.ui.notify(
-                `⚠ Igor: ${e.reason} (z=${e.combined_score.toFixed(1)}) — see dashboard`,
-                "warning"
-              );
-            }
-          }
-        } catch { /* silent — offline */ }
+      // undici EventSource (Node 22+, available in Node 25) supports custom headers,
+      // enabling Bearer auth over the SSE stream without any workaround.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { EventSource: UndiciEventSource } = require("undici") as {
+        EventSource: new (url: string, init?: { headers?: Record<string, string> }) => {
+          addEventListener(type: string, cb: (e: { data: string }) => void): void;
+          close(): void;
+        };
       };
 
-      // Poll every 30s as a stopgap until EventSource with headers is available
-      const interval = setInterval(poll, 30_000);
-      poll();  // immediate first check
+      const es = new UndiciEventSource(`${client.baseUrl}/api/escalations`, {
+        headers: { "Authorization": `Bearer ${client.apiKey}` },
+      });
 
-      // Store cleanup handle
-      escalationSource = {
-        close: () => clearInterval(interval),
-      } as unknown as EventSource;
-    } catch { /* escalation subscription is best-effort */ }
+      es.addEventListener("escalation", (e) => {
+        try {
+          const esc = JSON.parse(e.data) as { reason: string; combined_score: number };
+          ctx.ui.notify(
+            `⚠ Igor: ${esc.reason} (z=${esc.combined_score.toFixed(1)}) — see dashboard`,
+            "warning"
+          );
+        } catch { /* malformed event */ }
+      });
+
+      es.addEventListener("heartbeat", (e) => {
+        try {
+          const hb = JSON.parse(e.data) as { baseline_state: string };
+          const badge = hb.baseline_state === "operational" ? "◉ ops" : "○ cal";
+          ctx.ui.setStatus("igor-baseline", badge);
+        } catch { /* malformed heartbeat */ }
+      });
+
+      es.addEventListener("error", (_e) => {
+        connected = false;
+        ctx.ui.setStatus("igor", "○ Igor: disconnected");
+      });
+
+      escalationSource = { close: () => es.close() } as unknown as EventSource;
+    } catch { /* undici not available — silent */ }
   }
 }
 
