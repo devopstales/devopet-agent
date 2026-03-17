@@ -1186,9 +1186,6 @@ export default function designTreeExtension(pi: ExtensionAPI): void {
 						// Auto-focus so context injection immediately tracks this node
 						focusedNode = node.id;
 
-						// Auto-focus the design node being implemented
-						focusedNode = node.id;
-
 						// Publish active directive for session-start and dashboard
 						sharedState.activeDirective = {
 							nodeId: node.id,
