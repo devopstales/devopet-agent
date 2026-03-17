@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Publish pi-mono fork packages to npm if their versions don't match what's on the registry.
 # Called by CI before publishing omegon itself.
-# Also rewrites file: refs in both omegon's package.json and pi-mono's internal cross-deps.
+# Phase 1 rewrites file: refs in pi-mono's internal cross-deps for standalone npm publish.
+# Omegon's own package.json keeps file: refs — bundleDependencies + prepack.mjs handles materialization.
 set -euo pipefail
 
 PACKAGES=("ai" "tui" "agent" "coding-agent" "mom" "pods" "web-ui")
