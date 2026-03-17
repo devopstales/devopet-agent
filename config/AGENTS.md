@@ -83,11 +83,36 @@ Omegon takes **no position** on language, framework, or specific library choices
 
 Specs define **what must be true** — they are the source of truth for correctness. Code is an implementation detail. When specs and code disagree, the spec is right and the code is wrong.
 
+## Testing Standards
+
+**Every non-trivial code change must include tests. Untested code is incomplete code.**
+
+- New functions, methods, or modules require test coverage in a co-located `*.test.ts` file
+- Modified behavior requires updated or new tests that verify the change
+- Bug fixes require a regression test that would have caught the bug
+- Tests must pass before committing: `npm test` (or project equivalent)
+- Do not defer test writing to a follow-up task — write tests alongside the implementation
+- When modifying existing tested code, verify existing tests still pass and add new tests for new behavior
+
+### When tests may be skipped
+
+- Config files, documentation, type-only changes, markdown
+- One-line fixes where existing tests already cover the behavior
+- Design documents and OpenSpec artifacts
+- Prompt templates, skills, and other non-code resources
+
+### Test quality
+
+- Test behavior, not implementation — assert on public API results
+- Include negative tests — error paths, invalid inputs, boundary values
+- Use descriptive test names that read as specifications
+- Prefer fast, deterministic tests over slow integration tests
+
 ## Completion Standards
 
-**Work is not done until it is committed and pushed.**
+**Work is not done until it is tested, committed, and pushed.**
 
-- After completing a code change, commit and push immediately.
+- After completing a code change, write tests, then commit and push immediately.
 - Do not ask for permission to commit. The operator reviews the diff, not a confirmation prompt.
 
 ## Memory Sync Rules

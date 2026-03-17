@@ -238,9 +238,10 @@ ${skillSection}${designSection}${guardrailSection ?? ""}
 ## Contract
 
 1. Only work on files within your scope
-2. Update the Result section below when done
-3. Commit your work with clear messages — do not push
-4. If the task is too complex, set status to NEEDS_DECOMPOSITION
+2. Write tests for new functions and changed behavior — co-locate as *.test.ts
+3. Update the Result section below when done
+4. Commit your work with clear messages — do not push
+5. If the task is too complex, set status to NEEDS_DECOMPOSITION
 
 ## Result
 

@@ -1583,6 +1583,7 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 		promptSnippet:
 			"Assess task complexity for decomposition — returns pattern match, complexity score, and execute/cleave decision",
 		promptGuidelines: [
+			"Every non-trivial code change must include tests in co-located *.test.ts files. Untested code is incomplete — do not commit without tests for new functions and changed behavior.",
 			"Call cleave_assess before starting any multi-system or cross-cutting task to determine if decomposition is needed",
 			"If decision is 'execute', proceed directly. If 'cleave', use /cleave to decompose. If 'needs_assessment', proceed directly — it means no pattern matched but the task is likely simple enough for in-session execution.",
 			"Complexity formula: (1 + systems) × (1 + 0.5 × modifiers). Threshold default: 2.0.",

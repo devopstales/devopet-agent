@@ -294,7 +294,7 @@ export function buildChildPrompt(
 		"   - Fill in Summary, Artifacts, Decisions Made, Interfaces Published",
 		"3. **Commits**: Commit your work with clear messages. Do not push.",
 		"4. **No side effects**: Do not install global packages or modify system state.",
-		"5. **Verification**: Run tests or checks and report results in the Verification section.",
+		"5. **Testing**: Write tests for new functions and changed behavior in co-located *.test.ts files. Run them and report results in the Verification section. Untested code is incomplete.",
 		`6. **Workspace**: ${workspacePath}`,
 	];
 
