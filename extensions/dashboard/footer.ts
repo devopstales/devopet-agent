@@ -546,27 +546,33 @@ export class DashboardFooter implements Component {
     // ── Provider / model / thinking line ──────────────────────
     const m = ctx.model;
     if (m) {
-      const multiProvider = this.footerData.getAvailableProviderCount() > 1;
       const pointer = theme.fg("accent", "▸");
-      const dot = theme.fg("dim", "  ·  ");
+      const dot = theme.fg("dim", " · ");
 
+      // Width-aware: narrow cards drop provider prefix, abbreviate thinking
+      const narrow = width < 40;
+      const multiProvider = !narrow && this.footerData.getAvailableProviderCount() > 1;
+
+      // Shorten model ID for display: "claude-opus-4-6" stays, but drop provider/ prefix if present in ID
+      const modelDisplay = m.id.replace(/^.*\//, "");
       const providerModel = multiProvider
-        ? `${pointer} ${theme.fg("muted", m.provider)} ${theme.fg("dim", "/")} ${theme.fg("muted", m.id)}`
-        : `${pointer} ${theme.fg("muted", m.id)}`;
+        ? `${pointer} ${theme.fg("muted", m.provider)}${theme.fg("dim", "/")}${theme.fg("muted", modelDisplay)}`
+        : `${pointer} ${theme.fg("muted", modelDisplay)}`;
 
       const parts: string[] = [providerModel];
 
-      if (m.reasoning) {
+      if (m.reasoning && this.cachedThinkingLevel) {
         const thinkColor: ThemeColor = this.cachedThinkingLevel === "high"    ? "accent"
           : this.cachedThinkingLevel === "medium"   ? "muted"
           : "dim";
         const thinkIcon = this.cachedThinkingLevel === "off"
           ? theme.fg("dim", "○")
           : theme.fg(thinkColor, "◉");
-        parts.push(`${thinkIcon} ${theme.fg(thinkColor, this.cachedThinkingLevel)}`);
+        // Narrow: icon only, no label
+        parts.push(narrow ? thinkIcon : `${thinkIcon} ${theme.fg(thinkColor, this.cachedThinkingLevel)}`);
       }
 
-      if (this.cachedTokens.cost > 0) {
+      if (this.cachedTokens.cost > 0 && !narrow) {
         parts.push(theme.fg("dim", `$${this.cachedTokens.cost.toFixed(3)}`));
       }
 
@@ -592,7 +598,8 @@ export class DashboardFooter implements Component {
 
     if (!metrics && totalFacts === null) return "";
 
-    const sep = theme.fg("dim", "  ·  ");
+    const sep = theme.fg("dim", " · ");
+    const narrow = width < 35;
     const parts: string[] = [];
 
     if (totalFacts !== null) {
@@ -600,17 +607,24 @@ export class DashboardFooter implements Component {
     }
 
     if (metrics) {
+      // Always show injection count and token estimate
       if (metrics.projectFactCount > 0)
         parts.push(theme.fg("dim", "inj ") + theme.fg("muted", String(metrics.projectFactCount)));
-      if (metrics.workingMemoryFactCount > 0)
+      // Show working memory and episodes only when there's room
+      if (!narrow && metrics.workingMemoryFactCount > 0)
         parts.push(theme.fg("dim", "wm ")  + theme.fg("muted", String(metrics.workingMemoryFactCount)));
-      if (metrics.episodeCount > 0)
+      if (!narrow && metrics.episodeCount > 0)
         parts.push(theme.fg("dim", "ep ")  + theme.fg("muted", String(metrics.episodeCount)));
-      if (metrics.globalFactCount > 0)
+      // Drop global count in narrow — least useful
+      if (!narrow && metrics.globalFactCount > 0)
         parts.push(theme.fg("dim", "gl ")  + theme.fg("muted", String(metrics.globalFactCount)));
-      parts.push(theme.fg("dim", `~${metrics.estimatedTokens}`));
+      // Token estimate — always show, use compact format
+      const tokStr = metrics.estimatedTokens >= 1000
+        ? `~${(metrics.estimatedTokens / 1000).toFixed(1)}k`
+        : `~${metrics.estimatedTokens}`;
+      parts.push(theme.fg("dim", tokStr));
     } else {
-      parts.push(theme.fg("dim", "pending injection"));
+      parts.push(theme.fg("dim", "pending"));
     }
 
     return truncateToWidth(`  ${parts.join(sep)}`, width, "…");
@@ -688,14 +702,24 @@ export class DashboardFooter implements Component {
 
   /**
    * Build directive indicator lines for the model card area.
-   * Shows "▸ directive: my-feature" when a directive mind is active.
+   * Shows "▸ directive: my-feature ✓" (branch match) or "▸ directive: my-feature ⚠ main" (mismatch).
    * Returns empty array when no directive is active.
    */
   private buildDirectiveIndicatorLines(width: number): string[] {
     const label = this.getDirectiveLabel();
     if (!label) return [];
     const theme = this.theme;
-    const line = `${theme.fg("warning", "▸")} ${theme.fg("dim", "directive:")} ${theme.fg("warning", label)}`;
+    const directive = sharedState.activeDirective;
+    const currentBranch = this.footerData.getGitBranch?.() ?? "";
+
+    let branchBadge = "";
+    if (directive && currentBranch) {
+      branchBadge = currentBranch === directive.branch
+        ? ` ${theme.fg("success", "✓")}`
+        : ` ${theme.fg("error", "⚠")} ${theme.fg("dim", currentBranch)}`;
+    }
+
+    const line = `${theme.fg("warning", "▸")} ${theme.fg("dim", "directive:")} ${theme.fg("warning", label)}${branchBadge}`;
     return [truncateToWidth(line, width, "…")];
   }
 
@@ -776,8 +800,12 @@ export class DashboardFooter implements Component {
             : theme.fg("dim", summary.state));
     const normalized = normalizeLocalModelLabel(summary.model);
     const alias = forceCompact ? "" : (normalized.alias ? theme.fg("dim", `alias ${normalized.alias}`) : "");
-    const roleLabel = forceCompact ? summary.label.slice(0, 1) : summary.label;
-    const primary = `${theme.fg("accent", roleLabel)} ${theme.fg("muted", normalized.canonical)}`;
+    // In very compact mode, drop the role label to give more room to the model name
+    const veryCompact = width < 30;
+    const roleLabel = veryCompact ? "" : (forceCompact ? summary.label.slice(0, 1) : summary.label);
+    const primary = roleLabel
+      ? `${theme.fg("accent", roleLabel)} ${theme.fg("muted", normalized.canonical)}`
+      : theme.fg("muted", normalized.canonical);
     return truncateToWidth(
       composePrimaryMetaLine(
         width,
@@ -1105,10 +1133,14 @@ export class DashboardFooter implements Component {
       }
     }
 
-    // If no focused node and no implementing nodes, show all nodes (up to MAX_NODES)
+    // If no focused node and no implementing nodes, show actionable nodes only.
+    // Filter out decided/implemented/resolved — those are done; the footer should
+    // surface work in progress, not a historical catalog.
     if (!dt.focusedNode && (!dt.implementingNodes || dt.implementingNodes.length === 0) && dt.nodes) {
+      const TERMINAL_STATUSES = new Set(["decided", "implemented", "resolved"]);
+      const actionable = dt.nodes.filter(n => !TERMINAL_STATUSES.has(n.status));
       const MAX_NODES = 6;
-      for (const n of dt.nodes.slice(0, MAX_NODES)) {
+      for (const n of actionable.slice(0, MAX_NODES)) {
         const icon = this.nodeStatusIcon(n.status);
         const badge = designSpecBadge(n.designSpec, n.assessmentResult, (c, t) => theme.fg(c as any, t));
         const badgeSep = badge ? " " : "";
@@ -1121,9 +1153,9 @@ export class DashboardFooter implements Component {
           [qSuffix + linkSuffix],
         ));
       }
-      if (dt.nodes.length > MAX_NODES) {
+      if (actionable.length > MAX_NODES) {
         lines.push(
-          theme.fg("dim", `  … ${dt.nodes.length - MAX_NODES} more`) +
+          theme.fg("dim", `  … ${actionable.length - MAX_NODES} more`) +
           theme.fg("dim", " — /dashboard to expand"),
         );
       }

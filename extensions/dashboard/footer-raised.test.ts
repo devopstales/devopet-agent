@@ -872,3 +872,104 @@ describe("directive indicator in dashboard footer", () => {
     assert.ok(!text.includes("directive:"), "no directive indicator should appear when activeMind is undefined");
   });
 });
+
+describe("design tree node filtering in footer", () => {
+  let savedDesignTree: typeof sharedState.designTree;
+
+  beforeEach(() => {
+    savedDesignTree = sharedState.designTree;
+  });
+
+  afterEach(() => {
+    (sharedState as any).designTree = savedDesignTree;
+  });
+
+  it("filters out decided/implemented/resolved nodes from the listing", () => {
+    (sharedState as any).designTree = {
+      nodeCount: 5, decidedCount: 2, exploringCount: 2, implementingCount: 0,
+      implementedCount: 1, blockedCount: 0, openQuestionCount: 0,
+      focusedNode: null, implementingNodes: [],
+      nodes: [
+        { id: "done-1", title: "Done One", status: "decided", questionCount: 0 },
+        { id: "done-2", title: "Done Two", status: "implemented", questionCount: 0 },
+        { id: "done-3", title: "Done Three", status: "resolved", questionCount: 0 },
+        { id: "active-1", title: "Active One", status: "exploring", questionCount: 2 },
+        { id: "active-2", title: "Active Two", status: "seed", questionCount: 0 },
+      ],
+    };
+
+    const footer = new DashboardFooter(
+      {} as any,
+      makeTheme() as any,
+      makeFooterData() as any,
+      { mode: "raised", turns: 0 } satisfies DashboardState,
+    );
+    footer.setContext(makeContext() as any);
+
+    const rendered = footer.render(140);
+    const text = rendered.join("\n");
+
+    // Active nodes should appear
+    assert.ok(text.includes("active-1") || text.includes("Active One"), "exploring node should appear");
+    assert.ok(text.includes("active-2") || text.includes("Active Two"), "seed node should appear");
+
+    // Completed nodes should NOT appear in the listing
+    assert.ok(!text.includes("done-1") && !text.includes("Done One"), "decided node should be filtered");
+    assert.ok(!text.includes("done-2") && !text.includes("Done Two"), "implemented node should be filtered");
+    assert.ok(!text.includes("done-3") && !text.includes("Done Three"), "resolved node should be filtered");
+  });
+});
+
+describe("directive indicator shows branch match state", () => {
+  let savedActiveMind: typeof sharedState.activeMind;
+  let savedActiveDirective: typeof sharedState.activeDirective;
+
+  beforeEach(() => {
+    savedActiveMind = sharedState.activeMind;
+    savedActiveDirective = sharedState.activeDirective;
+    (sharedState as any).designTree = {
+      nodeCount: 1, decidedCount: 0, exploringCount: 1, implementingCount: 0,
+      implementedCount: 0, blockedCount: 0, openQuestionCount: 0,
+      focusedNode: null, implementingNodes: [], nodes: [],
+    };
+    (sharedState as any).openspec = { changes: [] };
+  });
+
+  afterEach(() => {
+    sharedState.activeMind = savedActiveMind;
+    sharedState.activeDirective = savedActiveDirective;
+  });
+
+  it("shows ✓ when branch matches directive", () => {
+    sharedState.activeMind = "directive/my-feature";
+    sharedState.activeDirective = { nodeId: "my-feature", branch: "feature/my-feature" };
+
+    const footer = new DashboardFooter(
+      {} as any,
+      makeTheme() as any,
+      { ...makeFooterData(), getGitBranch: () => "feature/my-feature" } as any,
+      { mode: "raised", turns: 0 } satisfies DashboardState,
+    );
+    footer.setContext(makeContext() as any);
+
+    const text = footer.render(140).join("\n");
+    assert.ok(text.includes("✓"), `expected ✓ for branch match, got:\n${text.slice(0, 300)}`);
+  });
+
+  it("shows ⚠ when branch doesn't match directive", () => {
+    sharedState.activeMind = "directive/my-feature";
+    sharedState.activeDirective = { nodeId: "my-feature", branch: "feature/my-feature" };
+
+    const footer = new DashboardFooter(
+      {} as any,
+      makeTheme() as any,
+      { ...makeFooterData(), getGitBranch: () => "main" } as any,
+      { mode: "raised", turns: 0 } satisfies DashboardState,
+    );
+    footer.setContext(makeContext() as any);
+
+    const text = footer.render(140).join("\n");
+    assert.ok(text.includes("⚠"), `expected ⚠ for branch mismatch, got:\n${text.slice(0, 300)}`);
+    assert.ok(text.includes("main"), "should show the current branch name");
+  });
+});
