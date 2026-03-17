@@ -2,7 +2,7 @@
 id: omega
 title: Omega — Rust execution engine and project intelligence daemon
 status: exploring
-related: [markdown-viewport, pikit-auspex-extension]
+related: [markdown-viewport, pikit-auspex-extension, a2a-protocol-integration]
 tags: [rust, architecture, cleave, lifecycle, dioxus, execution-engine, strategic]
 open_questions:
   - "What is the exact HTTP API surface between Omega and the auspex bridge — REST with typed request/response envelopes, or a more structured RPC protocol like JSON-RPC or Cap'n Proto?"
