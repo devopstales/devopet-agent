@@ -53,7 +53,7 @@ export const TOOL_GLYPHS: Record<string, string> = {
 	cleave_assess: "⚡",
 	whoami: "⊙",
 	chronos: "◷",
-	web_search: "⌖",
+	web_search: "◎",
 	render_diagram: "⬡",
 	render_native_diagram: "⬡",
 	render_excalidraw: "⬡",
