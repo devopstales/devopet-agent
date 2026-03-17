@@ -1,12 +1,9 @@
 ---
 id: multi-instance-coordination
 title: Multi-instance Omegon coordination — parallel work streams on the same repo
-status: seed
+status: decided
 parent: directive-branch-lifecycle
-open_questions:
-  - "Should `implement` auto-checkout the created branch, or is that too disruptive for operators who prefer to stay on main?"
-  - For Mode B (worktree delegates), should the delegate instance share the same SQLite memory DB (WAL concurrency) or get its own isolated copy that merges facts back on completion?
-  - "Is there a lightweight instance-presence signal (PID file, Unix socket, or similar) that would let a second instance detect \"another Omegon is already active on this repo\" and offer worktree isolation instead of shared-checkout collision?"
+open_questions: []
 ---
 
 # Multi-instance Omegon coordination — parallel work streams on the same repo
@@ -330,8 +327,11 @@ The escape hatch for operators who want to stay on main: they simply don't use `
 **Status:** decided
 **Rationale:** The factstore mind API was already fully implemented. The wiring required 110 lines across 4 files: shared-state type, implement fork+activate, archive ingest+delete, and memory queue drain. All existing memory_store/memory_recall/memory_query/context injection paths already used activeMind() — no changes needed there. The mind system provides logical isolation within a shared physical DB, clean abandon (deleteMind), and explicit merge with deduplication (ingestMind).
 
+### Decision: Mode C (single-instance branch-aware) is the implementation target; Mode B and instance-presence detection are deferred to Omega
+
+**Status:** decided
+**Rationale:** Instance-presence detection (flock+PID) only matters when multiple Omegon instances target the same repo — Mode B. Mode C is single-instance. Building the presence-detection infrastructure now would be engineering for a scenario that doesn't exist yet and that naturally belongs to the Omega coordinator. The deliverables for this pass: (1) auto-checkout on implement, (2) branch↔mind consistency on session start, (3) dashboard indicator, (4) tests. Instance-presence and worktree delegation are Omega scope.
+
 ## Open Questions
 
-- Should `implement` auto-checkout the created branch, or is that too disruptive for operators who prefer to stay on main?
-- For Mode B (worktree delegates), should the delegate instance share the same SQLite memory DB (WAL concurrency) or get its own isolated copy that merges facts back on completion?
-- Is there a lightweight instance-presence signal (PID file, Unix socket, or similar) that would let a second instance detect "another Omegon is already active on this repo" and offer worktree isolation instead of shared-checkout collision?
+*No open questions.*

@@ -1,14 +1,11 @@
 ---
 id: directive-branch-lifecycle
 title: Directive-Branch Lifecycle — git branch as the unified task boundary
-status: exploring
+status: decided
 tags: [architecture, lifecycle, git, workflow, design-tree, openspec, cleave]
-open_questions:
-  - How should OpenSpec change artifacts (proposal.md, specs, tasks.md, assessment.json) travel with the branch — committed on the branch, or kept on main as shared state?
-  - What is the right relationship between cleave worktree branches (ephemeral, per-child) and the directive branch (durable, per-task)? Should cleave children branch off the directive branch rather than main?
-  - Should archive automatically merge the directive branch to main (or open a PR), or should that remain a separate operator decision?
-  - How do small fixes (single-commit, no spec needed) fit into this model? Is there a lightweight path that skips the branch ceremony, or does every directive get a branch?
-  - What ambient enforcement should the system provide when the operator is on the wrong branch for their active directive — warning, auto-switch, or just dashboard visibility?
+open_questions: []
+issue_type: feature
+priority: 1
 ---
 
 # Directive-Branch Lifecycle — git branch as the unified task boundary
@@ -157,10 +154,33 @@ A directive-branch lifecycle would tighten the existing mechanisms into a single
 
 The current state produces stale branches, assessment gaps, and work-on-main drift that undermines the entire lifecycle system. The design-tree and OpenSpec investments lose value when the actual work bypasses them.
 
+## Decisions
+
+### Decision: OpenSpec artifacts travel with the branch naturally — no special handling needed
+
+**Status:** decided
+**Rationale:** If implement auto-checkouts the directive branch, all subsequent file writes (including openspec/changes/{id}/) land on that branch. Artifacts merge to main when the branch merges. No special binding mechanism needed — git does it.
+
+### Decision: Cleave children should branch from the directive branch (current branch), which is already the behavior when auto-checkout works
+
+**Status:** decided
+**Rationale:** Cleave already calls getCurrentBranch() as the base. If the operator is on the directive branch (because implement checked it out), cleave children automatically branch from and merge back to the directive branch. No code change needed in cleave — the fix is making implement set the correct branch context.
+
+### Decision: Archive should NOT auto-merge — merge is an operator decision, archive handles cleanup after merge
+
+**Status:** decided
+**Rationale:** Auto-merge at archive time is risky: the operator may want to review the diff, rebase, or open a PR. Archive already handles post-merge cleanup (deleteMergedBranches). The workflow is: operator merges when satisfied (git merge, PR, etc.), then runs archive. The branch↔mind consistency check on session start will surface 'directive complete, branch unmerged' as actionable guidance rather than forcing it.
+
+### Decision: Small fixes skip the branch ceremony — the lifecycle is opt-in at the implement gate
+
+**Status:** decided
+**Rationale:** Direct commits to main are valid for bug/chore/task nodes that use set_status(decided) without calling implement. The branch model activates only when implement is called. This matches the existing behavior where lightweight types skip the design-spec gate.
+
+### Decision: Dashboard visibility only — no auto-switch, no blocking enforcement
+
+**Status:** decided
+**Rationale:** Auto-switch is dangerous (could discard uncommitted work). Blocking enforcement is too aggressive for a tool that should help, not hinder. Dashboard shows the active directive mind and branch, with a mismatch indicator when the current branch doesn't match the active directive. The agent's system prompt can reference this to suggest checkout, but the operator makes the call.
+
 ## Open Questions
 
-- How should OpenSpec change artifacts (proposal.md, specs, tasks.md, assessment.json) travel with the branch — committed on the branch, or kept on main as shared state?
-- What is the right relationship between cleave worktree branches (ephemeral, per-child) and the directive branch (durable, per-task)? Should cleave children branch off the directive branch rather than main?
-- Should archive automatically merge the directive branch to main (or open a PR), or should that remain a separate operator decision?
-- How do small fixes (single-commit, no spec needed) fit into this model? Is there a lightweight path that skips the branch ceremony, or does every directive get a branch?
-- What ambient enforcement should the system provide when the operator is on the wrong branch for their active directive — warning, auto-switch, or just dashboard visibility?
+*No open questions.*
