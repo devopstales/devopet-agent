@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "changeName": "directive-branch-lifecycle",
-  "assessmentKind": "cleave",
+  "assessmentKind": "spec",
   "outcome": "pass",
-  "timestamp": "2026-03-17T05:13:43.686Z",
-  "summary": "Adversarial review of 3 commits (release cleanup, heuristic fix, false-positive fix). Found 2 critical issues (vague/substring keywords in patterns) and 1 warning (overly common infra keywords), all fixed and tested. 1681/1681 tests pass, typecheck clean. No issues affect directive-branch-lifecycle change — all findings were in the cleave assessment subsystem.",
+  "timestamp": "2026-03-17T05:22:15.919Z",
+  "summary": "Re-reconciliation to update snapshot after assessment.json was committed. No code changes since last pass — only the tracking file itself was added. 1681/1681 tests pass, typecheck clean.",
   "snapshot": {
-    "gitHead": "5a5abcb97816bfab7b7060f3d8af8c45224aae1f",
-    "fingerprint": "73d7979c2e5cb67e693c433cc49a3f7604dbca6769199a063c206b357bc3a674",
+    "gitHead": "b422fb167e7e427f71c271faae05701479147890",
+    "fingerprint": "cf114107ef503c5c",
     "dirty": false,
     "scopedPaths": [],
     "files": [
@@ -39,14 +39,8 @@
   },
   "reconciliation": {
     "reopen": false,
-    "changedFiles": [
-      "extensions/cleave/assessment.ts",
-      "extensions/cleave/assessment.test.ts"
-    ],
-    "constraints": [
-      "Pattern keywords must not include terms that appear in the vague-penalty list (improve, better, fix issues, make it, update)",
-      "Infrastructure pattern keywords should avoid domain-generic nouns (model, memory, context, status) that would match most directives in an AI-tooling codebase"
-    ],
+    "changedFiles": [],
+    "constraints": [],
     "recommendedAction": null
   }
 }
