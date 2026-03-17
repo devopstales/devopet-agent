@@ -1,7 +1,7 @@
 ---
 id: test-coverage-directive-gap
 title: Test coverage directive gap — agents consistently omit tests unless explicitly forced
-status: exploring
+status: decided
 parent: lifecycle-gate-ergonomics
 tags: [testing, directives, system-prompt, cleave, quality, agents]
 open_questions: []
@@ -67,12 +67,65 @@ Add a top-level section to `config/AGENTS.md` alongside Attribution Policy, Deve
 
 ```markdown
 
+### Broader architecture: Omegon directive authority vs filesystem discovery
+
+The testing gap exposed a deeper architectural question: how should Omegon's opinions be expressed so they're authoritative, not drowned out by filesystem noise?
+
+**Current directive provenance (in order of injection):**
+
+1. **Pi built-in system prompt** (`system-prompt.ts`) — tool descriptions, basic guidelines ("be concise"). No opinions about engineering practices. This is the "flexible tool" layer.
+
+2. **Omegon AGENTS.md** (`config/AGENTS.md` → deployed to `~/.pi/agent/AGENTS.md`) — discovered by pi's filesystem traversal as a "project context file." Treated identically to any random AGENTS.md found in a repo. No special authority.
+
+3. **Omegon skills** (`skills/*.md`) — discovered by pi's skill loader. Again, treated identically to skills from any installed package or project `.pi/skills/` directory. No priority ordering.
+
+4. **Omegon prompt templates** (`prompts/*.md`) — same discovery path. No special authority.
+
+5. **Extension-injected `promptGuidelines`** — code-level, injected by tool registration. These ARE authoritative because they come from code, not filesystem discovery. But they're per-tool, not global.
+
+6. **Extension-injected `sendMessage`** — context messages injected at runtime (memory, design-tree focus, directive-branch mismatch). Authoritative because they're code-driven.
+
+**The problem:**
+
+Layers 2-4 use filesystem discovery — the same mechanism that picks up whatever AGENTS.md, CLAUDE.md, or skill files exist in any repo the operator opens. Omegon's carefully authored engineering opinions compete with:
+- Random `AGENTS.md` files in cloned repos
+- Skills from npm packages the operator installed
+- Prompt templates from third-party sources
+
+Pi's discovery is intentionally flat — no priority, no namespacing, no authority hierarchy. This is correct for pi (flexible tool). It's wrong for Omegon (opinionated engineering platform).
+
+**What Omegon can do without breaking pi:**
+
+1. **Code-level injection** (layers 5-6) is already authoritative. Extend this pattern.
+   - Move critical directives from AGENTS.md into `promptGuidelines` on tools
+   - Use `sendMessage` for session-level context injection
+   - Extension `session_start` handlers can inject directives as custom messages
+
+2. **Marker-based ownership** — Omegon already uses `<!-- managed by omegon -->` in AGENTS.md. This marker prevents user overwrites. Extend this to distinguish "Omegon-authored" from "repo-discovered" directives.
+
+3. **Priority in context injection** — when multiple AGENTS.md files are found, Omegon's should be injected first (higher in the prompt = higher weight for LLMs). Pi's `loadedContextFiles` ordering could be influenced by the extension.
+
+4. **Bundled vs discovered** — Omegon's skills and prompts are injected via `--extension` (which pi passes to `injectBundledResourceArgs`). They're already distinguishable because they come from the Omegon package root, not from repo discovery. But there's no explicit priority ordering.
+
+**Recommendation for this session:**
+
+The testing directive fix (4 layers, all code-level or AGENTS.md with marker ownership) is the right pattern. For the broader directive authority architecture:
+
+- **Near-term**: Continue embedding critical opinions as `promptGuidelines` on always-loaded tools (code-level, not filesystem-discoverable, not override-able by repo content)
+- **Medium-term**: Create an Omegon-level "engineering standards" injection that runs at `session_start`, injecting authoritative context via `sendMessage` with `display: false` — invisible to the operator but present in the agent's context
+- **Long-term (Omega)**: The coordinator should own the system prompt entirely, composing it from Omegon's opinions + project context + operator preferences with explicit priority layering
+
 ## Decisions
 
 ### Decision: Multi-layer test directive injection: AGENTS.md + cleave contract + review check
 
 **Status:** exploring
 **Rationale:** A single mention isn't enough — agents weight prominent, repeated directives. The fix needs: (1) AGENTS.md top-level Testing Standards section (highest authority, all sessions), (2) cleave child contract rule change from "run tests" to "write and run tests", (3) cleave review test-coverage check as a Warning-level finding. These three layers reinforce each other without requiring the agent to proactively load a skill file.
+
+### Decision: Testing directive implemented at 4 layers; broader directive authority is a separate design concern
+
+**Status:** decided
+**Rationale:** The immediate testing gap is closed with code-level injections at AGENTS.md (marker-owned), cleave child contract, task file contract, and system prompt guideline. The broader question of Omegon directive authority vs filesystem discovery is architecturally significant but distinct from the testing fix — it should be its own design node tracking the near/medium/long-term path from filesystem-discovered directives to code-level authoritative injection.
 
 ## Open Questions
 
