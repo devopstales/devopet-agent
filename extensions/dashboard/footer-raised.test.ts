@@ -1,4 +1,4 @@
-import { beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { DashboardFooter } from "./footer.ts";
@@ -822,5 +822,53 @@ describe("buildBranchTreeLines", () => {
     }, theme);
     // First connector line after repoName should contain the current branch
     assert.ok(lines[0]!.includes("feature/current"), lines[0]);
+  });
+});
+
+describe("directive indicator in dashboard footer", () => {
+  let footer: DashboardFooter;
+  let savedActiveMind: typeof sharedState.activeMind;
+
+  beforeEach(() => {
+    savedActiveMind = sharedState.activeMind;
+    (sharedState as any).dashboardMode = "raised";
+    (sharedState as any).designTree = {
+      nodeCount: 1, decidedCount: 1, exploringCount: 0, implementingCount: 0,
+      implementedCount: 0, blockedCount: 0, openQuestionCount: 0,
+      focusedNode: null, implementingNodes: [], nodes: [],
+    };
+    (sharedState as any).openspec = { changes: [] };
+    footer = new DashboardFooter(
+      {} as any,
+      makeTheme() as any,
+      makeFooterData() as any,
+      { mode: "raised", turns: 0 } satisfies DashboardState,
+    );
+    footer.setContext(makeContext() as any);
+  });
+
+  afterEach(() => {
+    sharedState.activeMind = savedActiveMind;
+  });
+
+  it("shows directive indicator when activeMind is set", () => {
+    sharedState.activeMind = "directive/my-feature";
+    const rendered = footer.render(140);
+    const text = rendered.join("\n");
+    assert.ok(text.includes("my-feature"), `directive label 'my-feature' should appear in rendered footer, got:\n${text.slice(0, 500)}`);
+  });
+
+  it("does not show directive indicator when activeMind is null", () => {
+    sharedState.activeMind = null;
+    const rendered = footer.render(140);
+    const text = rendered.join("\n");
+    assert.ok(!text.includes("directive:"), "no directive indicator should appear when activeMind is null");
+  });
+
+  it("does not show directive indicator when activeMind is default", () => {
+    sharedState.activeMind = undefined;
+    const rendered = footer.render(140);
+    const text = rendered.join("\n");
+    assert.ok(!text.includes("directive:"), "no directive indicator should appear when activeMind is undefined");
   });
 });

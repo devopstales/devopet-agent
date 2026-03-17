@@ -1094,3 +1094,53 @@ describe("JSONL Import Dedup (merge=union resilience)", () => {
     });
   });
 });
+
+describe("directive mind ↔ branch convention", () => {
+  let dir: string;
+  let store: FactStore;
+
+  beforeEach(() => {
+    dir = tmpDir();
+    store = new FactStore(dir);
+  });
+
+  afterEach(() => {
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("active directive mind persists across store re-open", () => {
+    store.forkMind("default", "directive/my-feature", "test");
+    store.setActiveMind("directive/my-feature");
+    store.close();
+
+    // Re-open — active mind should be persisted
+    store = new FactStore(dir);
+    assert.equal(store.getActiveMind(), "directive/my-feature");
+  });
+
+  it("getActiveMind returns null when directive mind is deleted", () => {
+    store.forkMind("default", "directive/my-feature", "test");
+    store.setActiveMind("directive/my-feature");
+    assert.equal(store.getActiveMind(), "directive/my-feature");
+
+    store.deleteMind("directive/my-feature");
+    // getActiveMind validates existence — should return null
+    assert.equal(store.getActiveMind(), null);
+  });
+
+  it("directive mind name follows directive/{node-id} convention", () => {
+    const nodeId = "my-feature";
+    const mindName = `directive/${nodeId}`;
+    const expectedBranch = `feature/${nodeId}`;
+
+    store.forkMind("default", mindName, "test");
+    store.setActiveMind(mindName);
+
+    // The convention: directive/X → branch feature/X
+    const activeMind = store.getActiveMind()!;
+    assert.ok(activeMind.startsWith("directive/"));
+    const suffix = activeMind.slice("directive/".length);
+    assert.equal(`feature/${suffix}`, expectedBranch);
+  });
+});
