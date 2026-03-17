@@ -67,13 +67,20 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: bash scripts/publish-pi-mono.sh
 
-      - name: Install Omegon publish dependencies
+      - name: Install Omegon dependencies
         if: steps.check.outputs.skip == 'false'
         run: npm install --ignore-scripts
 
       - name: Verify vendor dist is fresh
         if: steps.check.outputs.skip == 'false'
-        run: node scripts/check-vendor-dist.mjs
+        run: |
+          node scripts/check-vendor-dist.mjs
+          # Spot-check: the OAuth fix must be in the compiled dist
+          if grep -q "redirectUriForExchange" vendor/pi-mono/packages/ai/dist/utils/oauth/anthropic.js 2>/dev/null; then
+            echo "FATAL: OAuth redirect_uri fix not compiled into dist"
+            exit 1
+          fi
+          echo "✓ OAuth fix verified in compiled dist"
 
       - name: Publish omegon
         if: steps.check.outputs.skip == 'false'

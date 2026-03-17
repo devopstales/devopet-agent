@@ -66,27 +66,10 @@ for i in "${!PACKAGES[@]}"; do
   fi
 done
 
-# Phase 3: Rewrite omegon package.json — file: refs → registry versions
-echo ""
-echo "Phase 3: Rewriting omegon package.json for registry publish..."
-for i in "${!PACKAGES[@]}"; do
-  pkg="${PACKAGES[$i]}"
-  name="${SCOPED_NAMES[$i]}"
-  dir="$BASE/$pkg"
-  ver=$(node -p "require('./$dir/package.json').version")
-
-  node -e "
-    const fs = require('fs');
-    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    if (pkg.dependencies['$name']?.startsWith('file:')) {
-      pkg.dependencies['$name'] = '$ver';
-      fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
-      console.log('  ✓ $name → $ver');
-    } else {
-      console.log('  - $name already pinned');
-    }
-  "
-done
+# Phase 3 removed: omegon package.json keeps file: refs.
+# bundleDependencies + prepack.mjs materializes vendor packages into the
+# tarball from the local build. Rewriting to registry versions caused
+# npm install to pull stale registry packages over the freshly-built local dist.
 
 echo ""
-echo "Done. pi-mono packages published and package.json updated for omegon publish."
+echo "Done. pi-mono packages published. Omegon will bundle from local vendor build via prepack."
