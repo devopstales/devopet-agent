@@ -2,6 +2,7 @@
 id: cleave-child-observability
 title: Cleave Child Observability — Live insight into running children
 status: implemented
+related: [cleave-process-tree]
 tags: [cleave, ux, observability, dashboard, debugging]
 open_questions: []
 ---

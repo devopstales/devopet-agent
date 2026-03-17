@@ -1,7 +1,7 @@
 ---
 id: a2a-protocol-integration
 title: A2A Protocol Integration — Agent-to-Agent interoperability for Omegon
-status: exploring
+status: deferred
 related: [omega, multi-instance-coordination]
 tags: [architecture, a2a, interoperability, multi-agent, protocol, strategic]
 open_questions:
@@ -76,6 +76,18 @@ Assess whether and how Omegon should adopt Google's Agent-to-Agent (A2A) protoco
 7. **A2A for MCP replacement** — MCP and A2A are complementary, not competing. Omegon should keep MCP for tool access and only add A2A for agent-to-agent communication.
 
 **Key risk:** A2A adds HTTP server infrastructure to what is currently a purely CLI tool. Running an HTTP listener changes the security surface significantly — especially if Omegon handles code with secrets. The Semgrep security analysis flags prompt injection inheritance as the primary A2A threat.
+
+## Decisions
+
+### Decision: A2A is not the right protocol for internal cleave child coordination
+
+**Status:** decided
+**Rationale:** A2A solves untrusted federation — discovery, negotiation, and auth between agents from different vendors and trust boundaries. Omegon controls the entire fleet: it spawns the children, knows their capabilities, and trusts them completely. HTTP + JSON-RPC + OAuth between co-located subprocesses is massive overhead for zero trust benefit. The one genuine gap (mid-task negotiation) is a subprocess IPC problem, not an interoperability protocol problem.
+
+### Decision: Defer A2A for external interop — no current demand
+
+**Status:** decided
+**Rationale:** A2A remains relevant if Omegon ever needs to expose capabilities to external orchestrators or federate with untrusted agents. That demand doesn't exist today. Revisit when Omega development begins or when external integration requests appear.
 
 ## Open Questions
 
