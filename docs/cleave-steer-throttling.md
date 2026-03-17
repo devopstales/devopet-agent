@@ -1,7 +1,7 @@
 ---
 id: cleave-steer-throttling
 title: Cleave steer throttling policy — scope-aware sibling update injection
-status: seed
+status: implemented
 parent: cleave-process-tree
 open_questions:
   - "What is the steer throttling policy? Max steers per child? Only when scope overlaps? Only for published interfaces/decisions, not raw progress?"
