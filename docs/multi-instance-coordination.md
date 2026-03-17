@@ -325,6 +325,11 @@ The escape hatch for operators who want to stay on main: they simply don't use `
 **Status:** exploring
 **Rationale:** The factstore mind system (`forkMind`, `ingestMind`, `setActiveMind`, `deleteMind`) was designed for exactly this scoping pattern and is fully implemented at the storage layer. The gap is only in the memory extension's read/write paths which hardcode the 'default' mind. Wiring `getActiveMind()` into those paths activates logical isolation per-directive within a shared physical DB. This gives clean abandon (delete mind), clean merge (ingestMind with dedup), and directive-scoped fact discovery — none of which a raw symlink provides. The worktree delegate still needs physical access to the primary's `facts.db` (via symlink or path override), but operates in its own logical mind namespace rather than polluting the default mind.
 
+### Decision: Mind-per-directive is implemented and wired end-to-end
+
+**Status:** decided
+**Rationale:** The factstore mind API was already fully implemented. The wiring required 110 lines across 4 files: shared-state type, implement fork+activate, archive ingest+delete, and memory queue drain. All existing memory_store/memory_recall/memory_query/context injection paths already used activeMind() — no changes needed there. The mind system provides logical isolation within a shared physical DB, clean abandon (deleteMind), and explicit merge with deduplication (ingestMind).
+
 ## Open Questions
 
 - Should `implement` auto-checkout the created branch, or is that too disruptive for operators who prefer to stay on main?
