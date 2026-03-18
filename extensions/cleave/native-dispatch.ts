@@ -19,16 +19,19 @@ export interface NativeDispatchConfig {
 	maxTurns: number;
 }
 
-/** Native progress events emitted by the Rust omegon-agent cleave subcommand. */
+/**
+ * Native progress events emitted by the Rust omegon-agent cleave subcommand.
+ * Discriminated on the `event` field (matches Rust `#[serde(tag = "event")]`).
+ */
 export type NativeProgressEvent =
-	| { type: "wave_start"; wave: number; children: string[] }
-	| { type: "child_spawned"; label: string; worktree_path: string; child_id?: string }
-	| { type: "child_status"; label: string; status: "completed" | "failed"; elapsed_secs?: number; error?: string }
-	| { type: "child_activity"; label: string; activity: string; tool?: string; turn?: number }
-	| { type: "auto_commit"; label: string; message: string; files: string[] }
-	| { type: "merge_start"; total_children: number }
-	| { type: "merge_result"; success: boolean; conflicts?: string[] }
-	| { type: "done"; total_duration_secs: number; succeeded: number; failed: number };
+	| { event: "wave_start"; wave: number; children: string[] }
+	| { event: "child_spawned"; child: string; pid: number }
+	| { event: "child_status"; child: string; status: "running" | "completed" | "failed"; duration_secs?: number; error?: string }
+	| { event: "child_activity"; child: string; turn?: number; tool?: string; target?: string }
+	| { event: "auto_commit"; child: string; files: number }
+	| { event: "merge_start" }
+	| { event: "merge_result"; child: string; success: boolean; detail?: string }
+	| { event: "done"; completed: number; failed: number; duration_secs: number };
 
 /** Shape of the Rust CleaveState.ChildState after serde(rename_all = "camelCase"). */
 export interface RustChildState {

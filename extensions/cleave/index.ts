@@ -52,7 +52,7 @@ import {
 import { detectConflicts, parseTaskResult } from "./conflicts.ts";
 import { emitResolvedBugCandidate } from "./lifecycle-emitter.ts";
 import { DEFAULT_CHILD_TIMEOUT_MS, dispatchChildren, resolveExecuteModel, emitCleaveChildProgress } from "./dispatcher.ts";
-import type { RustChildState } from "./native-dispatch.ts";
+import type { RustChildState, NativeProgressEvent } from "./native-dispatch.ts";
 import { DEFAULT_REVIEW_CONFIG, type ReviewConfig } from "./review.ts";
 import {
 	detectOpenSpec,
@@ -2603,51 +2603,52 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 				labelToChildId.set(child.label, child.childId);
 			}
 			
-			const handleProgressEvent = (event: any) => {
-				switch (event.type) {
+			const handleProgressEvent = (event: NativeProgressEvent) => {
+				switch (event.event) {
 					case "child_spawned": {
-						const childId = labelToChildId.get(event.label);
+						const childId = labelToChildId.get(event.child);
 						if (childId !== undefined) {
 							emitCleaveChildProgress(pi, childId, {
 								status: "running",
-								startedAt: new Date().toISOString(),
-								worktreePath: event.worktree_path,
+								startedAt: Date.now(),
 							});
 						}
 						break;
 					}
 					case "child_activity": {
-						const childId = labelToChildId.get(event.label);
+						const childId = labelToChildId.get(event.child);
 						if (childId !== undefined) {
-							emitCleaveChildProgress(pi, childId, {
-								lastLine: event.activity,
-								...(event.tool && { lastTool: event.tool }),
-								...(event.turn && { lastTurn: event.turn }),
-							});
+							const summary = event.tool
+								? `→ ${event.tool}${event.target ? ` ${event.target}` : ""}`
+								: event.turn != null
+									? `Turn ${event.turn}`
+									: "";
+							if (summary) {
+								emitCleaveChildProgress(pi, childId, { lastLine: summary });
+							}
 						}
 						break;
 					}
 					case "child_status": {
-						const childId = labelToChildId.get(event.label);
+						const childId = labelToChildId.get(event.child);
 						if (childId !== undefined) {
-							const patch: any = {
-								status: event.status === "completed" ? "completed" : "failed",
-							};
-							if (event.elapsed_secs !== undefined) {
-								patch.durationSec = event.elapsed_secs;
-								patch.completedAt = new Date().toISOString();
-							}
-							if (event.error) {
-								patch.error = event.error;
-							}
-							emitCleaveChildProgress(pi, childId, patch);
+							const dashStatus = event.status === "completed" ? "done" as const
+								: event.status === "failed" ? "failed" as const
+								: "running" as const;
+							emitCleaveChildProgress(pi, childId, {
+								status: dashStatus,
+								...(event.duration_secs != null && { elapsed: event.duration_secs * 1000 }),
+							});
 						}
 						break;
 					}
-					// Other events like wave_start, merge_start, done can be logged but don't directly update child state
-					default:
-						// Log other events for debugging
-						console.debug("[cleave] Native progress event:", event);
+					case "wave_start":
+					case "merge_start":
+					case "merge_result":
+					case "auto_commit":
+					case "done":
+						// These are informational — already surfaced via onProgress stderr lines
+						break;
 				}
 			};
 
