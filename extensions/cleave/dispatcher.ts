@@ -900,10 +900,12 @@ async function spawnChild(
 	model?: string,
 	idleTimeoutMs?: number,
 ): Promise<ChildResult> {
-	// Native dispatch: use the Rust binary when available and requested
+	// Native dispatch: use the Rust binary — MANDATORY.
+	// The TypeScript child path is dead. If native isn't available, fail loud.
 	if (useNative && nativeAgent && model) {
 		return spawnChildNative(nativeAgent, prompt, cwd, timeoutMs, model, signal, onLine);
 	}
+
 	if (useRpc) {
 		return spawnChildRpc(prompt, cwd, timeoutMs, signal, localModel, onEvent, idleTimeoutMs);
 	}
