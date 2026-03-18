@@ -1,7 +1,7 @@
 ---
 id: rust-phase-1
 title: "Phase 1 — Process inversion: Rust binary becomes the process owner, TS becomes subprocess"
-status: exploring
+status: resolved
 parent: rust-agent-loop
 tags: [rust, phase-1, process-inversion, tui-bridge, strategic]
 open_questions: []
@@ -59,6 +59,11 @@ Replace `bin/omegon.mjs` (Node.js) with the Rust binary as the process entry poi
 
 **Status:** decided
 **Rationale:** These are thin wrappers around external processes (d2, ffmpeg, satori, brave API). Porting them to Rust is low-value busywork — the Rust version would do the same subprocess calls. They can be exposed to the Rust agent loop through a tool bridge (the TUI bridge subprocess also handles tool calls for TS-only tools) or migrated lazily in Phase 2+. The priority is compaction and lifecycle — not reimplementing HTTP calls to search APIs.
+
+### Decision: Phase 1 completes without the TUI bridge — the true process inversion is Phase 2 with native TUI
+
+**Status:** decided
+**Rationale:** Investigation of pi's InteractiveMode (3.8k lines) reveals it cannot be cleanly separated from AgentSession to serve as a rendering subprocess. The TUI bridge concept assumed pi-tui was a separable layer; it isn't. Phase 1 is complete with: (1) compaction ✅, (2) lifecycle crates ✅, (3) session persistence ✅. The Rust binary is the default headless executor. Interactive mode continues using pi's InteractiveMode (which works). The true process inversion — where the user runs a Rust binary — requires a native TUI, which is Phase 2. This is not a retreat — it's recognition that the throwaway bridge would cost more to build than the native TUI it would be replaced by.
 
 ## Open Questions
 
