@@ -80,6 +80,32 @@ The **full mutation surface** (create nodes, set status, add decisions, archive 
 - All dashboard-state emitters (TS rendering concern)
 - Branch cleanup, lifecycle emitters, reconciliation
 
+### Phase 1a assessment — all 5 constraints satisfied
+
+**Implementation: 4 new files, 1,667 LoC Rust, 24 lifecycle tests**
+
+| File | LoC | Role |
+|------|-----|------|
+| lifecycle/types.rs | 237 | Shared enums + structs |
+| lifecycle/design.rs | 661 | Frontmatter + section parser, tree scan |
+| lifecycle/spec.rs | 533 | Spec parser, change listing, stage computation |
+| lifecycle/context.rs | 229 | ContextProvider impl, wired into agent loop |
+
+**Constraint verification:**
+1. ✅ Frontmatter: 12 fields (all present in real docs)
+2. ✅ Sections: Overview, Research, Decisions, Open Questions, Implementation Notes
+3. ✅ Spec: Given/When/Then + And clauses
+4. ✅ Stage: proposed→specified→planned→implementing→verifying
+5. ✅ Integration tested against real docs/ and openspec/
+
+**What Phase 1a delivers:** Cleave children now get design-tree focus context and active openspec change information in their system prompts, without any TS bridge. The LifecycleContextProvider scans at startup and injects via the ContextProvider trait.
+
+**Remaining for Phase 1b (when Rust becomes interactive parent):**
+- Full mutation tools (create, update, archive)
+- Dashboard state emission
+- Branch binding, reconciliation
+- Acceptance criteria parsing
+
 ## Decisions
 
 ### Decision: Phase 1a: read-only lifecycle parsing + context injection. Phase 1b: full mutation tools when Rust becomes the interactive parent.
