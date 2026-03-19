@@ -3,6 +3,21 @@
 All notable changes to Omegon are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-03-19
+
+### Changed
+- **BREAKING:** npm package renamed from `omegon` to `omegon-pi`. Install via `npm install -g omegon-pi`.
+- **BREAKING:** Binary command renamed from `omegon` to `omegon-pi`. The `pi` shim remains as a compatibility alias.
+- The Rust agent binary now owns the `omegon` name on npm (`npm install -g omegon` installs the Rust binary).
+- `/update` command now queries and installs `omegon-pi` instead of `omegon`.
+- Binary verification, subprocess resolver, and all internal references updated for the new name.
+
+### Migration
+```bash
+npm uninstall -g omegon
+npm install -g omegon-pi
+```
+
 ## [0.8.0] - 2026-03-17
 
 ### Added

@@ -12,7 +12,7 @@ npm install -g omegon-pi
 
 **Node requirement:** Omegon requires **Node.js 20+**. Node 18 will fail because bundled pi-tui uses modern Unicode regex features unsupported by older runtimes.
 
-This installs the canonical `omegon` command globally. A legacy `pi` alias may remain available for compatibility, but the supported lifecycle entrypoint is `omegon`. If a standalone pi package is already installed, omegon transparently takes ownership of the lifecycle boundary so startup, update, verification, and restart all stay inside Omegon control. To switch back to standalone pi at any time:
+This installs the `omegon-pi` command globally. A legacy `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi transparently takes ownership of the lifecycle boundary so startup, update, verification, and restart all stay inside Omegon control. To switch back to standalone pi at any time:
 
 ```bash
 npm uninstall -g omegon-pi
@@ -30,8 +30,8 @@ omegon      # start Omegon in any project directory
 
 | Context | How |
 |--------|-----|
-| **Installed Omegon (`npm install -g omegon-pi`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
-| **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both follow the same lifecycle contract: pull/sync, build, refresh dependencies, `npm link --force`, verify the active `omegon` target, then stop at an explicit restart handoff. |
+| **Installed Omegon (`npm install -g omegon-pi`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon-pi` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
+| **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both follow the same lifecycle contract: pull/sync, build, refresh dependencies, `npm link --force`, verify the active `omegon-pi` target, then stop at an explicit restart handoff. |
 | **Lightweight cache refresh only** | Run `/refresh`. This clears transient caches and reloads extensions, but it is not equivalent to package/runtime replacement. |
 
 > The patched fork syncs from upstream daily via GitHub Actions. Bug fixes and new AI provider support land automatically. If a sync PR has conflicts, they are surfaced for manual review before merging — upstream changes are never silently dropped.

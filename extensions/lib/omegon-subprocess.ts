@@ -14,7 +14,7 @@ let cached: OmegonSubprocessSpec | null = null;
 /**
  * Resolve the canonical Omegon-owned subprocess entrypoint without relying on PATH.
  *
- * Internal helpers should spawn `process.execPath` with `bin/omegon.mjs` explicitly,
+ * Internal helpers should spawn `process.execPath` with `bin/omegon-pi.mjs` explicitly,
  * rather than assuming a `pi` or `omegon` binary on PATH points back to this install.
  */
 export function resolveOmegonSubprocess(): OmegonSubprocessSpec {

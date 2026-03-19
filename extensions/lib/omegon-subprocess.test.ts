@@ -14,10 +14,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 
 describe("resolveOmegonSubprocess", () => {
-	it("resolves to node + bin/omegon.mjs", () => {
+	it("resolves to node + bin/omegon-pi.mjs", () => {
 		const spec = resolveOmegonSubprocess();
 		assert.ok(spec.command, "command should be set");
-		assert.ok(spec.omegonEntry.endsWith("bin/omegon.mjs"), `expected omegon.mjs, got: ${spec.omegonEntry}`);
+		assert.ok(spec.omegonEntry.endsWith("bin/omegon-pi.mjs"), `expected omegon-pi.mjs, got: ${spec.omegonEntry}`);
 		assert.ok(spec.argvPrefix.length > 0, "argvPrefix should have at least one entry");
 	});
 });

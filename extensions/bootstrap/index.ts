@@ -439,7 +439,7 @@ export default function (pi: ExtensionAPI) {
 /**
  * Restart Omegon by exiting with code 75.
  *
- * The bin/omegon.mjs wrapper runs the CLI in a subprocess loop. When it sees
+ * The bin/omegon-pi.mjs wrapper runs the CLI in a subprocess loop. When it sees
  * exit code 75 (EX_TEMPFAIL), it re-spawns a fresh CLI process. Because the
  * wrapper stays as the foreground process group leader throughout, the new
  * CLI always owns the terminal and can receive input — no detached spawn,
@@ -544,7 +544,7 @@ async function inspectActiveOmegonBinary(): Promise<OmegonBinaryVerification> {
 
 function formatVerification(verification: OmegonBinaryVerification): string {
 	if (!verification.ok || !verification.resolution) {
-		return `✗ omegon target verification failed${verification.reason ? `: ${verification.reason}` : ""}`;
+		return `✗ omegon-pi target verification failed${verification.reason ? `: ${verification.reason}` : ""}`;
 	}
 	return [
 		`✓ active ${verification.executableName}: ${verification.executablePath}`,
@@ -714,7 +714,7 @@ async function updateInstalledMode(
 	if (dryRun) return;
 
 	const confirmed = await ctx.ui.confirm(
-		"Update omegon?",
+		"Update omegon-pi?",
 		`Install ${PKG}@${latestVersion} globally via npm?\n\nThis will update Omegon, its bundled agent core, extensions, themes, and skills.\nRestart Omegon after the update completes.`,
 	);
 	if (!confirmed) {
