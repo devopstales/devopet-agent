@@ -1,6 +1,6 @@
 {
   "name": "omegon-pi",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Omegon \u2014 an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
   "bin": {
     "omegon-pi": "bin/omegon-pi.mjs",
@@ -30,11 +30,11 @@
     "coding-agent",
     "cli"
   ],
-  "author": "cwilson613",
+  "author": "cwilson <cwilson@styrene.io>",
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/styrene-lab/omegon.git"
+    "url": "https://github.com/styrene-lab/omegon-pi.git"
   },
   "bugs": {
     "url": "https://github.com/styrene-lab/omegon/issues"
