@@ -4,6 +4,6 @@
  *
  * `pi` remains available temporarily so existing installs are not stranded,
  * but it immediately re-enters the same Omegon-owned executable boundary as
- * the canonical `omegon` command.
+ * the canonical `omegon-pi` command.
  */
-await import("./omegon.mjs");
+await import("./omegon-pi.mjs");

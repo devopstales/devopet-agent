@@ -36,7 +36,7 @@ jobs:
         id: check
         run: |
           LOCAL_VER=$(node -p "require('./package.json').version")
-          NPM_VER=$(npm view omegon version 2>/dev/null || echo "0.0.0")
+          NPM_VER=$(npm view omegon-pi version 2>/dev/null || echo "0.0.0")
           echo "version=$LOCAL_VER" >> $GITHUB_OUTPUT
           if [ "$LOCAL_VER" = "$NPM_VER" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -79,29 +79,24 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: npm publish --access public --provenance
 
-      - name: Deprecate broken 0.9.1
+      - name: Deprecate old omegon package
         if: steps.check.outputs.skip == 'false'
         continue-on-error: true
         run: |
-          npm deprecate 'omegon@0.9.1' 'Broken: ships stale vendor dist with unfixed OAuth bug. Upgrade to 0.9.2 or later.'
+          npm deprecate 'omegon@*' 'This package has been renamed to omegon-pi. For the Rust agent: curl -fsSL https://omegon.styrene.dev/install.sh | sh. For the TS TUI: npm i -g omegon-pi'
 
       - name: Verify package is installable
         if: steps.check.outputs.skip == 'false'
         run: |
           VERSION=${{ steps.check.outputs.version }}
-          echo "Verifying omegon@${VERSION} is installable..."
-          # npm CDN propagation for 41MB+ tarballs can take 5-10 minutes
-          # from certain Cloudflare PoPs (including GitHub Actions' edge).
-          # Use npm install to verify — it follows redirects and retries
-          # internally, which is more reliable than HEAD requests to the CDN.
+          echo "Verifying omegon-pi@${VERSION} is installable..."
           for i in $(seq 1 24); do
-            if npm install --dry-run "omegon@${VERSION}" 2>/dev/null; then
+            if npm install --dry-run "omegon-pi@${VERSION}" 2>/dev/null; then
               echo "✓ Package installable (attempt $i)"
               exit 0
             fi
             echo "Attempt $i/24: not yet available — waiting 15s..."
             sleep 15
           done
-          echo "::warning::Package not installable after 6 minutes from this CDN edge. The tarball typically propagates within 10 minutes — check manually."
-          # Don't fail hard — the tarball will appear, just slowly on this edge
+          echo "::warning::Package not installable after 6 minutes from this CDN edge."
           exit 0

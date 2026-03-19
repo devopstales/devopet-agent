@@ -7,7 +7,7 @@ An opinionated distribution of [**pi**](https://github.com/badlogic/pi) — the 
 ## Installation
 
 ```bash
-npm install -g omegon
+npm install -g omegon-pi
 ```
 
 **Node requirement:** Omegon requires **Node.js 20+**. Node 18 will fail because bundled pi-tui uses modern Unicode regex features unsupported by older runtimes.
@@ -15,7 +15,7 @@ npm install -g omegon
 This installs the canonical `omegon` command globally. A legacy `pi` alias may remain available for compatibility, but the supported lifecycle entrypoint is `omegon`. If a standalone pi package is already installed, omegon transparently takes ownership of the lifecycle boundary so startup, update, verification, and restart all stay inside Omegon control. To switch back to standalone pi at any time:
 
 ```bash
-npm uninstall -g omegon
+npm uninstall -g omegon-pi
 npm install -g @mariozechner/pi-coding-agent
 ```
 
@@ -30,7 +30,7 @@ omegon      # start Omegon in any project directory
 
 | Context | How |
 |--------|-----|
-| **Installed Omegon (`npm install -g omegon`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
+| **Installed Omegon (`npm install -g omegon-pi`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
 | **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both follow the same lifecycle contract: pull/sync, build, refresh dependencies, `npm link --force`, verify the active `omegon` target, then stop at an explicit restart handoff. |
 | **Lightweight cache refresh only** | Run `/refresh`. This clears transient caches and reloads extensions, but it is not equivalent to package/runtime replacement. |
 
@@ -270,7 +270,7 @@ Pre-built prompts for common workflows:
 ## Requirements
 
 **Required:**
-- `omegon` — install via `npm install -g omegon`; launch via `omegon`
+- `omegon-pi` — install via `npm install -g omegon-pi`; launch via `omegon-pi`
 - `@styrene-lab/pi-coding-agent` ≥ 0.57 underpins Omegon's bundled agent core and tracks a patched fork of [badlogic/pi-mono](https://github.com/badlogic/pi-mono). Fork source: [cwilson613/pi-mono](https://github.com/cwilson613/pi-mono)
 
 **Optional (installed by `/bootstrap`):**

@@ -137,18 +137,18 @@ describe("bootstrap operator profile helpers", () => {
 
 describe("bootstrap omegon binary verification helpers", () => {
 	const resolution: PiResolutionInfo = {
-		omegonRoot: "/opt/homebrew/lib/node_modules/omegon",
-		cli: "/opt/homebrew/lib/node_modules/omegon/node_modules/@styrene-lab/pi-coding-agent/dist/cli.js",
+		omegonRoot: "/opt/homebrew/lib/node_modules/omegon-pi",
+		cli: "/opt/homebrew/lib/node_modules/omegon-pi/node_modules/@styrene-lab/pi-coding-agent/dist/cli.js",
 		resolutionMode: "npm",
 		agentDir: "/Users/test/.pi/agent",
 		stateDir: "/Users/test/.pi/agent",
 	};
 
-	it("accepts an active omegon binary owned by omegon", () => {
+	it("accepts an active omegon-pi binary owned by omegon", () => {
 		const result = validateOmegonBinaryVerification(
-			"omegon",
-			"/opt/homebrew/bin/omegon",
-			"/opt/homebrew/lib/node_modules/omegon/bin/omegon.mjs",
+			"omegon-pi",
+			"/opt/homebrew/bin/omegon-pi",
+			"/opt/homebrew/lib/node_modules/omegon-pi/bin/omegon-pi.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, true);
@@ -157,9 +157,9 @@ describe("bootstrap omegon binary verification helpers", () => {
 
 	it("rejects binaries whose resolved omegon root is not omegon", () => {
 		const result = validateOmegonBinaryVerification(
-			"omegon",
-			"/usr/local/bin/omegon",
-			"/usr/local/lib/node_modules/other-tool/bin/omegon.mjs",
+			"omegon-pi",
+			"/usr/local/bin/omegon-pi",
+			"/usr/local/lib/node_modules/other-tool/bin/omegon-pi.mjs",
 			{ ...resolution, omegonRoot: "/usr/local/lib/node_modules/other-tool" },
 		);
 		assert.equal(result.ok, false);
@@ -170,7 +170,7 @@ describe("bootstrap omegon binary verification helpers", () => {
 		const result = validateOmegonBinaryVerification(
 			"pi",
 			"/opt/homebrew/bin/pi",
-			"/opt/homebrew/lib/node_modules/omegon/bin/pi.mjs",
+			"/opt/homebrew/lib/node_modules/omegon-pi/bin/pi.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, true);
@@ -178,9 +178,9 @@ describe("bootstrap omegon binary verification helpers", () => {
 
 	it("rejects binaries whose realpath does not point at omegon", () => {
 		const result = validateOmegonBinaryVerification(
-			"omegon",
-			"/usr/local/bin/omegon",
-			"/usr/local/lib/node_modules/some-other-tool/bin/omegon.mjs",
+			"omegon-pi",
+			"/usr/local/bin/omegon-pi",
+			"/usr/local/lib/node_modules/some-other-tool/bin/omegon-pi.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, false);

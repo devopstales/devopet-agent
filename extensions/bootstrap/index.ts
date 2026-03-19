@@ -502,7 +502,7 @@ export function normalizeExecutablePath(executablePath: string): string {
 	}
 }
 
-async function getActiveExecutablePath(executableName = "omegon"): Promise<string> {
+async function getActiveExecutablePath(executableName = "omegon-pi"): Promise<string> {
 	const which = await run("which", [executableName]);
 	return which.code === 0 ? which.stdout.trim() : "";
 }
@@ -513,8 +513,8 @@ export function validateOmegonBinaryVerification(
 	realExecutablePath: string,
 	resolution: PiResolutionInfo,
 ): OmegonBinaryVerification {
-	const binaryLooksOwnedByOmegon = /[\\/]omegon[\\/]/.test(realExecutablePath) || /[\\/]omegon[\\/]bin[\\/](?:omegon|pi)(?:\.mjs)?$/.test(realExecutablePath);
-	if (!/omegon(?:[\\/]|$)/.test(resolution.omegonRoot)) {
+	const binaryLooksOwnedByOmegon = /[\\/]omegon(?:-pi)?[\\/]/.test(realExecutablePath) || /[\\/]omegon(?:-pi)?[\\/]bin[\\/](?:omegon-pi|pi)(?:\.mjs)?$/.test(realExecutablePath);
+	if (!/omegon(?:-pi)?(?:[\\/]|$)/.test(resolution.omegonRoot)) {
 		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} resolved to non-Omegon root: ${resolution.omegonRoot}` };
 	}
 	if (!binaryLooksOwnedByOmegon) {
@@ -524,10 +524,10 @@ export function validateOmegonBinaryVerification(
 }
 
 async function inspectActiveOmegonBinary(): Promise<OmegonBinaryVerification> {
-	const executableName = "omegon";
+	const executableName = "omegon-pi";
 	const executablePath = await getActiveExecutablePath(executableName);
 	if (!executablePath) {
-		return { ok: false, executableName, executablePath: "", realExecutablePath: "", reason: "`omegon` command not found on PATH" };
+		return { ok: false, executableName, executablePath: "", realExecutablePath: "", reason: "`omegon-pi` command not found on PATH" };
 	}
 	const realExecutablePath = normalizeExecutablePath(executablePath);
 	const probe = await run(executablePath, ["--where"]);
@@ -682,7 +682,7 @@ async function updateInstalledMode(
 		};
 	},
 ): Promise<void> {
-	const PKG = "omegon";
+	const PKG = "omegon-pi";
 
 	// Check latest version on npm
 	ctx.ui.notify(`Checking latest version of ${PKG}…`, "info");

@@ -76,7 +76,7 @@ if (process.argv.includes("--where")) {
     resolutionMode,
     agentDir: stateDir,
     stateDir,
-    executable: "omegon",
+    executable: "omegon-pi",
   }, null, 2) + "\n");
   process.exit(0);
 }

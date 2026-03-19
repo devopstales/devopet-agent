@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const OMEGON_BIN = join(process.cwd(), "bin", "omegon.mjs");
+const OMEGON_BIN = join(process.cwd(), "bin", "omegon-pi.mjs");
 const PI_BIN = join(process.cwd(), "bin", "pi.mjs");
 
 function makeTmpDir(prefix: string): string {
@@ -26,10 +26,10 @@ describe("omegon executable --where", () => {
 		});
 		assert.equal(result.status, 0, result.stderr);
 		const data = JSON.parse(result.stdout);
-		assert.match(data.omegonRoot, /omegon$/);
+		assert.match(data.omegonRoot, /omegon(-pi)?$/);
 		assert.match(data.cli, /(packages[\\/]coding-agent|node_modules[\\/]@styrene-lab[\\/]pi-coding-agent)[\\/]dist[\\/]cli\.js$/);
 		assert.ok(data.resolutionMode === "vendor" || data.resolutionMode === "npm");
-		assert.equal(data.executable, "omegon");
+		assert.equal(data.executable, "omegon-pi");
 		assert.equal(data.agentDir, data.stateDir);
 		assert.match(data.stateDir, /[\\/]\.pi[\\/]agent$/);
 	});
@@ -57,8 +57,8 @@ describe("omegon executable --where", () => {
 		});
 		assert.equal(result.status, 0, result.stderr);
 		const data = JSON.parse(result.stdout);
-		assert.match(data.omegonRoot, /omegon$/);
-		assert.equal(data.executable, "omegon");
+		assert.match(data.omegonRoot, /omegon/);
+		assert.equal(data.executable, "omegon-pi");
 		assert.equal(data.agentDir, data.stateDir);
 	});
 });
@@ -71,7 +71,7 @@ describe("omegon startup state migration", () => {
 		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@styrene-lab", "pi-coding-agent", "dist");
 		const sharedStateDir = join(fakeHome, ".pi", "agent");
 		const cliStub = join(fakeNodeModulesDir, "cli.js");
-		const omegonShim = join(fakeBinDir, "omegon.mjs");
+		const omegonShim = join(fakeBinDir, "omegon-pi.mjs");
 		try {
 			mkdirSync(fakeBinDir, { recursive: true });
 			mkdirSync(fakeNodeModulesDir, { recursive: true });
@@ -112,7 +112,7 @@ describe("omegon startup state migration", () => {
 		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@styrene-lab", "pi-coding-agent", "dist");
 		const sharedStateDir = join(fakeHome, ".pi", "agent");
 		const cliStub = join(fakeNodeModulesDir, "cli.js");
-		const omegonShim = join(fakeBinDir, "omegon.mjs");
+		const omegonShim = join(fakeBinDir, "omegon-pi.mjs");
 		try {
 			mkdirSync(fakeBinDir, { recursive: true });
 			mkdirSync(fakeNodeModulesDir, { recursive: true });

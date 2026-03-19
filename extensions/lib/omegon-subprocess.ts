@@ -21,7 +21,7 @@ export function resolveOmegonSubprocess(): OmegonSubprocessSpec {
   if (cached) return cached;
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const omegonEntry = join(here, "..", "..", "bin", "omegon.mjs");
+  const omegonEntry = join(here, "..", "..", "bin", "omegon-pi.mjs");
   cached = {
     command: process.execPath,
     argvPrefix: [omegonEntry],
