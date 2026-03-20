@@ -272,6 +272,7 @@ export class FactStore {
     this.db.pragma("foreign_keys = ON");
     this.initSchema();
     this.runMigrations();
+    this.ensureIndexes();
   }
 
   /**
@@ -451,26 +452,48 @@ export class FactStore {
       this.setSchemaVersion(4);
     }
 
-    // Migration 4→5: jj change ID provenance tracking
-    // Facts and episodes created in jj-managed repos record the working copy
-    // change ID at creation time. Change IDs are permanent (survive rebase)
-    // and link knowledge to its originating point in the commit graph.
+    // Migration 4→5: schema alignment + jj change ID provenance tracking
+    //
+    // Two concerns:
+    // 1. DBs created by the Rust omegon binary at schema v4 are missing columns
+    //    that the TS schema has always had: created_session, superseded_at,
+    //    archived_at (facts), session_id (episodes), and related tables
+    //    (episode_facts, episodes_vec). These must be added idempotently.
+    // 2. jj_change_id column for provenance tracking (new in v5).
     if (current < 5) {
-      // Add jj_change_id column — may already exist if DB was created with latest schema
-      try {
-        this.db.prepare(
-          `ALTER TABLE facts ADD COLUMN jj_change_id TEXT`
-        ).run();
-      } catch {
-        // Column already exists
-      }
-      try {
-        this.db.prepare(
-          `ALTER TABLE episodes ADD COLUMN jj_change_id TEXT`
-        ).run();
-      } catch {
-        // Column already exists
-      }
+      // Add columns that may be missing from Rust-created DBs.
+      // Each ALTER TABLE is wrapped in try/catch — "duplicate column" is expected
+      // for DBs created by TS (which always had these columns).
+      const addColumnIfMissing = (table: string, col: string, type: string = "TEXT") => {
+        try { this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); } catch { /* exists */ }
+      };
+      addColumnIfMissing("facts", "created_session");
+      addColumnIfMissing("facts", "superseded_at");
+      addColumnIfMissing("facts", "archived_at");
+      addColumnIfMissing("facts", "jj_change_id");
+      addColumnIfMissing("episodes", "session_id");
+      addColumnIfMissing("episodes", "jj_change_id");
+
+      // Create tables that may not exist in Rust-created DBs
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS episode_facts (
+          episode_id TEXT NOT NULL,
+          fact_id    TEXT NOT NULL,
+          PRIMARY KEY (episode_id, fact_id),
+          FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE,
+          FOREIGN KEY (fact_id) REFERENCES facts(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS episodes_vec (
+          episode_id TEXT PRIMARY KEY,
+          embedding  BLOB NOT NULL,
+          model_name TEXT NOT NULL DEFAULT '',
+          dims       INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (episode_id) REFERENCES episodes(id) ON DELETE CASCADE
+        );
+      `);
+
+      // Indexes on these columns are created by ensureIndexes() after all migrations.
       this.setSchemaVersion(5);
     }
   }
@@ -519,6 +542,10 @@ export class FactStore {
         FOREIGN KEY (mind) REFERENCES minds(name) ON DELETE CASCADE
       );
 
+      -- Core indexes on columns guaranteed to exist in all DB origins.
+      -- Indexes on migration-added columns (created_session, version) are
+      -- created in ensureIndexes() AFTER runMigrations() so they don't fail
+      -- on Rust-created DBs that lack those columns pre-migration.
       CREATE INDEX IF NOT EXISTS idx_facts_active
         ON facts(mind, status) WHERE status = 'active';
       CREATE INDEX IF NOT EXISTS idx_facts_hash
@@ -531,8 +558,6 @@ export class FactStore {
         ON facts(created_at);
       CREATE INDEX IF NOT EXISTS idx_facts_confidence
         ON facts(mind, confidence) WHERE status = 'active';
-      CREATE INDEX IF NOT EXISTS idx_facts_session
-        ON facts(created_session);
 
       CREATE TABLE IF NOT EXISTS edges (
         id                  TEXT PRIMARY KEY,
@@ -615,6 +640,19 @@ export class FactStore {
         VALUES ('default', 'Project default memory', 'active', 'local', ?)
       `).run(new Date().toISOString());
     }
+  }
+
+  /**
+   * Create indexes on columns that may not exist until after migrations.
+   * Called AFTER runMigrations() so Rust-created DBs have had their
+   * missing columns added before we try to index them.
+   */
+  private ensureIndexes(): void {
+    const safeIndex = (sql: string) => {
+      try { this.db.prepare(sql).run(); } catch { /* column or index issue — non-fatal */ }
+    };
+    safeIndex(`CREATE INDEX IF NOT EXISTS idx_facts_session ON facts(created_session)`);
+    safeIndex(`CREATE INDEX IF NOT EXISTS idx_facts_version ON facts(version DESC)`);
   }
 
   // ---------------------------------------------------------------------------
