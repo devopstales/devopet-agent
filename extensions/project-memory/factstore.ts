@@ -14,6 +14,7 @@
  *   The LLM never sees the database directly.
  */
 
+import * as childProcess from "node:child_process";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as crypto from "node:crypto";
@@ -152,6 +153,9 @@ export interface Fact {
   version: number;
   /** Last time this fact was returned by semanticSearch. Null if never accessed. */
   last_accessed: string | null;
+  /** jj change ID at fact creation — permanent provenance anchor.
+   *  Survives rebase/squash. Null for facts created outside jj repos. */
+  jj_change_id: string | null;
 }
 
 export interface MindRecord {
@@ -251,6 +255,9 @@ export class FactStore {
   private db: any;
   private dbPath: string;
   private decayProfile: DecayProfile;
+  /** Cached jj change ID — resolved once at construction, reused for all stores in this session. */
+  private cachedJjChangeId: string | null = null;
+  private jjChecked = false;
 
   constructor(memoryDir: string, opts?: { decay?: DecayProfile; dbName?: string }) {
     this.decayProfile = opts?.decay ?? DECAY;
@@ -264,8 +271,39 @@ export class FactStore {
     this.runMigrations();
   }
 
+  /**
+   * Get the current jj change ID, or null if not in a jj repo.
+   * Cached after first call — the change ID for this session's working copy.
+   */
+  private getJjChangeId(): string | null {
+    if (this.jjChecked) return this.cachedJjChangeId;
+    this.jjChecked = true;
+
+    try {
+      // Walk up from dbPath to find .jj
+      let dir = path.dirname(this.dbPath);
+      for (let i = 0; i < 10; i++) {
+        if (fs.existsSync(path.join(dir, ".jj"))) break;
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+      }
+      if (!fs.existsSync(path.join(dir, ".jj"))) return null;
+
+      const result = childProcess.execSync(
+        "jj log -r @ --no-graph -T 'change_id.short()'",
+        { cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+      );
+      const id = result.toString().trim();
+      this.cachedJjChangeId = id || null;
+      return this.cachedJjChangeId;
+    } catch {
+      return null;
+    }
+  }
+
   /** Current schema version — bump when adding migrations */
-  static readonly SCHEMA_VERSION = 4;
+  static readonly SCHEMA_VERSION = 5;
 
   private getSchemaVersion(): number {
     try {
@@ -395,6 +433,17 @@ export class FactStore {
         `UPDATE facts SET decay_profile = 'recent_work' WHERE section = 'Recent Work' AND decay_profile = 'standard'`
       ).run();
       this.setSchemaVersion(4);
+    }
+
+    // Migration 4→5: jj change ID provenance tracking
+    // Facts and episodes created in jj-managed repos record the working copy
+    // change ID at creation time. Change IDs are permanent (survive rebase)
+    // and link knowledge to its originating point in the commit graph.
+    if (current < 5) {
+      this.db.prepare(
+        `ALTER TABLE facts ADD COLUMN jj_change_id TEXT`
+      ).run();
+      this.setSchemaVersion(5);
     }
   }
 
@@ -590,8 +639,8 @@ export class FactStore {
     this.db.prepare(`
       INSERT INTO facts (id, mind, section, content, status, created_at, created_session,
                          supersedes, source, content_hash, confidence, last_reinforced,
-                         reinforcement_count, decay_rate, decay_profile, version)
-      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         reinforcement_count, decay_rate, decay_profile, version, jj_change_id)
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, mind, opts.section, content, now,
       opts.session ?? null,
@@ -603,6 +652,7 @@ export class FactStore {
       opts.decay_rate ?? this.decayProfile.baseRate,
       decayProfileName,
       version,
+      this.getJjChangeId(),
     );
 
     return { id, duplicate: false };
@@ -1551,7 +1601,7 @@ export class FactStore {
     ).all() as Fact[];
 
     for (const fact of allFacts) {
-      lines.push(JSON.stringify({
+      const exported: Record<string, unknown> = {
         _type: "fact",
         id: fact.id,
         mind: fact.mind,
@@ -1562,7 +1612,12 @@ export class FactStore {
         source: fact.source,
         content_hash: fact.content_hash,
         supersedes: fact.supersedes,
-      }));
+      };
+      // Include jj_change_id when present (backward compatible — older imports ignore it)
+      if (fact.jj_change_id) {
+        exported.jj_change_id = fact.jj_change_id;
+      }
+      lines.push(JSON.stringify(exported));
     }
 
     // Export active edges — deterministic: chronological with id tie-break
@@ -1703,8 +1758,8 @@ export class FactStore {
               this.db.prepare(`
                 INSERT INTO facts (id, mind, section, content, status, created_at, created_session,
                                    supersedes, source, content_hash, confidence, last_reinforced,
-                                   reinforcement_count, decay_rate)
-                VALUES (?, ?, ?, ?, 'active', ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+                                   reinforcement_count, decay_rate, jj_change_id)
+                VALUES (?, ?, ?, ?, 'active', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
                 id, mind, record.section, record.content,
                 record.created_at ?? now,
@@ -1715,6 +1770,7 @@ export class FactStore {
                 record.last_reinforced ?? now,
                 record.reinforcement_count ?? 1,
                 record.decay_rate ?? this.decayProfile.baseRate,
+                record.jj_change_id ?? null,
               );
               factIdMap.set(record.id, id);
               factsAdded++;
