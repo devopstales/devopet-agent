@@ -140,6 +140,9 @@ export interface DesignNode {
 	branches: string[];
 	/** OpenSpec change name linked to this node */
 	openspec_change?: string;
+	/** jj change ID — permanent identifier that survives rebase/squash.
+	 *  Captured when the node is created or transitions to a key status. */
+	jj_change_id?: string;
 	/** Issue type classification (epic/feature/task/bug/chore) */
 	issue_type?: IssueType;
 	/** Priority from 1 (critical) to 5 (trivial) */

@@ -5,6 +5,7 @@
  * on the filesystem and return plain data structures.
  */
 
+import * as childProcess from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type {
@@ -94,6 +95,39 @@ export function parseFrontmatter(content: string): Record<string, unknown> | nul
 	return result;
 }
 
+/**
+ * Capture the current jj working copy change ID if in a jj-managed repo.
+ *
+ * The change ID is a permanent identifier that survives rebase and squash.
+ * Unlike git SHAs which change on rewrite, a jj change ID stays the same
+ * no matter how the commit graph is reorganized. This makes it ideal for
+ * binding design tree nodes to their originating context.
+ *
+ * Returns undefined if jj is not available or not in a jj repo.
+ */
+export function captureJjChangeId(repoPath: string): string | undefined {
+	try {
+		// Walk up to find .jj
+		let dir = repoPath;
+		for (let i = 0; i < 10; i++) {
+			if (fs.existsSync(path.join(dir, ".jj"))) break;
+			const parent = path.dirname(dir);
+			if (parent === dir) return undefined;
+			dir = parent;
+		}
+		if (!fs.existsSync(path.join(dir, ".jj"))) return undefined;
+
+		const result = childProcess.execSync(
+			"jj log -r @ --no-graph -T 'change_id.short()'",
+			{ cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+		);
+		const id = result.toString().trim();
+		return id || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 /** Quote a YAML value if it contains special characters */
 export function yamlQuote(value: string): string {
 	if (/[:#\[\]{}&*!|>'"%@`/]/.test(value) || value.startsWith("- ")) {
@@ -133,6 +167,9 @@ export function generateFrontmatter(node: Omit<DesignNode, "filePath" | "lastMod
 	}
 	if (node.openspec_change) {
 		fm += `openspec_change: ${node.openspec_change}\n`;
+	}
+	if (node.jj_change_id) {
+		fm += `jj_change_id: ${node.jj_change_id}\n`;
 	}
 	if (node.issue_type) {
 		fm += `issue_type: ${node.issue_type}\n`;
@@ -649,6 +686,7 @@ export function scanDesignDocs(docsDir: string): DesignTree {
 				branch: validatedBranch,
 				branches: (fm.branches as string[]) || [],
 				openspec_change: fm.openspec_change as string | undefined,
+				jj_change_id: fm.jj_change_id as string | undefined,
 				issue_type,
 				priority,
 				filePath,
@@ -797,6 +835,9 @@ export function createNode(
 		fs.mkdirSync(docsDir, { recursive: true });
 	}
 
+	// Capture jj change ID if in a jj-managed repo
+	const jjChangeId = captureJjChangeId(docsDir);
+
 	const node: Omit<DesignNode, "filePath" | "lastModified"> = {
 		id: opts.id,
 		title: opts.title,
@@ -808,6 +849,7 @@ export function createNode(
 		open_questions: [],
 		branch: undefined,
 		branches: [],
+		jj_change_id: jjChangeId,
 		issue_type: opts.issue_type,
 		priority: opts.priority,
 	};
@@ -855,8 +897,38 @@ export function setNodeStatus(node: DesignNode, newStatus: NodeStatus): DesignNo
 		/^(---\n[\s\S]*?\nstatus:\s*)\S+/m,
 		`$1${newStatus}`,
 	);
+
+	// Capture jj change ID on milestone transitions.
+	// The change ID is permanent — it survives rebase/squash and links
+	// this design decision to the exact point in the commit graph where
+	// it was made. Only update on transitions that represent real milestones.
+	const milestoneStatuses = ["decided", "implemented", "resolved"];
+	if (milestoneStatuses.includes(newStatus)) {
+		const changeId = captureJjChangeId(path.dirname(node.filePath));
+		if (changeId) {
+			if (content.includes("jj_change_id:")) {
+				content = content.replace(
+					/^(jj_change_id:\s*)\S+/m,
+					`$1${changeId}`,
+				);
+			} else {
+				// Insert before the closing ---
+				content = content.replace(
+					/^(---\n[\s\S]*?)(\n---)/m,
+					`$1\njj_change_id: ${changeId}$2`,
+				);
+			}
+		}
+	}
+
 	fs.writeFileSync(node.filePath, content);
-	return { ...node, status: newStatus };
+	return {
+		...node,
+		status: newStatus,
+		jj_change_id: milestoneStatuses.includes(newStatus)
+			? captureJjChangeId(path.dirname(node.filePath)) ?? node.jj_change_id
+			: node.jj_change_id,
+	};
 }
 
 /**
