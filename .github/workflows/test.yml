@@ -26,3 +26,25 @@ jobs:
       - run: npm install
 
       - run: npm test
+
+      - name: Global install smoke test
+        run: |
+          set -euo pipefail
+          TARBALL=$(npm pack 2>/dev/null | tail -1)
+          SMOKE_DIR=$(mktemp -d)
+          npm install -g "./$TARBALL" --prefix "$SMOKE_DIR" 2>&1
+          BINARY="$SMOKE_DIR/bin/omegon-pi"
+
+          # Binary must exist and report correct version
+          VERSION=$("$BINARY" --version 2>&1)
+          echo "✓ Version: $VERSION"
+
+          # --help must not show module resolution errors
+          HELP=$("$BINARY" --help 2>&1)
+          if echo "$HELP" | grep -qiE "Cannot find module|ENOENT|Failed to load extension"; then
+            echo "FATAL: extension errors in global install:"
+            echo "$HELP" | grep -iE "Cannot find module|ENOENT|Failed to load extension"
+            exit 1
+          fi
+          echo "✓ Global install smoke test passed"
+          rm -rf "$SMOKE_DIR" "./$TARBALL"

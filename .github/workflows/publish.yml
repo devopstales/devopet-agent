@@ -75,22 +75,89 @@ jobs:
         if: steps.check.outputs.skip == 'false'
         run: node scripts/check-vendor-dist.mjs
 
+      - name: Pre-publish smoke test (pack → install → run)
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          echo "=== Packing tarball ==="
+          TARBALL=$(npm pack 2>/dev/null | tail -1)
+          echo "Tarball: $TARBALL"
+
+          echo "=== Installing globally from tarball ==="
+          SMOKE_DIR=$(mktemp -d)
+          npm install -g "./$TARBALL" --prefix "$SMOKE_DIR" 2>&1
+
+          echo "=== Verifying binary exists and runs ==="
+          BINARY="$SMOKE_DIR/bin/omegon-pi"
+          if [ ! -f "$BINARY" ]; then
+            echo "FATAL: omegon-pi binary not found at $BINARY"
+            ls -la "$SMOKE_DIR/bin/" || true
+            exit 1
+          fi
+
+          VERSION_OUT=$("$BINARY" --version 2>&1)
+          EXPECTED=${{ steps.check.outputs.version }}
+          if [ "$VERSION_OUT" != "$EXPECTED" ]; then
+            echo "FATAL: version mismatch — got '$VERSION_OUT', expected '$EXPECTED'"
+            exit 1
+          fi
+          echo "✓ Version: $VERSION_OUT"
+
+          echo "=== Verifying --help loads extensions without errors ==="
+          HELP_OUT=$("$BINARY" --help 2>&1)
+          if echo "$HELP_OUT" | grep -qi "Cannot find module\|ENOENT\|Error:"; then
+            echo "FATAL: extension loading errors detected:"
+            echo "$HELP_OUT" | grep -i "Cannot find module\|ENOENT\|Error:" | head -20
+            exit 1
+          fi
+          echo "✓ --help clean (no module resolution errors)"
+
+          echo "=== Verifying all extensions load ==="
+          # Check that no "Failed to load extension" messages appear
+          if echo "$HELP_OUT" | grep -qi "Failed to load extension"; then
+            echo "FATAL: extension loading failures:"
+            echo "$HELP_OUT" | grep -i "Failed to load extension"
+            exit 1
+          fi
+          echo "✓ All extensions loaded"
+
+          rm -rf "$SMOKE_DIR" "./$TARBALL"
+          echo "=== Pre-publish smoke test passed ==="
+
       - name: Publish omegon
         if: steps.check.outputs.skip == 'false'
         run: npm publish --access public
 
-      - name: Verify package is installable
+      - name: Post-publish install verification
         if: steps.check.outputs.skip == 'false'
         run: |
+          set -euo pipefail
           VERSION=${{ steps.check.outputs.version }}
-          echo "Verifying omegon-pi@${VERSION} is installable..."
+          echo "Waiting for omegon-pi@${VERSION} on registry..."
           for i in $(seq 1 24); do
-            if npm install --dry-run "omegon-pi@${VERSION}" 2>/dev/null; then
-              echo "✓ Package installable (attempt $i)"
-              exit 0
+            AVAILABLE=$(npm view "omegon-pi@${VERSION}" version 2>/dev/null || echo "")
+            if [ "$AVAILABLE" = "$VERSION" ]; then
+              echo "✓ Available on registry (attempt $i)"
+              break
             fi
             echo "Attempt $i/24: not yet available — waiting 15s..."
             sleep 15
           done
-          echo "::warning::Package not installable after 6 minutes from this CDN edge."
-          exit 0
+
+          echo "=== Installing from registry ==="
+          POST_DIR=$(mktemp -d)
+          npm install -g "omegon-pi@${VERSION}" --prefix "$POST_DIR" 2>&1
+
+          echo "=== Post-publish smoke test ==="
+          POST_BINARY="$POST_DIR/bin/omegon-pi"
+          POST_VERSION=$("$POST_BINARY" --version 2>&1)
+          echo "✓ Installed version: $POST_VERSION"
+
+          POST_HELP=$("$POST_BINARY" --help 2>&1)
+          if echo "$POST_HELP" | grep -qiE "Cannot find module|ENOENT|Failed to load extension"; then
+            echo "::error::Post-publish smoke test FAILED — extension errors in published package"
+            echo "$POST_HELP" | grep -iE "Cannot find module|ENOENT|Failed to load extension"
+            exit 1
+          fi
+          echo "✓ Post-publish smoke test passed"
+          rm -rf "$POST_DIR"

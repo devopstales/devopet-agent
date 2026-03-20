@@ -288,7 +288,7 @@ export default function (pi: ExtensionAPI) {
     // Suppress noisy status during first-run — bootstrap handles guidance
     // Suppress the "unreachable" warning during first-run (bootstrap handles it),
     // but always show success status so the operator sees their provider state.
-    const { sharedState } = await import("./lib/shared-state.ts");
+    const { sharedState } = await import("../lib/shared-state.ts");
     if (anthropicOk || !sharedState.bootstrapPending) {
       ctx.ui.notify(parts.join(" | "), anthropicOk ? "info" : "warning");
     }

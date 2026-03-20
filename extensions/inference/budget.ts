@@ -646,8 +646,8 @@ export default function (pi: ExtensionAPI) {
       // committing. Block degrading switches with a warning.
       if (sharedState.routingContext) {
         try {
-          const { evaluateDowngrade } = await import("./lib/downgrade-policy.ts");
-          const { buildRouteMatrixFromRegistry } = await import("./lib/route-envelope.ts");
+          const { evaluateDowngrade } = await import("../lib/downgrade-policy.ts");
+          const { buildRouteMatrixFromRegistry } = await import("../lib/route-envelope.ts");
           const viable = getViableModels(ctx.modelRegistry);
           const envelopes = buildRouteMatrixFromRegistry(viable.map((m) => ({ id: m.id, provider: m.provider })));
           // Filter envelopes to those matching the requested tier (or higher)
@@ -660,7 +660,7 @@ export default function (pi: ExtensionAPI) {
           }
           // Update routing state with new model's context class after switch
           if (evaluation.targetRoute) {
-            const { switchModel } = await import("./lib/routing-state.ts");
+            const { switchModel } = await import("../lib/routing-state.ts");
             sharedState.routingContext = switchModel(sharedState.routingContext, evaluation.targetRoute.contextCeiling);
             sharedState.activeContextClass = sharedState.routingContext.activeContextClass;
             pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "model-budget" });
@@ -676,8 +676,8 @@ export default function (pi: ExtensionAPI) {
         const target = `${model.provider}/${model.id}`;
         // Update routing state with actual model's envelope
         try {
-          const { findEnvelopeForModel, buildRouteMatrixFromRegistry } = await import("./lib/route-envelope.ts");
-          const { switchModel } = await import("./lib/routing-state.ts");
+          const { findEnvelopeForModel, buildRouteMatrixFromRegistry } = await import("../lib/route-envelope.ts");
+          const { switchModel } = await import("../lib/routing-state.ts");
           if (sharedState.routingContext) {
             const viable = getViableModels(ctx.modelRegistry);
             const envelopes = buildRouteMatrixFromRegistry(viable.map((m) => ({ id: m.id, provider: m.provider })));
