@@ -452,29 +452,49 @@ export class FactStore {
       this.setSchemaVersion(4);
     }
 
-    // Migration 4→5: schema alignment + jj change ID provenance tracking
+    // Migration 4→5: full Rust↔TS schema alignment
     //
-    // Two concerns:
-    // 1. DBs created by the Rust omegon binary at schema v4 are missing columns
-    //    that the TS schema has always had: created_session, superseded_at,
-    //    archived_at (facts), session_id (episodes), and related tables
-    //    (episode_facts, episodes_vec). These must be added idempotently.
-    // 2. jj_change_id column for provenance tracking (new in v5).
+    // The Rust omegon-memory crate owns the canonical schema but may produce
+    // DBs missing columns/tables that TS requires. This migration idempotently
+    // brings ANY DB (Rust v4, Rust v5, or TS-created) to a state where all
+    // TS code paths work. Every ALTER TABLE is wrapped in try/catch because
+    // the column may already exist.
     if (current < 5) {
-      // Add columns that may be missing from Rust-created DBs.
-      // Each ALTER TABLE is wrapped in try/catch — "duplicate column" is expected
-      // for DBs created by TS (which always had these columns).
-      const addColumnIfMissing = (table: string, col: string, type: string = "TEXT") => {
-        try { this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); } catch { /* exists */ }
+      const addCol = (table: string, col: string, typedef: string = "TEXT") => {
+        try { this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${typedef}`).run(); } catch { /* exists */ }
       };
-      addColumnIfMissing("facts", "created_session");
-      addColumnIfMissing("facts", "superseded_at");
-      addColumnIfMissing("facts", "archived_at");
-      addColumnIfMissing("facts", "jj_change_id");
-      addColumnIfMissing("episodes", "session_id");
-      addColumnIfMissing("episodes", "jj_change_id");
 
-      // Create tables that may not exist in Rust-created DBs
+      // --- facts table ---
+      addCol("facts", "created_session");
+      addCol("facts", "superseded_at");
+      addCol("facts", "archived_at");
+      addCol("facts", "jj_change_id");
+
+      // --- edges table ---
+      // Rust edges is minimal: id, source_fact_id, target_fact_id, relation,
+      // description, weight, created_at. TS needs these additional columns:
+      addCol("edges", "confidence", "REAL NOT NULL DEFAULT 1.0");
+      addCol("edges", "last_reinforced", "TEXT NOT NULL DEFAULT ''");
+      addCol("edges", "reinforcement_count", "INTEGER NOT NULL DEFAULT 1");
+      addCol("edges", "decay_rate", `REAL NOT NULL DEFAULT ${DECAY.baseRate}`);
+      addCol("edges", "status", "TEXT NOT NULL DEFAULT 'active'");
+      addCol("edges", "created_session");
+      addCol("edges", "source_mind");
+      addCol("edges", "target_mind");
+
+      // --- minds table ---
+      // Rust minds is minimal: name, description, status, origin_type, created_at.
+      addCol("minds", "origin_path");
+      addCol("minds", "origin_url");
+      addCol("minds", "readonly", "INTEGER NOT NULL DEFAULT 0");
+      addCol("minds", "parent");
+      addCol("minds", "last_sync");
+
+      // --- episodes table ---
+      addCol("episodes", "session_id");
+      addCol("episodes", "jj_change_id");
+
+      // --- tables that may not exist in Rust-created DBs ---
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS episode_facts (
           episode_id TEXT NOT NULL,
@@ -493,7 +513,7 @@ export class FactStore {
         );
       `);
 
-      // Indexes on these columns are created by ensureIndexes() after all migrations.
+      // Indexes on migration-added columns are created by ensureIndexes().
       this.setSchemaVersion(5);
     }
   }
@@ -578,12 +598,8 @@ export class FactStore {
         FOREIGN KEY (target_fact_id) REFERENCES facts(id) ON DELETE CASCADE
       );
 
-      CREATE INDEX IF NOT EXISTS idx_edges_source
-        ON edges(source_fact_id) WHERE status = 'active';
-      CREATE INDEX IF NOT EXISTS idx_edges_target
-        ON edges(target_fact_id) WHERE status = 'active';
-      CREATE INDEX IF NOT EXISTS idx_edges_relation
-        ON edges(relation) WHERE status = 'active';
+      -- Edge indexes that reference 'status' are created in ensureIndexes()
+      -- after migrations add the status column (missing in Rust-created DBs).
     `);
 
     // FTS5 virtual table for full-text search
@@ -647,12 +663,22 @@ export class FactStore {
    * Called AFTER runMigrations() so Rust-created DBs have had their
    * missing columns added before we try to index them.
    */
+  /**
+   * Create indexes on columns that may not exist until after migrations.
+   * Called AFTER runMigrations() so Rust-created DBs have had their
+   * missing columns added before we try to index them.
+   */
   private ensureIndexes(): void {
-    const safeIndex = (sql: string) => {
-      try { this.db.prepare(sql).run(); } catch { /* column or index issue — non-fatal */ }
+    const idx = (sql: string) => {
+      try { this.db.prepare(sql).run(); } catch { /* column or index already exists */ }
     };
-    safeIndex(`CREATE INDEX IF NOT EXISTS idx_facts_session ON facts(created_session)`);
-    safeIndex(`CREATE INDEX IF NOT EXISTS idx_facts_version ON facts(version DESC)`);
+    // facts indexes on migration-added columns
+    idx(`CREATE INDEX IF NOT EXISTS idx_facts_session ON facts(created_session)`);
+    idx(`CREATE INDEX IF NOT EXISTS idx_facts_version ON facts(version DESC)`);
+    // edges indexes that reference 'status' (missing in Rust-created DBs before migration)
+    idx(`CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_fact_id) WHERE status = 'active'`);
+    idx(`CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_fact_id) WHERE status = 'active'`);
+    idx(`CREATE INDEX IF NOT EXISTS idx_edges_relation ON edges(relation) WHERE status = 'active'`);
   }
 
   // ---------------------------------------------------------------------------

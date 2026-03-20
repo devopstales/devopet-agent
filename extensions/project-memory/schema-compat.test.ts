@@ -300,20 +300,56 @@ describe("Rust schema compatibility", () => {
       store.close();
     });
 
-    it("migrates to schema v5", () => {
+    it("migrates all tables to schema v5", () => {
       createRustV4DB(join(dir, "facts.db"));
       const store = new FactStore(dir);
-      // Verify the migration added missing columns
       const db = (store as any).db;
-      const cols = db.prepare("PRAGMA table_info(facts)").all().map((c: any) => c.name);
-      assert.ok(cols.includes("created_session"), "facts should have created_session after migration");
-      assert.ok(cols.includes("superseded_at"), "facts should have superseded_at after migration");
-      assert.ok(cols.includes("archived_at"), "facts should have archived_at after migration");
-      assert.ok(cols.includes("jj_change_id"), "facts should have jj_change_id after migration");
 
+      // facts columns
+      const factCols = db.prepare("PRAGMA table_info(facts)").all().map((c: any) => c.name);
+      for (const col of ["created_session", "superseded_at", "archived_at", "jj_change_id"]) {
+        assert.ok(factCols.includes(col), `facts should have ${col} after migration`);
+      }
+
+      // edges columns
+      const edgeCols = db.prepare("PRAGMA table_info(edges)").all().map((c: any) => c.name);
+      for (const col of ["confidence", "last_reinforced", "reinforcement_count", "decay_rate", "status", "created_session", "source_mind", "target_mind"]) {
+        assert.ok(edgeCols.includes(col), `edges should have ${col} after migration`);
+      }
+
+      // minds columns
+      const mindCols = db.prepare("PRAGMA table_info(minds)").all().map((c: any) => c.name);
+      for (const col of ["origin_path", "origin_url", "readonly", "parent", "last_sync"]) {
+        assert.ok(mindCols.includes(col), `minds should have ${col} after migration`);
+      }
+
+      // episodes columns
       const epCols = db.prepare("PRAGMA table_info(episodes)").all().map((c: any) => c.name);
-      assert.ok(epCols.includes("session_id"), "episodes should have session_id after migration");
-      assert.ok(epCols.includes("jj_change_id"), "episodes should have jj_change_id after migration");
+      for (const col of ["session_id", "jj_change_id"]) {
+        assert.ok(epCols.includes(col), `episodes should have ${col} after migration`);
+      }
+
+      // episode_facts and episodes_vec tables exist
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((t: any) => t.name);
+      assert.ok(tables.includes("episode_facts"), "episode_facts table should exist");
+      assert.ok(tables.includes("episodes_vec"), "episodes_vec table should exist");
+
+      store.close();
+    });
+
+    it("can create edges after migration", () => {
+      createRustV4DB(join(dir, "facts.db"));
+      const store = new FactStore(dir);
+      // Store two facts, then create an edge between them
+      const f1 = store.storeFact({ section: "Architecture", content: "Fact A" });
+      const f2 = store.storeFact({ section: "Architecture", content: "Fact B" });
+      const edge = store.storeEdge({
+        sourceFact: f1.id,
+        targetFact: f2.id,
+        relation: "depends_on",
+        description: "A depends on B",
+      });
+      assert.ok(edge, "should create edge on migrated Rust DB");
       store.close();
     });
   });
