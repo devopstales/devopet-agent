@@ -37,9 +37,19 @@ describe("classifyRoute", () => {
     assert.equal(classifyRoute(envelope, 400_000, undefined, "Clan"), "degrading");
   });
 
-  it("ineligible when tier mismatch", () => {
+  it("ineligible when candidate tier is lower than required", () => {
     const envelope = makeEnvelope({ tier: "retribution" });
     assert.equal(classifyRoute(envelope, 100_000, "gloriana"), "ineligible");
+  });
+
+  it("compatible when candidate tier is higher than required (gloriana serves victory)", () => {
+    const envelope = makeEnvelope({ tier: "gloriana", contextCeiling: 1_000_000, contextClass: "Legion" });
+    assert.equal(classifyRoute(envelope, 200_000, "victory"), "compatible");
+  });
+
+  it("compatible when candidate tier equals required", () => {
+    const envelope = makeEnvelope({ tier: "victory", contextCeiling: 1_000_000, contextClass: "Legion" });
+    assert.equal(classifyRoute(envelope, 200_000, "victory"), "compatible");
   });
 
   it("compatible-with-compaction when gap is bridgeable", () => {

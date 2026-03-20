@@ -35,6 +35,8 @@ import {
   type ModelTier,
   type RegistryModel,
 } from "../lib/model-routing.ts";
+import { initRoutingState } from "../lib/routing-state.ts";
+import { buildRouteMatrixFromRegistry, findEnvelopeForModel } from "../lib/route-envelope.ts";
 import { readLastUsedModel, writeLastUsedModel } from "../lib/model-preferences.ts";
 import { readOperatorProfile, loadOperatorRuntimeState, toCapabilityProfile, toCapabilityRuntimeState } from "../lib/operator-profile.ts";
 import { PROVIDER_ENV_VARS, getProviderRemediationHint } from "../lib/provider-env.ts";
@@ -288,21 +290,19 @@ export default function (pi: ExtensionAPI) {
 
     // ── Initialize context-class routing state ──
     // Determine the context ceiling of the active model from the route matrix.
-    try {
-      const { initRoutingState } = await import("../lib/routing-state.ts");
-      const { buildRouteMatrixFromRegistry, findEnvelopeForModel } = await import("../lib/route-envelope.ts");
-      const activeModel = restoredModel ?? switchedDriver?.model ?? retainedModel;
-      if (activeModel) {
+    const activeModel = restoredModel ?? switchedDriver?.model ?? retainedModel;
+    if (activeModel) {
+      try {
         const viable = getViableModels(ctx.modelRegistry);
         const envelopes = buildRouteMatrixFromRegistry(viable.map((m) => ({ id: m.id, provider: m.provider })));
         const envelope = findEnvelopeForModel(activeModel.id, activeModel.provider, envelopes);
-        const ceiling = envelope?.contextCeiling ?? 1_000_000; // fallback to Legion
+        const ceiling = envelope?.contextCeiling ?? 131_072; // fallback to Squad (fail-closed)
         const routingCtx = initRoutingState(ceiling);
         sharedState.routingContext = routingCtx;
         sharedState.activeContextClass = routingCtx.activeContextClass;
+      } catch {
+        // Non-critical — context class display is informational
       }
-    } catch {
-      // Non-critical — context class display is informational
     }
 
     // Notify operator — suppress the "no model" warning during first-run
@@ -427,6 +427,55 @@ export default function (pi: ExtensionAPI) {
         content: lines.join("\n"),
         display: true,
       });
+    },
+  });
+
+  // ── /context command — inspect and pin context class routing state ──
+
+  pi.registerCommand("context", {
+    description: "View context class routing state. Usage: /context [pin <class>]",
+    handler: async (args, ctx) => {
+      const { contextClassLabel } = await import("../lib/context-class.ts");
+      const routingCtx = sharedState.routingContext;
+
+      if (!routingCtx) {
+        ctx.ui.notify("No routing context initialized yet.", "warning");
+        return;
+      }
+
+      // /context pin <class>
+      const parts = args.trim().split(/\s+/);
+      if (parts[0] === "pin" && parts[1]) {
+        const validClasses = ["Squad", "Maniple", "Clan", "Legion"];
+        const cls = validClasses.find((c) => c.toLowerCase() === parts[1].toLowerCase());
+        if (!cls) {
+          ctx.ui.notify(`Invalid context class. Valid: ${validClasses.join(", ")}`, "error");
+          return;
+        }
+        const { pinFloor } = await import("../lib/routing-state.ts");
+        sharedState.routingContext = pinFloor(routingCtx, cls as any);
+        sharedState.activeContextClass = sharedState.routingContext.activeContextClass;
+        pi.events.emit(DASHBOARD_UPDATE_EVENT, { source: "effort" });
+        ctx.ui.notify(`📌 Context floor pinned to ${contextClassLabel(cls as any)}`, "info");
+        return;
+      }
+
+      // /context — show current state
+      const lines: string[] = [
+        `**Active:** ${contextClassLabel(routingCtx.activeContextClass)} (${routingCtx.activeContextWindow.toLocaleString()} tokens)`,
+        `**Required floor:** ${contextClassLabel(routingCtx.requiredMinContextClass)} (${routingCtx.requiredMinContextWindow.toLocaleString()} tokens)`,
+      ];
+      if (routingCtx.pinnedFloor) {
+        lines.push(`**Pinned floor:** ${contextClassLabel(routingCtx.pinnedFloor)}`);
+      }
+      if (routingCtx.observedUsage !== undefined) {
+        lines.push(`**Observed usage:** ${routingCtx.observedUsage.toLocaleString()} tokens`);
+      }
+      if (routingCtx.headroom !== undefined) {
+        lines.push(`**Headroom:** ${routingCtx.headroom.toLocaleString()} tokens`);
+      }
+      lines.push(`**Downgrade safety:** ${routingCtx.downgradeSafetyArmed ? "armed ✓" : "disarmed ✗"}`);
+      ctx.ui.notify(lines.join("\n"), "info");
     },
   });
 

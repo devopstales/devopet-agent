@@ -17,7 +17,6 @@ import { contextClassDelta } from "./routing-state.ts";
 import {
   classifyRoute,
   type RouteEnvelope,
-  type DowngradeClassification,
 } from "./route-envelope.ts";
 import { contextClassOrd, type ContextClass } from "./context-class.ts";
 import type { ProviderRoutingPolicy, ModelTier } from "./model-routing.ts";

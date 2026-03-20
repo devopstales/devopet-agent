@@ -24,6 +24,7 @@ import { debug } from "../lib/debug.ts";
 import { linkDashboardFile, linkOpenSpecArtifact, linkOpenSpecChange } from "./uri-helper.ts";
 import { designSpecBadge } from "./overlay-data.ts";
 import { buildContextGaugeModel } from "./context-gauge.ts";
+import { updateUsage, raiseFloorFromUsage } from "../lib/routing-state.ts";
 
 /**
  * Box-drawing character set.
@@ -513,6 +514,16 @@ export class DashboardFooter implements Component {
     // ── Bar line ──────────────────────────────────────────────
     const usage = ctx.getContextUsage();
     const contextWindow = usage?.contextWindow ?? 0;
+
+    // Update routing state with observed usage for downgrade policy
+    if (sharedState.routingContext && usage?.percent && contextWindow > 0) {
+      const observedTokens = Math.round(contextWindow * (usage.percent / 100));
+      sharedState.routingContext = updateUsage(sharedState.routingContext, observedTokens);
+      // Auto-raise floor when usage exceeds 60% of active window
+      if (usage.percent > 60) {
+        sharedState.routingContext = raiseFloorFromUsage(sharedState.routingContext, observedTokens);
+      }
+    }
     const gaugeModel = buildContextGaugeModel({
       percent: usage?.percent,
       contextWindow,
@@ -561,6 +572,15 @@ export class DashboardFooter implements Component {
 
       const parts: string[] = [providerModel];
 
+      // Context class badge (Squad/Maniple/Clan/Legion) — between model and thinking
+      if (sharedState.activeContextClass && !narrow) {
+        const ctxClass = sharedState.activeContextClass;
+        const ctxColor: ThemeColor = ctxClass === "Legion" ? "accent"
+          : ctxClass === "Clan" ? "muted"
+          : "dim";
+        parts.push(theme.fg(ctxColor, ctxClass));
+      }
+
       if (m.reasoning && this.cachedThinkingLevel) {
         const thinkColor: ThemeColor = this.cachedThinkingLevel === "high"    ? "accent"
           : this.cachedThinkingLevel === "medium"   ? "muted"
@@ -570,15 +590,6 @@ export class DashboardFooter implements Component {
           : theme.fg(thinkColor, "◉");
         // Narrow: icon only, no label
         parts.push(narrow ? thinkIcon : `${thinkIcon} ${theme.fg(thinkColor, this.cachedThinkingLevel)}`);
-      }
-
-      // Context class badge (Squad/Maniple/Clan/Legion)
-      if (sharedState.activeContextClass && !narrow) {
-        const ctxClass = sharedState.activeContextClass;
-        const ctxColor: ThemeColor = ctxClass === "Legion" ? "accent"
-          : ctxClass === "Clan" ? "muted"
-          : "dim";
-        parts.push(theme.fg(ctxColor, ctxClass));
       }
 
       if (this.cachedTokens.cost > 0 && !narrow) {

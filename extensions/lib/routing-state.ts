@@ -12,7 +12,6 @@ import {
   CONTEXT_CLASS_TOKENS,
   type ContextClass,
 } from "./context-class.ts";
-import type { RouteEnvelope } from "./route-envelope.ts";
 
 // ─── Types ───────────────────────────────────────────────────
 

@@ -31,7 +31,7 @@ const CLASS_ORD: Record<ContextClass, number> = {
 export const CONTEXT_THRESHOLDS: Array<{ class: ContextClass; maxTokens: number }> = [
   { class: "Squad", maxTokens: 131_072 },    // 128k
   { class: "Maniple", maxTokens: 278_528 },  // ~272k
-  { class: "Clan", maxTokens: 524_288 },     // ~512k (covers 400k models with headroom)
+  { class: "Clan", maxTokens: 450_560 },     // ~440k (covers 400k models, not 512k)
   // Legion: everything above
 ];
 
@@ -53,6 +53,8 @@ export const CONTEXT_CLASS_TOKENS: Record<ContextClass, number> = {
  * smallest class whose ceiling it fits under.
  */
 export function classifyContextWindow(tokenCount: number): ContextClass {
+  // Defend against NaN/Infinity — unknown values default to smallest (safest) class
+  if (!Number.isFinite(tokenCount) || tokenCount < 0) return "Squad";
   for (const { class: cls, maxTokens } of CONTEXT_THRESHOLDS) {
     if (tokenCount <= maxTokens) return cls;
   }
@@ -62,12 +64,16 @@ export function classifyContextWindow(tokenCount: number): ContextClass {
 /**
  * Operator-facing label for a context class.
  */
+/** Human-friendly token count display — matches operator mental model. */
+const CONTEXT_CLASS_DISPLAY: Record<ContextClass, string> = {
+  Squad: "128k",
+  Maniple: "272k",
+  Clan: "400k",
+  Legion: "1M",
+};
+
 export function contextClassLabel(cls: ContextClass): string {
-  const tokens = CONTEXT_CLASS_TOKENS[cls];
-  const display = tokens >= 1_000_000
-    ? `${(tokens / 1_000_000).toFixed(0)}M`
-    : `${Math.round(tokens / 1024)}k`;
-  return `${cls} (${display})`;
+  return `${cls} (${CONTEXT_CLASS_DISPLAY[cls]})`;
 }
 
 /**
@@ -88,3 +94,25 @@ export function compareContextClass(a: ContextClass, b: ContextClass): number {
  * All context classes in ascending order.
  */
 export const CONTEXT_CLASSES: readonly ContextClass[] = ["Squad", "Maniple", "Clan", "Legion"];
+
+// ─── Thinking Level Display Names ────────────────────────────
+// Internal values stay off/minimal/low/medium/high.
+// Operator-facing display uses the Mechanicum cognition ladder.
+
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
+
+const THINKING_DISPLAY: Record<ThinkingLevel, string> = {
+  off: "Servitor",
+  minimal: "Functionary",
+  low: "Adept",
+  medium: "Magos",
+  high: "Archmagos",
+};
+
+/**
+ * Operator-facing display label for a thinking level.
+ * Maps internal values to the Mechanicum cognition ladder.
+ */
+export function thinkingLevelLabel(level: ThinkingLevel): string {
+  return THINKING_DISPLAY[level] ?? level;
+}

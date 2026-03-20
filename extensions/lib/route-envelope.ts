@@ -16,6 +16,20 @@ import {
 } from "./context-class.ts";
 import type { ModelTier } from "./model-routing.ts";
 
+// ─── Tier ordinal for "can this tier serve that request?" ────
+
+const TIER_ORD: Record<string, number> = {
+  local: 0,
+  retribution: 1,
+  victory: 2,
+  gloriana: 3,
+};
+
+/** True when the candidate tier can serve the required tier (same or higher). */
+function tierSatisfies(candidateTier: string, requiredTier: string): boolean {
+  return (TIER_ORD[candidateTier] ?? -1) >= (TIER_ORD[requiredTier] ?? 999);
+}
+
 // ─── Types ───────────────────────────────────────────────────
 
 export interface BreakpointZone {
@@ -154,8 +168,9 @@ export function classifyRoute(
   requiredTier?: ModelTier,
   currentClass?: ContextClass,
 ): DowngradeClassification {
-  // Tier mismatch = ineligible (can't use a retribution model for gloriana work)
-  if (requiredTier && envelope.tier !== requiredTier) {
+  // Tier mismatch = ineligible (can't use a retribution model for gloriana work,
+  // but a gloriana model CAN serve victory work — higher satisfies lower)
+  if (requiredTier && !tierSatisfies(envelope.tier, requiredTier)) {
     return "ineligible";
   }
 

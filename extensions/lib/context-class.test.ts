@@ -6,6 +6,7 @@ import {
   contextClassOrd,
   compareContextClass,
   CONTEXT_CLASSES,
+  thinkingLevelLabel,
   type ContextClass,
 } from "./context-class.ts";
 
@@ -21,8 +22,8 @@ describe("classifyContextWindow", () => {
     [278_529, "Clan"],        // just above
     [400_000, "Clan"],
     [409_600, "Clan"],
-    [524_288, "Clan"],        // Clan ceiling
-    [524_289, "Legion"],      // just above
+    [450_560, "Clan"],        // Clan ceiling
+    [450_561, "Legion"],      // just above
     [1_000_000, "Legion"],
     [1_048_576, "Legion"],
     [2_000_000, "Legion"],
@@ -74,5 +75,41 @@ describe("compareContextClass", () => {
 describe("CONTEXT_CLASSES", () => {
   it("has 4 entries in ascending order", () => {
     assert.deepEqual([...CONTEXT_CLASSES], ["Squad", "Maniple", "Clan", "Legion"]);
+  });
+});
+
+describe("classifyContextWindow edge cases", () => {
+  it("NaN returns Squad (fail-closed)", () => {
+    assert.equal(classifyContextWindow(NaN), "Squad");
+  });
+
+  it("Infinity returns Squad (fail-closed)", () => {
+    assert.equal(classifyContextWindow(Infinity), "Squad");
+  });
+
+  it("negative returns Squad (fail-closed)", () => {
+    assert.equal(classifyContextWindow(-1), "Squad");
+  });
+});
+
+describe("thinkingLevelLabel", () => {
+  it("maps off to Servitor", () => {
+    assert.equal(thinkingLevelLabel("off"), "Servitor");
+  });
+
+  it("maps minimal to Functionary", () => {
+    assert.equal(thinkingLevelLabel("minimal"), "Functionary");
+  });
+
+  it("maps low to Adept", () => {
+    assert.equal(thinkingLevelLabel("low"), "Adept");
+  });
+
+  it("maps medium to Magos", () => {
+    assert.equal(thinkingLevelLabel("medium"), "Magos");
+  });
+
+  it("maps high to Archmagos", () => {
+    assert.equal(thinkingLevelLabel("high"), "Archmagos");
   });
 });
