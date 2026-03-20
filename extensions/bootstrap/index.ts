@@ -46,7 +46,7 @@ const MARKER_VERSION = "2"; // bump to re-trigger bootstrap after adding operato
 
 // --- Version Check State (absorbed from version-check.ts) ---
 const REPO_OWNER = "styrene-lab";
-const REPO_NAME = "omegon";
+const REPO_NAME = "omegon-pi";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -320,7 +320,7 @@ export default function (pi: ExtensionAPI) {
 
   /** Read installed version from package.json (absorbed from version-check.ts) */
   function getInstalledVersion(): string {
-    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
     return pkg.version;
   }
