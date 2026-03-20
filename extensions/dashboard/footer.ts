@@ -572,6 +572,15 @@ export class DashboardFooter implements Component {
         parts.push(narrow ? thinkIcon : `${thinkIcon} ${theme.fg(thinkColor, this.cachedThinkingLevel)}`);
       }
 
+      // Context class badge (Squad/Maniple/Clan/Legion)
+      if (sharedState.activeContextClass && !narrow) {
+        const ctxClass = sharedState.activeContextClass;
+        const ctxColor: ThemeColor = ctxClass === "Legion" ? "accent"
+          : ctxClass === "Clan" ? "muted"
+          : "dim";
+        parts.push(theme.fg(ctxColor, ctxClass));
+      }
+
       if (this.cachedTokens.cost > 0 && !narrow) {
         parts.push(theme.fg("dim", `$${this.cachedTokens.cost.toFixed(3)}`));
       }

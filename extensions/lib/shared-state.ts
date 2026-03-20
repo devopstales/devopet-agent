@@ -18,6 +18,8 @@ import type { EffortState } from "../effort/types.ts";
 import type { ProviderRoutingPolicy } from "./model-routing.ts";
 import type { MemoryInjectionMetrics } from "../project-memory/injection-metrics.ts";
 import type { LifecycleMemoryMessage } from "../project-memory/types.ts";
+import type { RoutingSessionState } from "./routing-state.ts";
+import type { ContextClass } from "./context-class.ts";
 import { getDefaultPolicy } from "./model-routing.ts";
 
 export type RecoveryFailureClassification =
@@ -139,6 +141,12 @@ interface SharedState {
   /** Pending mind lifecycle operations from design-tree/openspec for project-memory to process.
    *  Written by implement/archive flows, consumed by project-memory on next turn. */
   mindLifecycleQueue?: MindLifecycleRequest[];
+
+  /** Context-aware routing session state. Written by effort extension on session_start and tier switches. */
+  routingContext?: RoutingSessionState;
+
+  /** Active context class label for dashboard display. Derived from routingContext. */
+  activeContextClass?: ContextClass;
 
   /** Active directive: the design node currently being implemented.
    *  Set by design_tree_update(implement), read by session-start and dashboard. */

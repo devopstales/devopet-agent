@@ -286,6 +286,25 @@ export default function (pi: ExtensionAPI) {
         : state.thinking;
     pi.setThinkingLevel(effectiveThinking as any);
 
+    // ── Initialize context-class routing state ──
+    // Determine the context ceiling of the active model from the route matrix.
+    try {
+      const { initRoutingState } = await import("../lib/routing-state.ts");
+      const { buildRouteMatrixFromRegistry, findEnvelopeForModel } = await import("../lib/route-envelope.ts");
+      const activeModel = restoredModel ?? switchedDriver?.model ?? retainedModel;
+      if (activeModel) {
+        const viable = getViableModels(ctx.modelRegistry);
+        const envelopes = buildRouteMatrixFromRegistry(viable.map((m) => ({ id: m.id, provider: m.provider })));
+        const envelope = findEnvelopeForModel(activeModel.id, activeModel.provider, envelopes);
+        const ceiling = envelope?.contextCeiling ?? 1_000_000; // fallback to Legion
+        const routingCtx = initRoutingState(ceiling);
+        sharedState.routingContext = routingCtx;
+        sharedState.activeContextClass = routingCtx.activeContextClass;
+      }
+    } catch {
+      // Non-critical — context class display is informational
+    }
+
     // Notify operator — suppress the "no model" warning during first-run
     // (bootstrap handles consolidated guidance), but always show when a model
     // is resolved so the operator knows what's driving their session.
