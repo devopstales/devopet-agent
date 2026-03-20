@@ -137,7 +137,7 @@ Localhost-only, read-only HTTP dashboard that exposes live control-plane state a
 
 Unified inference management — local models, effort tiers, model budget control, and offline driver switching.
 
-- **Tools**: `ask_local_model`, `list_local_models`, `set_model_tier`, `set_thinking_level`, `switch_to_offline_driver`
+- **Tools**: `set_model_tier`, `set_thinking_level`, `switch_to_offline_driver`, `ask_local_model`, `list_local_models`, `manage_ollama`
 - **Commands**: `/local-models`, `/local-status`, `/effort <name>`, `/effort cap`, `/effort uncap`
 - **Effort tiers**: Seven named tiers using provider-neutral labels — tier labels resolve to concrete model IDs from whichever provider (Anthropic or OpenAI) the session routing policy prefers:
 
