@@ -42,7 +42,7 @@ omegon-pi   # start Omegon in any project directory
 
 ![Omegon Architecture](docs/img/architecture.png)
 
-Omegon extends `@styrene-lab/pi-coding-agent` with **32 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+Omegon extends `@styrene-lab/pi-coding-agent` with **31 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
 
 ### Development Methodology
 
@@ -237,7 +237,6 @@ Connect external MCP (Model Context Protocol) servers as native pi tools.
 | `spinner-verbs` | Warhammer 40K-themed loading messages |
 | `sermon` | The Crawler's scrawl — ambient organic/computational text that scrolls beneath the spinner |
 | `core-renderers` | Sci-UI rendering for Omegon's custom tools (tool call/result display) |
-| `igor` | Nervous-system bridge to [Igor](https://github.com/styrene-lab/igor) — personal brain recall, ingest, intent dispatch, escalation alerts (degrades gracefully when unreachable) |
 | `style` | Alpharius design system reference (`/style`) |
 | `version-check` | Polls GitHub releases hourly, notifies when a new Omegon release is available |
 | `web-ui` | Localhost-only read-only HTTP dashboard and JSON control-plane endpoints (`/web-ui [start|stop|status|open]`) |
