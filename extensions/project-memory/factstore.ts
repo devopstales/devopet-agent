@@ -456,16 +456,20 @@ export class FactStore {
     // change ID at creation time. Change IDs are permanent (survive rebase)
     // and link knowledge to its originating point in the commit graph.
     if (current < 5) {
-      this.db.prepare(
-        `ALTER TABLE facts ADD COLUMN jj_change_id TEXT`
-      ).run();
-      // Also add to episodes table
+      // Add jj_change_id column — may already exist if DB was created with latest schema
+      try {
+        this.db.prepare(
+          `ALTER TABLE facts ADD COLUMN jj_change_id TEXT`
+        ).run();
+      } catch {
+        // Column already exists
+      }
       try {
         this.db.prepare(
           `ALTER TABLE episodes ADD COLUMN jj_change_id TEXT`
         ).run();
       } catch {
-        // Column may already exist from a partial migration
+        // Column already exists
       }
       this.setSchemaVersion(5);
     }

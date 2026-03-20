@@ -1067,8 +1067,10 @@ describe("JSONL Import Dedup (merge=union resilience)", () => {
       ).get();
       assert.equal(before.decay_profile, "standard");
 
-      // Force re-run of migration by resetting schema version and re-opening
-      (store as any).db.prepare(`DELETE FROM schema_version WHERE version = 4`).run();
+      // Force re-run of v4 migration by rolling back the version marker.
+      // Delete all versions > 3 so getSchemaVersion() returns 3 and the v4 migration re-runs.
+      // v5 migration (jj_change_id column) is idempotent — the column already exists.
+      (store as any).db.prepare(`DELETE FROM schema_version WHERE version > 3`).run();
       store.close();
 
       // Re-open triggers migration
@@ -1082,8 +1084,8 @@ describe("JSONL Import Dedup (merge=union resilience)", () => {
     it("does not change non-Recent-Work facts during v4 migration", () => {
       store.storeFact({ section: "Architecture", content: "Arch fact" });
 
-      // Force re-run
-      (store as any).db.prepare(`DELETE FROM schema_version WHERE version = 4`).run();
+      // Force re-run — same approach: reset to v3 so v4+v5 re-run
+      (store as any).db.prepare(`DELETE FROM schema_version WHERE version > 3`).run();
       store.close();
       store = new FactStore(dir);
 

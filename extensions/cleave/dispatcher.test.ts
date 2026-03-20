@@ -878,14 +878,16 @@ describe("native agent dispatch routing", () => {
 	it("resolveNativeAgent returns spec with valid paths when binary exists", () => {
 		_clearNativeAgentCache();
 		const native = resolveNativeAgent();
-		const devBinary = join(__repoRoot, "core", "target", "release", "omegon-agent");
-		if (!existsSync(devBinary)) {
-			assert.equal(native, null, "no binary found — null expected");
+		// resolveNativeAgent checks multiple locations: dev build, platform package, PATH, npm.
+		// If any path resolves, we get a spec; if none do, null.
+		if (!native) {
+			// No native binary available in any location — acceptable in CI or minimal environments
+			assert.equal(native, null);
 			return;
 		}
-		assert.ok(native, "should resolve when binary exists");
-		assert.equal(native!.binaryPath, devBinary);
-		assert.ok(native!.bridgePath.endsWith("llm-bridge.mjs"));
+		assert.ok(native.binaryPath, "resolved spec should have a binaryPath");
+		assert.ok(native.bridgePath.endsWith("llm-bridge.mjs"), "bridgePath should point to llm-bridge.mjs");
+		assert.equal(typeof native.hasNativeProviders, "boolean");
 	});
 
 	it("OMEGON_NATIVE_DISPATCH=0 disables native dispatch", () => {

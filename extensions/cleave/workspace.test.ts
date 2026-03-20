@@ -5,6 +5,9 @@
 
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { matchScenariosToChildren, generateTaskFile, buildSkillSection, buildGuardrailSection, classifyDirtyPaths } from "./workspace.ts";
 import type { SkillDirective } from "./workspace.ts";
 import { buildChildPrompt, resolveExecuteModel, classifyByScope, applyEffortFloor } from "./dispatcher.ts";
@@ -638,8 +641,10 @@ describe("buildGuardrailSection", () => {
 	});
 
 	it("returns empty string for directory with no project files", () => {
-		const section = buildGuardrailSection("/tmp");
+		const emptyDir = mkdtempSync(join(tmpdir(), "guardrail-test-"));
+		const section = buildGuardrailSection(emptyDir);
 		assert.equal(section, "");
+		rmSync(emptyDir, { recursive: true, force: true });
 	});
 
 	it("includes command in guardrail section", () => {
