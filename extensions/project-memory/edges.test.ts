@@ -342,6 +342,80 @@ describe("getEdgesForFacts", () => {
   });
 });
 
+describe("Phase 1 edge routing — connect actions split from fact actions", () => {
+  let dir: string;
+  let store: FactStore;
+
+  before(() => {
+    dir = tmpDir();
+    store = new FactStore(dir);
+  });
+
+  after(() => {
+    store.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("connect actions in mixed extraction output create edges when routed to processEdges", () => {
+    // Simulate what runExtractionCycle does after the routing fix:
+    // Phase 1 extraction returns both observe and connect actions
+    const rawOutput = [
+      `{"type":"observe","section":"Architecture","content":"Module A handles auth"}`,
+      `{"type":"observe","section":"Architecture","content":"Module B handles storage"}`,
+    ].join("\n");
+
+    const actions = parseExtractionOutput(rawOutput);
+    const factActions = actions.filter(a => a.type !== "connect");
+    const edgeActions = actions.filter(a => a.type === "connect");
+
+    // First pass: create facts
+    const result = store.processExtraction("default", factActions);
+    assert.equal(result.added, 2);
+    assert.equal(edgeActions.length, 0); // no edges yet
+
+    // Now simulate a second extraction that produces connect actions referencing the new facts
+    const facts = store.getActiveFacts("default");
+    const moduleA = facts.find(f => f.content.includes("Module A"))!;
+    const moduleB = facts.find(f => f.content.includes("Module B"))!;
+
+    const rawOutput2 = [
+      `{"type":"reinforce","id":"${moduleA.id}"}`,
+      `{"type":"connect","source":"${moduleA.id}","target":"${moduleB.id}","relation":"depends_on","description":"auth module depends on storage"}`,
+    ].join("\n");
+
+    const actions2 = parseExtractionOutput(rawOutput2);
+    const factActions2 = actions2.filter(a => a.type !== "connect");
+    const edgeActions2 = actions2.filter(a => a.type === "connect");
+
+    // Route fact actions through processExtraction
+    store.processExtraction("default", factActions2);
+    // Route edge actions through processEdges (the fix)
+    const edgeResult = store.processEdges(edgeActions2);
+
+    assert.equal(edgeResult.added, 1);
+    const edges = store.getEdgesForFact(moduleA.id);
+    assert.ok(edges.some(e => e.relation === "depends_on" && e.target_fact_id === moduleB.id));
+  });
+
+  it("processExtraction silently ignores connect actions (pre-fix behavior)", () => {
+    // Prove that connect actions in processExtraction are dropped
+    const a = store.storeFact({ section: "Architecture", content: "Fact for silent drop A", source: "manual" }).id;
+    const b = store.storeFact({ section: "Architecture", content: "Fact for silent drop B", source: "manual" }).id;
+
+    const actions = parseExtractionOutput([
+      `{"type":"connect","source":"${a}","target":"${b}","relation":"test_silent","description":"should be dropped"}`,
+    ].join("\n"));
+
+    // Without the routing fix, connect actions go through processExtraction and are silently dropped
+    const result = store.processExtraction("default", actions);
+    assert.equal(result.added, 0);
+    assert.equal(result.reinforced, 0);
+    // Verify no edge was created
+    const edges = store.getEdgesForFact(a);
+    assert.ok(!edges.some(e => e.relation === "test_silent"));
+  });
+});
+
 describe("global decay profile", () => {
   it("global store decays slower with reinforcement than project store", () => {
     // Import GLOBAL_DECAY

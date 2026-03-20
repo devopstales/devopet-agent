@@ -1264,7 +1264,17 @@ export default function (pi: ExtensionAPI) {
 
     const actions = parseExtractionOutput(rawOutput);
     if (actions.length > 0) {
-      const result = store.processExtraction(mind, actions);
+      // Split edge actions from fact actions — processExtraction ignores connect,
+      // so we route them to processEdges separately.
+      const factActions = actions.filter(a => a.type !== "connect");
+      const edgeActions = actions.filter(a => a.type === "connect");
+
+      const result = store.processExtraction(mind, factActions);
+
+      // Process project-level edges from Phase 1 extraction
+      if (edgeActions.length > 0) {
+        store.processEdges(edgeActions);
+      }
 
       // Embed newly created facts (tracked fire-and-forget — shutdown awaits these)
       if (result.newFactIds.length > 0 && embeddingAvailable) {

@@ -9,7 +9,7 @@
  *   reinforce — "This existing fact is still true" (by ID)
  *   supersede — "This new fact replaces that old one" (by ID + new content)
  *   archive   — "This fact appears stale/wrong" (by ID)
- *   connect   — "These two facts are related" (global extraction only)
+ *   connect   — "These two facts are related" (project + global extraction)
  *
  * All LLM calls use direct HTTP (llm-direct.ts) — zero subprocess overhead.
  */
@@ -147,6 +147,13 @@ ACTION TYPES:
 
 {"type":"archive","id":"abc123"}
   → A specific existing fact is clearly wrong, obsolete, or no longer relevant.
+
+{"type":"connect","source":"<fact_id>","target":"<fact_id>","relation":"depends_on","description":"module A imports from module B"}
+  → Two existing facts are meaningfully related. Both source and target must be IDs
+    from the current active facts above. Use when you see architectural dependencies,
+    causal relationships, or co-change patterns in the conversation.
+    Common relations: depends_on, imports, enables, motivated_by, contradicts,
+    changes_with, requires, conflicts_with, instance_of
 
 RULES:
 - Output ONLY valid JSONL. One JSON object per line. No commentary, no explanation.

@@ -94,7 +94,7 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   compactionCodexTimeout: 60_000,
   compactionHaikuTimeout: 30_000,
   compactionRetryLimit: 3,
-  globalExtractionEnabled: false,
+  globalExtractionEnabled: true,
   episodeModel: "gpt-5.3-codex-spark",
   episodeStepTimeout: 8_000,
   episodeFallbackChain: true,
