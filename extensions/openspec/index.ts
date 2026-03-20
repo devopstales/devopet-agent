@@ -513,7 +513,9 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 								for (const section of spec.sections) {
 									if (section.type === "removed") continue;
 									for (const req of section.requirements) {
-										designLines.push(`- **${req.title}** (${section.type}) — ${req.scenarios.length} scenarios`);
+										const ecCount = req.edgeCases.length;
+										const ecSuffix = ecCount > 0 ? `, ${ecCount} edge cases` : "";
+										designLines.push(`- **${req.title}** (${section.type}) — ${req.scenarios.length} scenarios${ecSuffix}`);
 									}
 								}
 								designLines.push("");
@@ -548,14 +550,36 @@ export default function openspecExtension(pi: ExtensionAPI): void {
 									if (section.type === "removed") continue;
 									for (const req of section.requirements) {
 										taskLines.push(`## ${groupNum}. ${req.title}`, "");
-										// Each scenario becomes a task
+										// Each scenario becomes an implementation task
 										let taskNum = 1;
 										for (const s of req.scenarios) {
 											taskLines.push(`- [ ] ${groupNum}.${taskNum} ${s.title}`);
 											taskNum++;
 										}
-										// Add a verification task
-										taskLines.push(`- [ ] ${groupNum}.${taskNum} Write tests for ${req.title}`);
+										// Structured testing block instead of generic "Write tests"
+										taskLines.push("");
+										taskLines.push(`### Testing Requirements`, "");
+
+										// Tier 1: Spec scenarios as acceptance tests
+										if (req.scenarios.length > 0) {
+											taskLines.push("**Spec Scenarios (must pass):**");
+											for (const s of req.scenarios) {
+												taskLines.push(`- ${s.title}`);
+											}
+											taskLines.push("");
+										}
+
+										// Tier 2: Edge cases from spec (must have tests)
+										if (req.edgeCases.length > 0) {
+											taskLines.push("**Edge Cases (must have tests):**");
+											for (const ec of req.edgeCases) {
+												taskLines.push(`- ${ec}`);
+											}
+											taskLines.push("");
+										}
+
+										// Test task referencing the structured block
+										taskLines.push(`- [ ] ${groupNum}.${taskNum} Tests for ${req.title} (see Testing Requirements above)`);
 										taskLines.push("");
 										groupNum++;
 									}

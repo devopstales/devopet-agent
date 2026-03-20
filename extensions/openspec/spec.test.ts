@@ -630,6 +630,83 @@ Then result
 	});
 });
 
+// ─── Fast-forward task generation format ─────────────────────────────────────
+
+describe("fast-forward task generation with edge cases", () => {
+	it("generates structured Testing Requirements block when edge cases exist", () => {
+		// Simulate what fast_forward does: parse specs, generate task lines
+		const sections = parseSpecContent(SAMPLE_SPEC);
+		const taskLines: string[] = [];
+		let groupNum = 1;
+
+		for (const section of sections) {
+			if (section.type === "removed") continue;
+			for (const req of section.requirements) {
+				taskLines.push(`## ${groupNum}. ${req.title}`, "");
+				let taskNum = 1;
+				for (const s of req.scenarios) {
+					taskLines.push(`- [ ] ${groupNum}.${taskNum} ${s.title}`);
+					taskNum++;
+				}
+				taskLines.push("");
+				taskLines.push(`### Testing Requirements`, "");
+				if (req.scenarios.length > 0) {
+					taskLines.push("**Spec Scenarios (must pass):**");
+					for (const s of req.scenarios) {
+						taskLines.push(`- ${s.title}`);
+					}
+					taskLines.push("");
+				}
+				if (req.edgeCases.length > 0) {
+					taskLines.push("**Edge Cases (must have tests):**");
+					for (const ec of req.edgeCases) {
+						taskLines.push(`- ${ec}`);
+					}
+					taskLines.push("");
+				}
+				taskLines.push(`- [ ] ${groupNum}.${taskNum} Tests for ${req.title} (see Testing Requirements above)`);
+				taskLines.push("");
+				groupNum++;
+			}
+		}
+
+		const output = taskLines.join("\n");
+
+		// JWT requirement has edge cases
+		assert.ok(output.includes("### Testing Requirements"), "Should have Testing Requirements section");
+		assert.ok(output.includes("**Spec Scenarios (must pass):**"), "Should have spec scenarios tier");
+		assert.ok(output.includes("**Edge Cases (must have tests):**"), "Should have edge cases tier");
+		assert.ok(output.includes("Empty token string → 401"), "Should include edge case content");
+		assert.ok(output.includes("(see Testing Requirements above)"), "Test task should reference Testing Requirements");
+	});
+
+	it("omits edge cases tier when requirement has no edge cases", () => {
+		const sections = parseSpecContent(SAMPLE_SPEC);
+		const addedSection = sections.find(s => s.type === "added");
+		assert.ok(addedSection);
+		const refreshReq = addedSection.requirements.find(r => r.title.includes("Refresh"));
+		assert.ok(refreshReq);
+		assert.equal(refreshReq.edgeCases.length, 0);
+
+		// Generate task lines for just this requirement
+		const taskLines: string[] = ["### Testing Requirements", ""];
+		if (refreshReq.scenarios.length > 0) {
+			taskLines.push("**Spec Scenarios (must pass):**");
+			for (const s of refreshReq.scenarios) taskLines.push(`- ${s.title}`);
+			taskLines.push("");
+		}
+		if (refreshReq.edgeCases.length > 0) {
+			taskLines.push("**Edge Cases (must have tests):**");
+			for (const ec of refreshReq.edgeCases) taskLines.push(`- ${ec}`);
+			taskLines.push("");
+		}
+
+		const output = taskLines.join("\n");
+		assert.ok(output.includes("**Spec Scenarios (must pass):**"), "Should still have scenarios");
+		assert.ok(!output.includes("**Edge Cases (must have tests):**"), "Should NOT have edge cases tier");
+	});
+});
+
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 describe("validateChangeName", () => {
