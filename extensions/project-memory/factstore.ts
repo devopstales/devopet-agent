@@ -199,6 +199,9 @@ export interface Episode {
   date: string;
   session_id: string | null;
   created_at: string;
+  /** jj change ID at episode creation — anchors the session narrative
+   *  to its point in the commit graph. Null outside jj repos. */
+  jj_change_id: string | null;
 }
 
 export interface Edge {
@@ -255,9 +258,9 @@ export class FactStore {
   private db: any;
   private dbPath: string;
   private decayProfile: DecayProfile;
-  /** Cached jj change ID — resolved once at construction, reused for all stores in this session. */
-  private cachedJjChangeId: string | null = null;
-  private jjChecked = false;
+  /** Whether this store is in a jj repo — checked once, reused. */
+  private jjRepoPath: string | null = null;
+  private jjRepoChecked = false;
 
   constructor(memoryDir: string, opts?: { decay?: DecayProfile; dbName?: string }) {
     this.decayProfile = opts?.decay ?? DECAY;
@@ -272,31 +275,44 @@ export class FactStore {
   }
 
   /**
+   * Get the jj repo root, or null if not in a jj repo.
+   * The repo root is cached (doesn't change within a session).
+   */
+  private getJjRepoRoot(): string | null {
+    if (this.jjRepoChecked) return this.jjRepoPath;
+    this.jjRepoChecked = true;
+
+    let dir = path.dirname(this.dbPath);
+    for (let i = 0; i < 10; i++) {
+      if (fs.existsSync(path.join(dir, ".jj"))) {
+        this.jjRepoPath = dir;
+        return dir;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) return null;
+      dir = parent;
+    }
+    return null;
+  }
+
+  /**
    * Get the current jj change ID, or null if not in a jj repo.
-   * Cached after first call — the change ID for this session's working copy.
+   *
+   * NOT cached — called fresh each time because the change ID updates
+   * when `jj new` is called (which the commit tool does). A stale cached
+   * ID would bind facts to the wrong change.
    */
   private getJjChangeId(): string | null {
-    if (this.jjChecked) return this.cachedJjChangeId;
-    this.jjChecked = true;
+    const repoRoot = this.getJjRepoRoot();
+    if (!repoRoot) return null;
 
     try {
-      // Walk up from dbPath to find .jj
-      let dir = path.dirname(this.dbPath);
-      for (let i = 0; i < 10; i++) {
-        if (fs.existsSync(path.join(dir, ".jj"))) break;
-        const parent = path.dirname(dir);
-        if (parent === dir) return null;
-        dir = parent;
-      }
-      if (!fs.existsSync(path.join(dir, ".jj"))) return null;
-
       const result = childProcess.execSync(
-        "jj log -r @ --no-graph -T 'change_id.short()'",
-        { cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+        "jj log -r @ --no-graph -T 'change_id'",
+        { cwd: repoRoot, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
       );
       const id = result.toString().trim();
-      this.cachedJjChangeId = id || null;
-      return this.cachedJjChangeId;
+      return id || null;
     } catch {
       return null;
     }
@@ -443,6 +459,14 @@ export class FactStore {
       this.db.prepare(
         `ALTER TABLE facts ADD COLUMN jj_change_id TEXT`
       ).run();
+      // Also add to episodes table
+      try {
+        this.db.prepare(
+          `ALTER TABLE episodes ADD COLUMN jj_change_id TEXT`
+        ).run();
+      } catch {
+        // Column may already exist from a partial migration
+      }
       this.setSchemaVersion(5);
     }
   }
@@ -1645,7 +1669,7 @@ export class FactStore {
 
     for (const ep of allEpisodes) {
       const factIds = this.getEpisodeFactIds(ep.id);
-      lines.push(JSON.stringify({
+      const exported: Record<string, unknown> = {
         _type: "episode",
         id: ep.id,
         mind: ep.mind,
@@ -1655,7 +1679,11 @@ export class FactStore {
         session_id: ep.session_id,
         created_at: ep.created_at,
         fact_ids: factIds,
-      }));
+      };
+      if (ep.jj_change_id) {
+        exported.jj_change_id = ep.jj_change_id;
+      }
+      lines.push(JSON.stringify(exported));
     }
 
     return lines.join("\n") + "\n";
@@ -1824,6 +1852,7 @@ export class FactStore {
                 sessionId: record.session_id ?? null,
                 factIds,
                 createdAt: record.created_at,
+                jjChangeId: record.jj_change_id ?? null,
               });
             }
             break;
@@ -2215,12 +2244,16 @@ export class FactStore {
     sessionId?: string | null;
     factIds?: string[];
     createdAt?: string;
+    /** Override jj_change_id (used on import to preserve original provenance). */
+    jjChangeId?: string | null;
   }): void {
     const now = opts.createdAt ?? new Date().toISOString();
+    // Use provided change ID on import; capture fresh on new episodes
+    const changeId = opts.jjChangeId !== undefined ? opts.jjChangeId : this.getJjChangeId();
     this.db.prepare(`
-      INSERT INTO episodes (id, mind, title, narrative, date, session_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, opts.mind, opts.title, opts.narrative, opts.date, opts.sessionId ?? null, now);
+      INSERT INTO episodes (id, mind, title, narrative, date, session_id, created_at, jj_change_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, opts.mind, opts.title, opts.narrative, opts.date, opts.sessionId ?? null, now, changeId);
 
     if (opts.factIds?.length) {
       const stmt = this.db.prepare(

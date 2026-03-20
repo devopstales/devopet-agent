@@ -118,7 +118,7 @@ export function captureJjChangeId(repoPath: string): string | undefined {
 		if (!fs.existsSync(path.join(dir, ".jj"))) return undefined;
 
 		const result = childProcess.execSync(
-			"jj log -r @ --no-graph -T 'change_id.short()'",
+			"jj log -r @ --no-graph -T 'change_id'",
 			{ cwd: dir, timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
 		);
 		const id = result.toString().trim();
