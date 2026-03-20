@@ -44,6 +44,12 @@ const MARKER_PATH = join(AGENT_DIR, "omegon-bootstrap-done");
 const MARKER_PATH_LEGACY = join(AGENT_DIR, "pi-kit-bootstrap-done"); // legacy — treat as done if present
 const MARKER_VERSION = "2"; // bump to re-trigger bootstrap after adding operator profile capture
 
+// --- Version Check State (absorbed from version-check.ts) ---
+const REPO_OWNER = "styrene-lab";
+const REPO_NAME = "omegon";
+const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const FETCH_TIMEOUT_MS = 10_000;
+
 export type { OperatorCapabilityProfile } from "../lib/operator-profile.ts";
 export type LocalFallbackPolicy = "allow" | "ask" | "deny";
 
@@ -308,9 +314,76 @@ async function ensureOperatorProfile(pi: ExtensionAPI, ctx: CommandContext): Pro
 }
 
 export default function (pi: ExtensionAPI) {
+  // --- Version Check State (absorbed from version-check.ts) ---
+  let versionCheckTimer: ReturnType<typeof setInterval> | null = null;
+  let notifiedVersion: string | null = null;
+
+  /** Read installed version from package.json (absorbed from version-check.ts) */
+  function getInstalledVersion(): string {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    return pkg.version;
+  }
+
+  /** Fetch the latest release tag from GitHub. Returns version string or null. (absorbed from version-check.ts) */
+  async function fetchLatestRelease(): Promise<string | null> {
+    if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_OFFLINE) return null;
+
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`,
+        {
+          headers: { Accept: "application/vnd.github+json" },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) return null;
+      const data = (await response.json()) as { tag_name?: string };
+      return data.tag_name?.replace(/^v/, "") ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Compare dotted numeric version parts (absorbed from version-check.ts) */
+  function isNewer(latest: string, current: string): boolean {
+    const latestParts = latest.match(/\d+/g)?.map((part) => Number.parseInt(part, 10)) ?? [];
+    const currentParts = current.match(/\d+/g)?.map((part) => Number.parseInt(part, 10)) ?? [];
+    const length = Math.max(latestParts.length, currentParts.length);
+
+    for (let i = 0; i < length; i += 1) {
+      const latestPart = latestParts[i] ?? 0;
+      const currentPart = currentParts[i] ?? 0;
+      if (latestPart > currentPart) return true;
+      if (latestPart < currentPart) return false;
+    }
+
+    return false;
+  }
+
+  /** Check for new version and notify if found (absorbed from version-check.ts) */
+  async function checkForUpdate() {
+    const installed = getInstalledVersion();
+    const latest = await fetchLatestRelease();
+    if (!latest || !isNewer(latest, installed)) return;
+    if (latest === notifiedVersion) return; // don't spam
+
+    notifiedVersion = latest;
+    pi.sendMessage({
+      customType: "view",
+      content: `**Omegon update available:** v${installed} → v${latest}\n\nRun \`pi update\` to upgrade.`,
+      display: true,
+    });
+  }
+
 	// --- First-run detection on session start ---
 	pi.on("session_start", async (_event, ctx) => {
 		sharedState.routingPolicy = routingPolicyFromProfile(loadOperatorProfile(getConfigRoot(ctx)));
+
+		// --- Version check (absorbed from version-check.ts) ---
+		// Fire-and-forget — don't block session start
+		checkForUpdate();
+		versionCheckTimer = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
 
 		if (!isFirstRun()) return;
 		if (!ctx.hasUI) return;
@@ -343,6 +416,14 @@ export default function (pi: ExtensionAPI) {
 		msg += "Run /bootstrap to set up.";
 
 		ctx.ui.notify(msg, coreMissing.length > 0 ? "warning" : "info");
+	});
+
+	// --- Session shutdown cleanup for version checking (absorbed from version-check.ts) ---
+	pi.on("session_shutdown", async () => {
+		if (versionCheckTimer) {
+			clearInterval(versionCheckTimer);
+			versionCheckTimer = null;
+		}
 	});
 
 	pi.registerCommand("bootstrap", {
