@@ -92,7 +92,7 @@ import {
 	mergeBranch,
 	pruneWorktreeDirs,
 } from "./worktree.ts";
-import { inspectGitState } from "../lib/git-state.ts";
+import { inspectGitState, parseGitmodules } from "../lib/git-state.ts";
 
 // ─── Dashboard state emitter ────────────────────────────────────────────────
 
@@ -329,6 +329,16 @@ async function checkpointRelatedChanges(
 		throw new Error("Checkpoint cancelled before commit approval.");
 	}
 	const commitMessage = response && response.length > 0 ? response : suggested;
+	// Warn about submodule HEAD consistency — the checkpoint commits the outer
+	// pointer but if the submodule has uncommitted internal changes, the worktree
+	// will be created from a parent that pins the submodule to a stale SHA.
+	const submodulePaths = parseGitmodules(repoPath);
+	const submoduleFiles = classification.checkpointFiles.filter((f) => submodulePaths.has(f));
+	if (submoduleFiles.length > 0) {
+		debug("cleave", `⚠️  checkpoint includes submodule path(s): ${submoduleFiles.join(", ")} — ` +
+			"ensure submodule HEAD includes all desired changes before cleave");
+	}
+
 	const addResult = await pi.exec("git", ["add", "--", ...classification.checkpointFiles], { cwd: repoPath, timeout: 15_000 });
 	if (addResult.code !== 0) {
 		throw new Error(
@@ -397,7 +407,9 @@ export async function runDirtyTreePreflight(pi: ExtensionAPI, options: DirtyTree
 		cwd: options.repoPath,
 		timeout: 5_000,
 	});
-	const gitState = inspectGitState(status.stdout);
+	// Detect submodules for classification
+	const submodulePaths = parseGitmodules(options.repoPath);
+	const gitState = inspectGitState(status.stdout, undefined, submodulePaths);
 	if (gitState.entries.length === 0) return "continue";
 
 	const openspecContext = options.openspecChangePath

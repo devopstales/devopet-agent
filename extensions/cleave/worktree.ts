@@ -1,6 +1,14 @@
 /**
  * cleave/worktree — Git worktree operations for child isolation.
  *
+ * ⚠️  LEGACY — The primary cleave dispatch path uses the Rust orchestrator
+ * (core/crates/omegon/src/cleave/) which owns worktree creation, submodule
+ * initialization, and merge. This TS module is only reachable from the
+ * `/cleave resume` command for runs started under the old TS dispatcher.
+ *
+ * Submodule support is NOT implemented here — it lives in the Rust
+ * worktree.rs (submodule_init, commit_dirty_submodules, verify_scope_accessible).
+ *
  * Each child gets its own git worktree on a separate branch,
  * preventing file conflicts during parallel execution.
  * Completed branches are merged back to base after harvesting.

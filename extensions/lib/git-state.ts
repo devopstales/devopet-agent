@@ -6,6 +6,9 @@
  * without executing git mutations.
  */
 
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
 export const BUILTIN_VOLATILE_ALLOWLIST = [".pi/memory/facts.jsonl"] as const;
 
 export type GitStatusCode =
@@ -34,6 +37,8 @@ export interface GitStatusEntry {
 	originalPath?: string;
 	indexKind: GitStatusCode;
 	worktreeKind: GitStatusCode;
+	/** True when this path is a registered git submodule root. */
+	submodule: boolean;
 }
 
 export interface GitStateSnapshot {
@@ -81,8 +86,19 @@ export function parseGitStatus(output: string): GitStatusEntry[] {
 export function inspectGitState(
 	output: string,
 	volatileAllowlist: readonly string[] = BUILTIN_VOLATILE_ALLOWLIST,
+	submodulePaths?: ReadonlySet<string>,
 ): GitStateSnapshot {
 	const entries = parseGitStatus(output);
+
+	// Cross-reference against submodule paths if provided
+	if (submodulePaths && submodulePaths.size > 0) {
+		for (const entry of entries) {
+			if (submodulePaths.has(entry.path)) {
+				entry.submodule = true;
+			}
+		}
+	}
+
 	const tracked = entries.filter((entry) => entry.tracked);
 	const untracked = entries.filter((entry) => entry.untracked);
 	const volatile = entries.filter((entry) => isVolatilePath(entry.path, volatileAllowlist));
@@ -93,6 +109,31 @@ export function inspectGitState(
 		volatile,
 		nonVolatile: entries.filter((entry) => !isVolatilePath(entry.path, volatileAllowlist)),
 	};
+}
+
+/**
+ * Parse .gitmodules to extract submodule paths.
+ *
+ * Returns a Set of submodule paths (e.g., {"core"}).
+ * Returns an empty set if .gitmodules doesn't exist or can't be read.
+ */
+export function parseGitmodules(repoPath: string): Set<string> {
+	const gitmodulesPath = join(repoPath, ".gitmodules");
+	if (!existsSync(gitmodulesPath)) return new Set();
+
+	try {
+		const content = readFileSync(gitmodulesPath, "utf-8");
+		const paths = new Set<string>();
+		for (const line of content.split("\n")) {
+			const match = line.match(/^\s*path\s*=\s*(.+?)\s*$/);
+			if (match?.[1]) {
+				paths.add(match[1]);
+			}
+		}
+		return paths;
+	} catch {
+		return new Set();
+	}
 }
 
 export function buildPathsetFromEntries(entries: GitStatusEntry[]): GitPathsetInput {
@@ -188,6 +229,7 @@ function parseGitStatusLine(line: string): GitStatusEntry {
 		originalPath,
 		indexKind: decodeStatus(indexStatus),
 		worktreeKind: decodeStatus(worktreeStatus),
+		submodule: false, // Set later by inspectGitState if submodulePaths provided
 	};
 }
 
