@@ -160,7 +160,7 @@ Omegon maintains a fork of `pi` at `~/workspace/ai/pi-mono`. Changes to pi's cor
 
 | Category | What changed | Update step |
 |---|---|---|
-| **A — omegon only** | extensions, alpharius.json, docs | Restart pi (theme auto-deploys on session_start) |
+| **A — omegon only** | extensions, alpharius.json, docs | Restart omegon-pi (theme auto-deploys on session_start) |
 | **B — pi-mono only** | tool-execution.ts, diff.ts, bash.ts, theme.ts, etc. | `npm run build:pi` → restart pi |
 | **C — cross-cutting** | new theme vars AND new rendering code | `npm run build:pi` → restart pi |
 
@@ -185,7 +185,7 @@ This is idempotent — safe to re-run. After this, `npm run build:pi` is the ent
 # 2. Rebuild
 npm run build:pi
 
-# 3. Restart pi session — changes are live
+# 3. Restart omegon-pi session — changes are live
 ```
 
 ### `pi update` and `bin/deploy` Safety

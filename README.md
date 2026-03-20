@@ -2,7 +2,7 @@
 
 An opinionated distribution of [**pi**](https://github.com/badlogic/pi) — the coding agent by [Mario Zechner](https://github.com/badlogic). Omegon bundles pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and quality-of-life tools.
 
-> **Relationship to pi:** Omegon is not a fork or replacement. It packages pi as a dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. The core pi packages are migrating to the styrene-lab-owned npm scope (`@styrene-lab/pi-coding-agent` and related packages) so package ownership matches the `styrene-lab/omegon` product boundary. Older `@cwilson613/*` package names are compatibility debt during the transition, not the long-term release boundary. If you want standalone pi without Omegon's extensions, install `@mariozechner/pi-coding-agent` directly.
+> **Relationship to pi:** Omegon is not a fork or replacement. It packages pi as a dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. The core pi packages are migrating to the styrene-lab-owned npm scope (`@styrene-lab/pi-coding-agent` and related packages) so package ownership matches the `styrene-lab/omegon-pi` product boundary. Older `@cwilson613/*` package names are compatibility debt during the transition, not the long-term release boundary. If you want standalone pi without Omegon's extensions, install `@mariozechner/pi-coding-agent` directly.
 
 ## Installation
 
@@ -22,7 +22,7 @@ npm install -g @mariozechner/pi-coding-agent
 **First-time setup:**
 
 ```bash
-omegon      # start Omegon in any project directory
+omegon-pi   # start Omegon in any project directory
 /bootstrap  # check deps, install missing tools, configure preferences
 ```
 
@@ -42,7 +42,7 @@ omegon      # start Omegon in any project directory
 
 ![Omegon Architecture](docs/img/architecture.png)
 
-Omegon extends `@styrene-lab/pi-coding-agent` with **31 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+Omegon extends `@styrene-lab/pi-coding-agent` with **32 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
 
 ### Development Methodology
 
@@ -137,11 +137,11 @@ Single global knob controlling the inference intensity across the entire harness
 |------|------|--------|----------|--------|
 | 1 | **Servitor** | local | off | local |
 | 2 | **Average** | local | minimal | local |
-| 3 | **Substantial** | sonnet | low | sonnet |
-| 4 | **Ruthless** | sonnet | medium | sonnet |
-| 5 | **Lethal** | sonnet | high | opus |
-| 6 | **Absolute** | opus | high | opus |
-| 7 | **Omnissiah** | opus | high | opus |
+| 3 | **Substantial** | victory | low | victory |
+| 4 | **Ruthless** | victory | medium | victory |
+| 5 | **Lethal** | victory | high | gloriana |
+| 6 | **Absolute** | gloriana | high | gloriana |
+| 7 | **Omnissiah** | gloriana | high | gloriana |
 
 - `/effort <name>` — switch tier mid-session
 - `/effort cap` — lock current tier as ceiling; agent cannot self-upgrade past it
@@ -169,7 +169,7 @@ Switch the driving model from cloud to a local Ollama model when connectivity dr
 
 Switch model tiers to match task complexity and conserve API spend. Tier labels are provider-neutral — resolved at runtime through the session routing policy.
 
-- **Tool**: `set_model_tier` — `opus` / `sonnet` / `haiku` / `local`
+- **Tool**: `set_model_tier` — `gloriana` / `victory` / `retribution` / `local`
 - **Tool**: `set_thinking_level` — `off` / `minimal` / `low` / `medium` / `high`
 - Downgrade for routine edits, upgrade for architecture decisions
 - Respects effort tier cap — cannot upgrade past a locked ceiling
@@ -182,6 +182,8 @@ Generate images and diagrams directly in the terminal.
 - **D2 diagrams** rendered inline — `render_diagram`
 - **Native SVG/PNG diagrams** for canonical motifs (pipeline, fanout, panel-split) — `render_native_diagram`
 - **Excalidraw** JSON-to-PNG rendering — `render_excalidraw`
+- **React composition stills** via Satori + resvg — `render_composition_still`
+- **React composition video** (animated GIF/MP4) via Satori + gifenc — `render_composition_video`
 
 ### 🔍 Web Search
 
@@ -223,16 +225,19 @@ Connect external MCP (Model Context Protocol) servers as native pi tools.
 
 | Extension | Description |
 |-----------|-------------|
-| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences (`/bootstrap`, `/refresh`, `/update-pi`) |
+| `00-splash` | Animated ASCII logo with glitch-convergence startup animation and loading checklist |
+| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences (`/bootstrap`, `/refresh`, `/update`) |
 | `chronos` | Authoritative date/time from system clock — eliminates AI date math errors |
 | `01-auth` | Auth status, diagnosis, and refresh across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
-| `distill` | Context distillation for session handoff (`/distill`) |
 | `session-log` | Append-only structured session tracking |
 | `auto-compact` | Context pressure monitoring with automatic compaction |
 | `defaults` | Deploys `AGENTS.md` and theme on first install; content-hash guard prevents overwriting customizations |
 | `terminal-title` | Dynamic tab titles showing active cleave runs and git branch |
 | `spinner-verbs` | Warhammer 40K-themed loading messages |
+| `sermon` | The Crawler's scrawl — ambient organic/computational text that scrolls beneath the spinner |
+| `core-renderers` | Sci-UI rendering for Omegon's custom tools (tool call/result display) |
+| `igor` | Nervous-system bridge to [Igor](https://github.com/styrene-lab/igor) — personal brain recall, ingest, intent dispatch, escalation alerts (degrades gracefully when unreachable) |
 | `style` | Alpharius design system reference (`/style`) |
 | `version-check` | Polls GitHub releases hourly, notifies when a new Omegon release is available |
 | `web-ui` | Localhost-only read-only HTTP dashboard and JSON control-plane endpoints (`/web-ui [start|stop|status|open]`) |
@@ -289,7 +294,7 @@ Upstream [`badlogic/pi-mono`](https://github.com/badlogic/pi-mono) is the canoni
 
 2. **Bracketed-paste stuck state** — a missing end-marker (e.g. from a large paste that split across chunks) would leave `isInPaste = true` permanently, silently swallowing all subsequent keystrokes including Enter. Fixed with a 500ms watchdog timer and Escape-to-clear in [`packages/tui/src/components/input.ts`](https://github.com/cwilson613/pi-mono/blob/main/packages/tui/src/components/input.ts).
 
-Both fixes are submitted as PRs to upstream ([#2060](https://github.com/badlogic/pi-mono/pull/2060), [#2061](https://github.com/badlogic/pi-mono/pull/2061)). Once merged, the fork becomes a pass-through and the dependency can revert to `@mariozechner/pi-coding-agent`.
+Both fixes were submitted as PRs to upstream ([#2060](https://github.com/badlogic/pi-mono/pull/2060), [#2061](https://github.com/badlogic/pi-mono/pull/2061)) but were closed without merge. The fork is maintained independently under the `@styrene-lab/*` npm scope.
 
 ## License
 
