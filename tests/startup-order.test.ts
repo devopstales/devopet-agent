@@ -11,16 +11,37 @@ interface PiPackageJson {
 }
 
 describe("startup extension order", () => {
-  it("registers offline-driver before effort so local driver models exist at effort startup", () => {
+  it("inference extension is registered (consolidates offline-driver, effort, model-budget, local-inference)", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const pkgPath = join(here, "..", "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as PiPackageJson;
     const extensions = pkg.pi?.extensions ?? [];
-    const offlineIndex = extensions.indexOf("./extensions/offline-driver.ts");
-    const effortIndex = extensions.indexOf("./extensions/effort");
+    const inferenceIndex = extensions.indexOf("./extensions/inference");
 
-    assert.notEqual(offlineIndex, -1, "offline-driver extension must be registered");
-    assert.notEqual(effortIndex, -1, "effort extension must be registered");
-    assert.ok(offlineIndex < effortIndex, "offline-driver must load before effort");
+    assert.notEqual(inferenceIndex, -1, "inference extension must be registered");
+  });
+
+  it("consolidated extensions are no longer individually registered", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(here, "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as PiPackageJson;
+    const extensions = pkg.pi?.extensions ?? [];
+
+    const removed = [
+      "./extensions/offline-driver.ts",
+      "./extensions/effort",
+      "./extensions/model-budget.ts",
+      "./extensions/local-inference",
+      "./extensions/spinner-verbs.ts",
+      "./extensions/sermon-widget.ts",
+      "./extensions/auto-compact.ts",
+      "./extensions/session-log.ts",
+      "./extensions/version-check.ts",
+      "./extensions/terminal-title.ts",
+      "./extensions/core-renderers.ts",
+    ];
+    for (const ext of removed) {
+      assert.equal(extensions.indexOf(ext), -1, `${ext} should no longer be individually registered`);
+    }
   });
 });

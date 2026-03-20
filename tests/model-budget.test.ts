@@ -8,7 +8,7 @@ import {
   classifyRecoveryFailure,
   piCoreAutoRetryLikelyHandles,
   shouldUseExtensionRetryFallback,
-} from "../extensions/model-budget.ts";
+} from "../extensions/inference/budget.ts";
 import { clampThinkingLevel } from "../extensions/lib/model-routing.ts";
 
 describe("model-budget copy", () => {

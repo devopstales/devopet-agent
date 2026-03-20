@@ -42,7 +42,7 @@ omegon-pi   # start Omegon in any project directory
 
 ![Omegon Architecture](docs/img/architecture.png)
 
-Omegon extends `@styrene-lab/pi-coding-agent` with **31 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+Omegon extends `@styrene-lab/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
 
 ### Development Methodology
 
@@ -103,6 +103,8 @@ Persistent, cross-session knowledge stored in SQLite. Accumulates architectural 
 - **Directive minds**: `implement` forks a scoped memory mind from `default`; all fact reads/writes auto-scope to the directive. `archive` ingests discoveries back to `default` and cleans up. Zero-copy fork with parent-chain inheritance — no fact duplication, parent embeddings and edges are reused
 - **Global knowledge base**: Cross-project facts at `~/.pi/memory/global.db`
 - **Git sync**: Exports to JSONL for version-controlled knowledge sharing across machines; volatile runtime scoring metadata (confidence, reinforcement counts, decay scores) omitted from exports for stable diffs
+- **Auto-compact**: Context pressure monitoring with automatic compaction (absorbed from auto-compact extension)
+- **Session log**: Append-only structured session tracking (absorbed from session-log extension)
 
 ![Memory Lifecycle](docs/img/memory-lifecycle.png)
 
@@ -119,6 +121,8 @@ Live status panel showing design tree, OpenSpec changes, cleave dispatch, and gi
   - Context gauge · model · thinking level in shared footer zone
   - No line cap — renders as much content as needed
 - **Keyboard**: `Ctrl+Shift+B` toggles raised/compact
+- **Terminal title**: Dynamic tab titles showing active cleave runs and git branch (absorbed from terminal-title extension)
+- **Core renderers**: Sci-UI rendering for Omegon's custom tools (absorbed from core-renderers extension)
 
 ### 🌐 Web UI
 
@@ -129,9 +133,13 @@ Localhost-only, read-only HTTP dashboard that exposes live control-plane state a
 - **Endpoints**: `GET /api/state`, plus slice routes `/api/session`, `/api/dashboard`, `/api/design-tree`, `/api/openspec`, `/api/cleave`, `/api/models`, `/api/memory`, `/api/health`
 - **State contract**: versioned `ControlPlaneState` (schema v1)
 
-### ⚔️ Effort Tiers
+### 🚀 Inference
 
-Single global knob controlling the inference intensity across the entire harness. Seven named tiers using provider-neutral labels — tier labels resolve to concrete model IDs from whichever provider (Anthropic or OpenAI) the session routing policy prefers.
+Unified inference management — local models, effort tiers, model budget control, and offline driver switching.
+
+- **Tools**: `set_model_tier`, `set_thinking_level`, `switch_to_offline_driver`, `ask_local_model`, `list_local_models`, `manage_ollama`
+- **Commands**: `/local-models`, `/local-status`, `/effort <name>`, `/effort cap`, `/effort uncap`
+- **Effort tiers**: Seven named tiers using provider-neutral labels — tier labels resolve to concrete model IDs from whichever provider (Anthropic or OpenAI) the session routing policy prefers:
 
 | Tier | Name | Driver | Thinking | Review |
 |------|------|--------|----------|--------|
@@ -143,36 +151,19 @@ Single global knob controlling the inference intensity across the entire harness
 | 6 | **Absolute** | gloriana | high | gloriana |
 | 7 | **Omnissiah** | gloriana | high | gloriana |
 
-- `/effort <name>` — switch tier mid-session
-- `/effort cap` — lock current tier as ceiling; agent cannot self-upgrade past it
-- `/effort uncap` — remove ceiling lock
-- Affects: driver model, thinking level, extraction, compaction, cleave child floor, review model
+- **Local inference**: Delegate sub-tasks to locally running LLMs via Ollama — zero API cost
+- **Model budget**: Switch model tiers to match task complexity and conserve API spend
+- **Offline driver**: Switch the driving model from cloud to a local Ollama model when connectivity drops
+- **Auto-discovery**: Available models detected on session start
+- **Hardware-aware selection**: Model registry covers 64GB (70B), 32GB (32B), 24GB (14B/MoE-30B), 16GB (8B), 8GB (4B)
 
-### 🤖 Local Inference
+### 🎭 Ambiance
 
-Delegate sub-tasks to locally running LLMs via Ollama — zero API cost.
+Atmospheric UI enhancements — themed loading messages and ambient scrolling text.
 
-- **Tools**: `ask_local_model`, `list_local_models`
-- **Commands**: `/local-models`, `/local-status`
-- Auto-discovers available models on session start
-
-### 🔌 Offline Driver
-
-Switch the driving model from cloud to a local Ollama model when connectivity drops or for fully offline operation.
-
-- **Tool**: `switch_to_offline_driver`
-- Auto-selects best available model from a hardware-aware preference list
-- Model registry in `extensions/lib/local-models.ts` — one file to update when new models land
-- Covers: 64GB (70B), 32GB (32B), 24GB (14B/MoE-30B), 16GB (8B), 8GB (4B)
-
-### 💰 Model Budget
-
-Switch model tiers to match task complexity and conserve API spend. Tier labels are provider-neutral — resolved at runtime through the session routing policy.
-
-- **Tool**: `set_model_tier` — `gloriana` / `victory` / `retribution` / `local`
-- **Tool**: `set_thinking_level` — `off` / `minimal` / `low` / `medium` / `high`
-- Downgrade for routine edits, upgrade for architecture decisions
-- Respects effort tier cap — cannot upgrade past a locked ceiling
+- **Spinner verbs**: Warhammer 40K-themed loading messages (consolidated from spinner-verbs extension)
+- **Sermon**: The Crawler's scrawl — ambient organic/computational text that scrolls beneath the spinner (consolidated from sermon extension)
+- **Sermon widget**: Visual component integration for ambient text display (consolidated from sermon-widget extension)
 
 ### 🎨 Render
 
@@ -226,20 +217,15 @@ Connect external MCP (Model Context Protocol) servers as native pi tools.
 | Extension | Description |
 |-----------|-------------|
 | `00-splash` | Animated ASCII logo with glitch-convergence startup animation and loading checklist |
-| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences (`/bootstrap`, `/refresh`, `/update`) |
+| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences, version checking (`/bootstrap`, `/refresh`, `/update`) |
 | `chronos` | Authoritative date/time from system clock — eliminates AI date math errors |
 | `01-auth` | Auth status, diagnosis, and refresh across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
-| `session-log` | Append-only structured session tracking |
-| `auto-compact` | Context pressure monitoring with automatic compaction |
 | `defaults` | Deploys `AGENTS.md` and theme on first install; content-hash guard prevents overwriting customizations |
-| `terminal-title` | Dynamic tab titles showing active cleave runs and git branch |
-| `spinner-verbs` | Warhammer 40K-themed loading messages |
-| `sermon` | The Crawler's scrawl — ambient organic/computational text that scrolls beneath the spinner |
-| `core-renderers` | Sci-UI rendering for Omegon's custom tools (tool call/result display) |
 | `style` | Alpharius design system reference (`/style`) |
-| `version-check` | Polls GitHub releases hourly, notifies when a new Omegon release is available |
 | `web-ui` | Localhost-only read-only HTTP dashboard and JSON control-plane endpoints (`/web-ui [start|stop|status|open]`) |
+
+**Note**: Several utility extensions have been absorbed into their logical hosts: `auto-compact` and `session-log` → `project-memory`, `version-check` → `bootstrap`, `terminal-title` and `core-renderers` → `dashboard`, `spinner-verbs`, `sermon`, and `sermon-widget` → `ambiance`.
 
 ## Skills
 

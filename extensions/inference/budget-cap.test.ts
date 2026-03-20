@@ -10,7 +10,7 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { checkEffortCap, TIER_ORDER } from "../model-budget.ts";
+import { checkEffortCap, TIER_ORDER } from "./budget.ts";
 import { sharedState } from "../lib/shared-state.ts";
 
 // ─── Helpers ──────────────────────────────────────────────────

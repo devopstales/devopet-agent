@@ -20,16 +20,16 @@
 import { createHash } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@styrene-lab/pi-coding-agent";
 import type { ImageContent, Model, TextContent } from "@styrene-lab/pi-ai";
-import { DASHBOARD_UPDATE_EVENT, sharedState } from "./lib/shared-state.ts";
-import type { RecoveryEvent, RecoveryFailureClassification } from "./lib/shared-state.ts";
-import type { RecoveryAction, RecoveryCooldownSummary, RecoveryDashboardState, RecoveryTarget } from "./dashboard/types.ts";
-import { tierConfig } from "./effort/tiers.ts";
-import type { EffortLevel } from "./effort/types.ts";
-import { clampThinkingLevel, classifyUpstreamFailure, getDefaultPolicy, getViableModels, getTierDisplayLabel, resolveTier, type CapabilityRuntimeState, type ModelTier, type RegistryModel, type UpstreamFailureClassification } from "./lib/model-routing.ts";
-import { writeLastUsedModel } from "./lib/model-preferences.ts";
-import { loadOperatorRuntimeState, readOperatorProfile, toCapabilityProfile, toCapabilityRuntimeState } from "./lib/operator-profile.ts";
-import { buildFallbackGuidance, explainTierResolutionFailure, planRecoveryForModel, recordTransientFailureForModel, type RecoveryPlan } from "./lib/operator-fallback.ts";
-import { switchToOfflineDriver } from "./offline-driver.ts";
+import { DASHBOARD_UPDATE_EVENT, sharedState } from "../lib/shared-state.ts";
+import type { RecoveryEvent, RecoveryFailureClassification } from "../lib/shared-state.ts";
+import type { RecoveryAction, RecoveryCooldownSummary, RecoveryDashboardState, RecoveryTarget } from "../dashboard/types.ts";
+import { tierConfig } from "./tiers.ts";
+import type { EffortLevel } from "./types.ts";
+import { clampThinkingLevel, classifyUpstreamFailure, getDefaultPolicy, getViableModels, getTierDisplayLabel, resolveTier, type CapabilityRuntimeState, type ModelTier, type RegistryModel, type UpstreamFailureClassification } from "../lib/model-routing.ts";
+import { writeLastUsedModel } from "../lib/model-preferences.ts";
+import { loadOperatorRuntimeState, readOperatorProfile, toCapabilityProfile, toCapabilityRuntimeState } from "../lib/operator-profile.ts";
+import { buildFallbackGuidance, explainTierResolutionFailure, planRecoveryForModel, recordTransientFailureForModel, type RecoveryPlan } from "../lib/operator-fallback.ts";
+import { switchToOfflineDriver } from "./offline.ts";
 
 /** Model tier ordering for effort cap comparison. */
 export const TIER_ORDER: Record<string, number> = { local: 0, retribution: 1, victory: 2, gloriana: 3 };
