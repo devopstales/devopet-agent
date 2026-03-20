@@ -123,6 +123,44 @@ When a user authenticates
 Then it works correctly
 ```
 
+### Edge Cases
+
+After scenarios, add an `#### Edge Cases` section to capture boundary conditions and error paths
+that don't warrant full Given/When/Then scenarios. Use one-liner format:
+
+```markdown
+### Requirement: Read secret from Vault
+
+<description>
+
+#### Scenario: Read returns data when path is allowed
+Given a Vault server with KV v2 at secret/data/myapp
+When the client reads "secret/data/myapp/db-password"
+Then the response contains the secret value
+
+#### Edge Cases
+- Empty path string → returns error, not panic
+- Path with trailing slash → normalized or rejected consistently
+- Response body is not valid JSON → error with diagnostic context
+- Network timeout mid-response → clean error, no partial state
+- KV v2 response missing `data.data` field → descriptive error message
+```
+
+**Format**: `- <input condition> → <expected behavior>`
+
+For complex edge cases that need setup context, expand to abbreviated Given/When/Then:
+
+```markdown
+#### Edge Cases
+- Empty path → error
+- Given a Vault token with policy denying list on secret/metadata/*
+  When listing secret/metadata/myapp
+  Then the error includes the denied path and policy name
+```
+
+The implementing agent expands each one-liner into a full test function:
+`- Empty path → error` becomes `#[test] fn read_empty_path_returns_error() { ... }`
+
 ### Deriving API Contracts from Scenarios
 
 When a change introduces or modifies a network API (HTTP, gRPC, WebSocket), **derive an OpenAPI 3.1 spec** (or AsyncAPI for event-driven APIs) from the scenarios during the Plan phase. Place it at `openspec/changes/<id>/api.yaml`.

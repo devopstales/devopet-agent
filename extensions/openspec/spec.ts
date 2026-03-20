@@ -723,15 +723,45 @@ function parseRequirements(content: string): Requirement[] {
 			: reqContent.trim();
 
 		const scenarios = parseScenarios(reqContent);
+		const edgeCases = parseEdgeCases(reqContent);
 
 		requirements.push({
 			title: reqPositions[i].title,
 			description,
 			scenarios,
+			edgeCases,
 		});
 	}
 
 	return requirements;
+}
+
+/**
+ * Parse edge case one-liners from an #### Edge Cases section.
+ *
+ * Format: `- <condition> → <expected behavior>`
+ * Also accepts abbreviated G/W/T blocks under the Edge Cases heading.
+ * Returns the raw one-liner strings (not parsed into structured types).
+ */
+export function parseEdgeCases(content: string): string[] {
+	const edgeCases: string[] = [];
+
+	// Find #### Edge Cases section
+	const edgeCaseRe = /####\s+Edge\s+Cases?\s*\n([\s\S]*?)(?=\n####\s|$)/gi;
+	let match: RegExpExecArray | null;
+
+	while ((match = edgeCaseRe.exec(content)) !== null) {
+		const block = match[1].trim();
+		for (const line of block.split("\n")) {
+			const trimmed = line.trim();
+			// Match one-liner format: "- condition → expected"
+			if (trimmed.startsWith("- ") && trimmed.length > 2) {
+				edgeCases.push(trimmed.slice(2).trim());
+			}
+		}
+	}
+
+	return edgeCases;
 }
 
 /**
@@ -1142,6 +1172,21 @@ export function countScenarios(specs: SpecFile[]): number {
 	return count;
 }
 
+/**
+ * Count total edge cases across all spec files in a change.
+ */
+export function countEdgeCases(specs: SpecFile[]): number {
+	let count = 0;
+	for (const spec of specs) {
+		for (const section of spec.sections) {
+			for (const req of section.requirements) {
+				count += req.edgeCases.length;
+			}
+		}
+	}
+	return count;
+}
+
 // ─── Canonical Lifecycle Resolver ────────────────────────────────────────────
 
 /**
@@ -1272,8 +1317,11 @@ export function summarizeSpecs(specs: SpecFile[]): string {
 		), 0,
 	);
 	const totalScenarios = countScenarios(specs);
+	const totalEdgeCases = countEdgeCases(specs);
 
-	return `${domains.length} domain(s), ${totalReqs} requirement(s), ${totalScenarios} scenario(s)`;
+	const parts = [`${domains.length} domain(s)`, `${totalReqs} requirement(s)`, `${totalScenarios} scenario(s)`];
+	if (totalEdgeCases > 0) parts.push(`${totalEdgeCases} edge case(s)`);
+	return parts.join(", ");
 }
 
 // ─── Design Change Scanning ──────────────────────────────────────────────────

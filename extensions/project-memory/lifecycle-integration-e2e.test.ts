@@ -75,6 +75,7 @@ function makeArchivedChange(): ChangeInfo {
           title: "Structured lifecycle conclusions create memory candidates",
           description: "",
           scenarios: [],
+          edgeCases: [],
         }],
       }],
     }],

@@ -23,7 +23,9 @@ import {
 	addSpec,
 	archiveChange,
 	parseSpecsDir,
+	parseEdgeCases,
 	countScenarios,
+	countEdgeCases,
 	summarizeSpecs,
 	validateChangeName,
 	validateDomain,
@@ -58,11 +60,17 @@ When they make an API request with the token
 Then the request is rejected with 401 Unauthorized
 And the response includes an error message
 
+#### Edge Cases
+- Empty token string → 401 with descriptive error
+- Token with invalid signature → 401, not 500
+- Token missing required claims → 400 Bad Request
+
 ### Requirement: Refresh token rotation
 
 Refresh tokens must be rotated on each use.
 
 #### Scenario: Token rotation on refresh
+
 Given a user has a valid refresh token
 When they request a new access token
 Then a new access token is issued
@@ -481,6 +489,144 @@ describe("countScenarios + summarizeSpecs", () => {
 
 	it("handles empty specs", () => {
 		assert.equal(summarizeSpecs([]), "No specs");
+	});
+
+	it("includes edge case count in summary when present", () => {
+		const specs = [{
+			domain: "auth",
+			filePath: "/tmp/spec.md",
+			sections: parseSpecContent(SAMPLE_SPEC),
+		}];
+		const summary = summarizeSpecs(specs);
+		assert.ok(summary.includes("edge case"), `Expected edge case count in: ${summary}`);
+	});
+});
+
+// ─── Edge Case Parsing ───────────────────────────────────────────────────────
+
+describe("parseEdgeCases", () => {
+	it("parses one-liner edge cases from #### Edge Cases section", () => {
+		const content = `
+#### Scenario: Happy path
+Given something
+When action
+Then result
+
+#### Edge Cases
+- Empty input → error
+- Null value → default behavior
+- Very long string → truncated to 1000 chars
+`;
+		const cases = parseEdgeCases(content);
+		assert.equal(cases.length, 3);
+		assert.equal(cases[0], "Empty input → error");
+		assert.equal(cases[1], "Null value → default behavior");
+		assert.equal(cases[2], "Very long string → truncated to 1000 chars");
+	});
+
+	it("returns empty array when no Edge Cases section exists", () => {
+		const content = `
+#### Scenario: Happy path
+Given something
+When action
+Then result
+`;
+		const cases = parseEdgeCases(content);
+		assert.equal(cases.length, 0);
+	});
+
+	it("handles Edge Cases section with no items", () => {
+		const content = `
+#### Edge Cases
+
+#### Scenario: Next thing
+Given something
+When action
+Then result
+`;
+		const cases = parseEdgeCases(content);
+		assert.equal(cases.length, 0);
+	});
+
+	it("stops at next #### heading", () => {
+		const content = `
+#### Edge Cases
+- Case A → result A
+- Case B → result B
+
+#### Scenario: Another
+Given x
+When y
+Then z
+`;
+		const cases = parseEdgeCases(content);
+		assert.equal(cases.length, 2);
+	});
+
+	it("ignores non-list content in Edge Cases section", () => {
+		const content = `
+#### Edge Cases
+Some explanatory text that is not a list item.
+- Actual edge case → expected result
+More text.
+- Another edge case → another result
+`;
+		const cases = parseEdgeCases(content);
+		assert.equal(cases.length, 2);
+	});
+});
+
+describe("parseSpecContent with edge cases", () => {
+	it("extracts edge cases from requirements in SAMPLE_SPEC", () => {
+		const sections = parseSpecContent(SAMPLE_SPEC);
+		const addedSection = sections.find(s => s.type === "added");
+		assert.ok(addedSection);
+		const jwtReq = addedSection.requirements.find(r => r.title.includes("JWT"));
+		assert.ok(jwtReq);
+		assert.equal(jwtReq.edgeCases.length, 3);
+		assert.ok(jwtReq.edgeCases[0].includes("Empty token"));
+	});
+
+	it("requirements without edge cases have empty array", () => {
+		const sections = parseSpecContent(SAMPLE_SPEC);
+		const addedSection = sections.find(s => s.type === "added");
+		assert.ok(addedSection);
+		const refreshReq = addedSection.requirements.find(r => r.title.includes("Refresh"));
+		assert.ok(refreshReq);
+		assert.equal(refreshReq.edgeCases.length, 0);
+	});
+});
+
+describe("countEdgeCases", () => {
+	it("counts edge cases across spec files", () => {
+		const specs = [{
+			domain: "auth",
+			filePath: "/tmp/spec.md",
+			sections: parseSpecContent(SAMPLE_SPEC),
+		}];
+		const count = countEdgeCases(specs);
+		assert.equal(count, 3); // 3 edge cases in JWT requirement
+	});
+
+	it("returns 0 for specs with no edge cases", () => {
+		const specs = [{
+			domain: "empty",
+			filePath: "/tmp/empty.md",
+			sections: parseSpecContent(`# empty — Delta Spec
+
+## ADDED Requirements
+
+### Requirement: Basic feature
+
+A simple feature.
+
+#### Scenario: Works
+Given setup
+When action
+Then result
+`),
+		}];
+		assert.equal(countEdgeCases(specs), 0);
 	});
 });
 

@@ -19,7 +19,7 @@ function makeChange(stage: ChangeInfo["stage"]): ChangeInfo {
       filePath: "/repo/openspec/changes/memory-lifecycle-integration/specs/memory/lifecycle.md",
       sections: [{
         type: "added",
-        requirements: [{ title: "Structured lifecycle conclusions create memory candidates", description: "", scenarios: [] }],
+        requirements: [{ title: "Structured lifecycle conclusions create memory candidates", description: "", scenarios: [], edgeCases: [] }],
       }],
     }],
   };

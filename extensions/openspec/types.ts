@@ -38,6 +38,8 @@ export interface Requirement {
 	title: string;
 	description: string;
 	scenarios: Scenario[];
+	/** Edge case one-liners: "condition → expected behavior" */
+	edgeCases: string[];
 }
 
 /**
