@@ -3,6 +3,18 @@
 All notable changes to Omegon are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/). Versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] - 2026-03-20
+
+### Added
+- **openspec**: Edge case format in spec files — `#### Edge Cases` section with one-liner `condition → expected behavior` entries parsed into `Requirement.edgeCases[]`. `countEdgeCases()` and edge case counts in `summarizeSpecs()` output.
+- **openspec**: Structured Testing Requirements in fast-forward tasks — replaces generic "Write tests for X" with three-tier block: Spec Scenarios (must pass), Edge Cases (must have tests), and test task referencing the structured block. Edge case counts in design.md spec summaries.
+
+### Fixed
+- **memory**: Enable project-level edge creation in extraction pipeline. Three fixes:
+  1. `globalExtractionEnabled` default changed from `false` to `true` (was disabled March 4th to suppress 429 noise)
+  2. Phase 1 extraction prompt now includes `connect` action type for project-level edges
+  3. Phase 1 extraction cycle routes `connect` actions to `processEdges()` (previously silently dropped)
+
 ## [0.12.0] - 2026-03-19
 
 ### Changed
