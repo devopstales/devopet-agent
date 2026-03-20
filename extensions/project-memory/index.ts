@@ -558,6 +558,18 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // --- Session Log State (absorbed from session-log.ts) ---
+  const SESSION_LOG_HEADER = `# Session Log
+
+Append-only record of development sessions. Read recent entries for context.
+`;
+
+  // --- Auto-compact State (absorbed from auto-compact.ts) ---
+  const COMPACT_PERCENT = Number(process.env.AUTO_COMPACT_PERCENT) || 70;
+  const COOLDOWN_MS = (Number(process.env.AUTO_COMPACT_COOLDOWN) || 60) * 1000;
+  let lastCompactTime = 0;
+  let compacting = false;
+
   // --- Lifecycle ---
 
   pi.on("session_start", async (_event, ctx) => {
@@ -565,6 +577,26 @@ export default function (pi: ExtensionAPI) {
       const { splashUpdate } = await import("../lib/splash-state.js");
       splashUpdate("memory", "active");
     } catch {}
+
+    // --- Session log context injection (absorbed from session-log.ts) ---
+    // Auto-read session log on session start for context
+    const logPath = path.join(ctx.cwd, ".session_log");
+    if (require("node:fs").existsSync(logPath)) {
+      try {
+        const content = require("node:fs").readFileSync(logPath, "utf-8");
+        const lines = content.split("\n");
+        // Show last ~80 lines as context (lightweight, non-intrusive)
+        const tail = lines.slice(-80).join("\n").trim();
+        if (tail) {
+          // Inject as a context message so the LLM knows recent history
+          pi.sendMessage({
+            customType: "session-log-context",
+            content: `Recent .session_log entries (last 80 lines):\n\n${tail}`,
+            display: false,  // Don't clutter the user's display
+          }, { deliverAs: "nextTurn" });
+        }
+      } catch { /* ignore read errors */ }
+    }
 
     drainLifecycleCandidateQueue(ctx);
     drainFactArchiveQueue();
@@ -1033,6 +1065,32 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", async (_event, ctx) => {
     sessionActive = false;
 
+    // --- Session log entry (absorbed from session-log.ts) ---
+    // Append session summary to .session_log
+    const logPath = path.join(ctx.cwd, ".session_log");
+    try {
+      const timestamp = new Date().toISOString();
+      // Count file operations from session telemetry
+      const filesWritten = sessionFilesWritten.length;
+      const filesEdited = sessionFilesEdited.length;
+      const totalFileOps = filesWritten + filesEdited;
+      
+      const logEntry = `\n## ${timestamp}\n` +
+        `Session: ${totalFileOps} file operations\n` +
+        (sessionFilesWritten.length > 0 ? `Written: ${sessionFilesWritten.join(", ")}\n` : "") +
+        (sessionFilesEdited.length > 0 ? `Edited: ${sessionFilesEdited.join(", ")}\n` : "") +
+        `\n`;
+      
+      // Ensure log exists with header
+      const fsSync = require("node:fs") as typeof import("node:fs");
+      if (!fsSync.existsSync(logPath)) {
+        fsSync.writeFileSync(logPath, SESSION_LOG_HEADER, "utf-8");
+      }
+      
+      // Append entry
+      fsSync.appendFileSync(logPath, logEntry, "utf-8");
+    } catch { /* ignore log errors - don't block shutdown */ }
+
     // Kill any running extraction subprocess immediately.
     // On /reload, the old module is discarded — orphaned subprocesses with dangling
     // pipe listeners corrupt terminal state (ANSI escape sequences leak to stdout).
@@ -1236,6 +1294,28 @@ export default function (pi: ExtensionAPI) {
   // Flow: pi auto-compact (cloud) → fails → next tool_execution_end → still over threshold
   //       → we set useLocalCompaction=true → ctx.compact() → session_before_compact
   //       → local model generates summary → success → resume relay
+
+  // --- Auto-compact logic (absorbed from auto-compact.ts) ---
+  // Proactive context compaction extension - monitors context usage after each turn
+  // and triggers compaction before the context window fills up at a configurable threshold
+  pi.on("turn_end", (_event, ctx) => {
+    if (compacting) return;
+
+    const usage = ctx.getContextUsage();
+    if (!usage || usage.percent === null) return;
+    if (usage.percent < COMPACT_PERCENT) return;
+
+    const now = Date.now();
+    if (now - lastCompactTime < COOLDOWN_MS) return;
+
+    compacting = true;
+    lastCompactTime = now;
+
+    ctx.compact({
+      onComplete: () => { compacting = false; },
+      onError: () => { compacting = false; },
+    });
+  });
 
   // --- Extraction cycle ---
 

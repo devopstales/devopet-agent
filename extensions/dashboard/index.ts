@@ -16,17 +16,123 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@styrene-lab/pi-coding-agent";
 import type { OverlayHandle } from "@styrene-lab/pi-tui";
+import { basename } from "path";
 import { DASHBOARD_UPDATE_EVENT } from "../lib/shared-state.ts";
 import { getSharedBridge, buildSlashCommandResult } from "../lib/slash-command-bridge.ts";
 import { DashboardFooter } from "./footer.ts";
 import { DashboardOverlay, showDashboardOverlay } from "./overlay.ts";
 import type { DashboardState, DashboardMode } from "./types.ts";
+import type { CleaveState } from "./types.ts";
 import { debug } from "../lib/debug.ts";
+import { sciCall } from "../lib/sci-ui.ts";
 
 /** Valid /dashboard subcommands for tab completion (legacy) */
 const DASHBOARD_SUBCOMMANDS = ["compact", "raised", "panel", "focus", "open"];
 
+/** Shorten a file path for display — keep last 2-3 segments. (absorbed from core-renderers.ts) */
+function shortenPath(p: string | null | undefined, maxLen = 55): string {
+	if (!p) return "…";
+	if (p.length <= maxLen) return p;
+	const parts = p.split("/");
+	// Show last 3 segments at most
+	const tail = parts.slice(-3).join("/");
+	return tail.length <= maxLen ? tail : "…" + p.slice(-(maxLen - 1));
+}
+
 export default function (pi: ExtensionAPI) {
+  // --- Terminal Title State (absorbed from terminal-title.ts) ---
+  const project = basename(process.cwd());
+  let titleCtx: ExtensionContext | null = null;
+  let promptSnippet = "";
+  let idle = true;
+  let turnIndex = 0;
+  let toolChain: string[] = [];
+  let toolActive = false;
+  let cleaveStatus: CleaveState["status"] = "idle";
+  let cleaveDone = 0;
+  let cleaveTotal = 0;
+
+  // --- Dashboard State ---
+  // --- Terminal Title Helpers (absorbed from terminal-title.ts) ---
+  function truncate(text: string, max: number): string {
+    const clean = text.split("\n")[0]!.trim().replace(/\s+/g, " ");
+    if (clean.length <= max) return clean;
+    return clean.slice(0, max).trimEnd() + "…";
+  }
+
+  /** Read cleave state from shared dashboard state (absorbed from terminal-title.ts) */
+  function syncCleaveState(): void {
+    const { sharedState } = require("../lib/shared-state.ts");
+    const cleave = sharedState.cleave;
+    if (cleave) {
+      cleaveStatus = cleave.status;
+      const children = cleave.children ?? [];
+      cleaveTotal = children.length;
+      cleaveDone = children.filter((c: any) => c.status === "done").length;
+    } else {
+      cleaveStatus = "idle";
+      cleaveDone = 0;
+      cleaveTotal = 0;
+    }
+  }
+
+  /** Render terminal title (absorbed from terminal-title.ts) */
+  function renderTitle() {
+    if (!titleCtx?.ui?.setTitle) return;
+
+    const parts: string[] = [`Ω ${project}`];
+
+    // Cleave dispatch — takes priority when active
+    const cleaveActive = cleaveStatus !== "idle" && cleaveStatus !== "done" && cleaveStatus !== "failed";
+    if (cleaveActive) {
+      if (cleaveStatus === "dispatching" || cleaveStatus === "merging") {
+        parts.push(`⚡ cleave ${cleaveDone}/${cleaveTotal}`);
+      } else {
+        parts.push(`⚡ ${cleaveStatus}`);
+      }
+    } else if (cleaveStatus === "done") {
+      parts.push("⚡ cleave ✓");
+    } else if (cleaveStatus === "failed") {
+      parts.push("⚡ cleave ✗");
+    }
+
+    // Tool execution
+    if (toolActive && toolChain.length > 0) {
+      const display = toolChain.slice(-2).join(" → ");
+      parts.push(`⚙ ${display}`);
+    }
+    // Agent thinking (no active tool)
+    else if (!idle && promptSnippet && !cleaveActive) {
+      parts.push(`◆ ${promptSnippet}`);
+    }
+
+    // Turn counter when actively working (T2+)
+    if (!idle && turnIndex >= 2) {
+      parts.push(`T${turnIndex}`);
+    }
+
+    // Idle indicator
+    if (idle) {
+      parts.push("✦");
+    }
+
+    titleCtx.ui.setTitle(parts.join(" "));
+  }
+
+  /** Reset terminal title state (absorbed from terminal-title.ts) */
+  function resetTitleState(c: ExtensionContext) {
+    titleCtx = c;
+    promptSnippet = "";
+    toolChain = [];
+    toolActive = false;
+    idle = true;
+    turnIndex = 0;
+    cleaveStatus = "idle";
+    cleaveDone = 0;
+    cleaveTotal = 0;
+    setTimeout(renderTitle, 50);
+  }
+
   const state: DashboardState = {
     mode: "compact",
     turns: 0,
@@ -241,7 +347,7 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // ── Session start: set up the custom footer ──────────────────
+  // ── Session start: set up the custom footer and terminal title ──────────────────
 
   pi.on("session_start", async (_event, ctx) => {
     debug("dashboard", "session_start:enter", {
@@ -261,6 +367,9 @@ export default function (pi: ExtensionAPI) {
     pendingFocus = false;
     restoreMode(ctx);
     debug("dashboard", "session_start:mode", { mode: state.mode });
+
+    // --- Terminal title reset (absorbed from terminal-title.ts) ---
+    resetTitleState(ctx);
 
     // Set the custom footer
     try {
@@ -297,8 +406,14 @@ export default function (pi: ExtensionAPI) {
     }
 
     // Subscribe to dashboard:update events from producer extensions.
-    unsubscribeEvents = pi.events.on(DASHBOARD_UPDATE_EVENT, (_data) => {
-      debug("dashboard", "update-event", _data as Record<string, unknown>);
+    unsubscribeEvents = pi.events.on(DASHBOARD_UPDATE_EVENT, (data) => {
+      debug("dashboard", "update-event", data as Record<string, unknown>);
+      // Update terminal title state if cleave event
+      const source = (data as Record<string, unknown>)?.source;
+      if (source === "cleave") {
+        syncCleaveState();
+        renderTitle();
+      }
       tui?.requestRender();
     });
 
@@ -310,6 +425,7 @@ export default function (pi: ExtensionAPI) {
         footerType: footer?.constructor?.name,
       });
       tui?.requestRender();
+      renderTitle(); // Initial title render
     });
 
     // Non-blocking capability health check — probes Omegon's own runtime deps
@@ -364,9 +480,15 @@ export default function (pi: ExtensionAPI) {
     tui = null;
   });
 
-  // ── Agent running state — guards focused overlay during streaming ─────
+  // ── Session lifecycle for terminal title (absorbed from terminal-title.ts) ───
+  pi.on("session_switch", (_e, c) => resetTitleState(c));
+  pi.on("session_fork", (_e, c) => resetTitleState(c));
 
-  pi.on("before_agent_start", async () => {
+  // ── Agent lifecycle for terminal title (absorbed from terminal-title.ts) ────
+  pi.on("before_agent_start", (event) => {
+    if (event.prompt) {
+      promptSnippet = truncate(event.prompt, 30);
+    }
     agentRunning = true;
     // If focus was pending and agent starts before handle arrived, cancel it
     pendingFocus = false;
@@ -375,6 +497,28 @@ export default function (pi: ExtensionAPI) {
       overlayHandle.unfocus();
       state.mode = "panel";
     }
+  });
+
+  pi.on("agent_start", (_e, c) => {
+    titleCtx = c;
+    idle = false;
+    toolChain = [];
+    toolActive = false;
+    renderTitle();
+  });
+
+  pi.on("turn_start", (event) => {
+    turnIndex = event.turnIndex;
+    renderTitle();
+  });
+
+  pi.on("tool_execution_start", (event) => {
+    // Deduplicate consecutive same-tool calls
+    if (toolChain[toolChain.length - 1] !== event.toolName) {
+      toolChain.push(event.toolName);
+    }
+    toolActive = true;
+    renderTitle();
   });
 
   // ── Events that trigger re-render ─────────────────────────────
@@ -390,8 +534,190 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_execution_end", async (_event, ctx) => {
+    toolActive = false;
+    renderTitle();
     refresh(ctx);
   });
+
+  pi.on("agent_end", (_e, c) => {
+    titleCtx = c;
+    idle = true;
+    toolChain = [];
+    toolActive = false;
+    renderTitle();
+  });
+
+  // ── Session compaction for terminal title (absorbed from terminal-title.ts) ─
+  pi.on("session_compact", () => {
+    // Brief flash during compaction
+    const prev = promptSnippet;
+    promptSnippet = "compacting…";
+    renderTitle();
+    setTimeout(() => {
+      promptSnippet = prev;
+      renderTitle();
+    }, 2000);
+  });
+
+  // ── Core Tool Renderers (absorbed from core-renderers.ts) ───────────
+  // Uses registerToolRenderer() to attach renderCall/renderResult
+  // to tools that have no built-in rendering in pi-mono.
+
+  // registerToolRenderer was added in pi-mono 0965ae87 — gracefully skip
+  // if the published pi version doesn't have it yet.
+  if (typeof (pi as any).registerToolRenderer === "function") {
+
+    // ── View ──────────────────────────────────────────────────────────────
+    pi.registerToolRenderer("view", {
+      renderCall(args: any, theme: any) {
+        const p = shortenPath(args?.path);
+        const page = args?.page ? ` p${args.page}` : "";
+        return sciCall("view", `${p}${page}`, theme);
+      },
+    });
+
+    // ── Web Search ────────────────────────────────────────────────────────
+    pi.registerToolRenderer("web_search", {
+      renderCall(args: any, theme: any) {
+        const query = args?.query ?? "";
+        const mode = args?.mode ?? "quick";
+        const display = query.length > 55 ? query.slice(0, 52) + "…" : query;
+        const modeTag = mode !== "quick" ? ` [${mode}]` : "";
+        return sciCall("web_search", `${display}${modeTag}`, theme);
+      },
+    });
+
+    // ── Chronos ───────────────────────────────────────────────────────────
+    pi.registerToolRenderer("chronos", {
+      renderCall(args: any, theme: any) {
+        const sub = args?.subcommand ?? "week";
+        const expr = args?.expression ? ` "${args.expression}"` : "";
+        return sciCall("chronos", `${sub}${expr}`, theme);
+      },
+    });
+
+    // ── Render Diagram (D2) ───────────────────────────────────────────────
+    pi.registerToolRenderer("render_diagram", {
+      renderCall(args: any, theme: any) {
+        const title = args?.title ?? "diagram";
+        return sciCall("render_diagram", title, theme);
+      },
+    });
+
+    // ── Render Native Diagram ─────────────────────────────────────────────
+    pi.registerToolRenderer("render_native_diagram", {
+      renderCall(args: any, theme: any) {
+        const title = args?.title ?? "diagram";
+        return sciCall("render_native_diagram", title, theme);
+      },
+    });
+
+    // ── Render Excalidraw ─────────────────────────────────────────────────
+    pi.registerToolRenderer("render_excalidraw", {
+      renderCall(args: any, theme: any) {
+        const p = shortenPath(args?.path);
+        return sciCall("render_excalidraw", p, theme);
+      },
+    });
+
+    // ── Generate Image Local ──────────────────────────────────────────────
+    pi.registerToolRenderer("generate_image_local", {
+      renderCall(args: any, theme: any) {
+        const prompt = args?.prompt ?? "";
+        const preset = args?.preset ?? "schnell";
+        const display = prompt.length > 50 ? prompt.slice(0, 47) + "…" : prompt;
+        return sciCall("generate_image_local", `${display} [${preset}]`, theme);
+      },
+    });
+
+    // ── Render Composition Still ──────────────────────────────────────────
+    pi.registerToolRenderer("render_composition_still", {
+      renderCall(args: any, theme: any) {
+        const p = shortenPath(args?.composition_path);
+        const frame = args?.frame != null ? ` f${args.frame}` : "";
+        return sciCall("render_composition_still", `${p}${frame}`, theme);
+      },
+    });
+
+    // ── Render Composition Video ──────────────────────────────────────────
+    pi.registerToolRenderer("render_composition_video", {
+      renderCall(args: any, theme: any) {
+        const p = shortenPath(args?.composition_path);
+        const frames = args?.duration_in_frames ?? "?";
+        const fmt = args?.format ?? "gif";
+        return sciCall("render_composition_video", `${p} (${frames}f, ${fmt})`, theme);
+      },
+    });
+
+    // ── Model Tier ────────────────────────────────────────────────────────
+    pi.registerToolRenderer("set_model_tier", {
+      renderCall(args: any, theme: any) {
+        const tier = args?.tier ?? "?";
+        return sciCall("set_model_tier", `→ ${tier}`, theme);
+      },
+    });
+
+    // ── Thinking Level ────────────────────────────────────────────────────
+    pi.registerToolRenderer("set_thinking_level", {
+      renderCall(args: any, theme: any) {
+        const level = args?.level ?? "?";
+        return sciCall("set_thinking_level", `→ ${level}`, theme);
+      },
+    });
+
+    // ── Ask Local Model ───────────────────────────────────────────────────
+    pi.registerToolRenderer("ask_local_model", {
+      renderCall(args: any, theme: any) {
+        const model = args?.model ?? "auto";
+        const prompt = args?.prompt ?? "";
+        const display = prompt.length > 45 ? prompt.slice(0, 42) + "…" : prompt;
+        return sciCall("ask_local_model", `[${model}] ${display}`, theme);
+      },
+    });
+
+    // ── Manage Ollama ─────────────────────────────────────────────────────
+    pi.registerToolRenderer("manage_ollama", {
+      renderCall(args: any, theme: any) {
+        const action = args?.action ?? "?";
+        const model = args?.model ? ` ${args.model}` : "";
+        return sciCall("manage_ollama", `${action}${model}`, theme);
+      },
+    });
+
+    // ── List Local Models ─────────────────────────────────────────────────
+    pi.registerToolRenderer("list_local_models", {
+      renderCall(_args: any, theme: any) {
+        return sciCall("list_local_models", "inventory", theme);
+      },
+    });
+
+    // ── Switch Offline Driver ─────────────────────────────────────────────
+    pi.registerToolRenderer("switch_to_offline_driver", {
+      renderCall(args: any, theme: any) {
+        const reason = args?.reason ?? "";
+        const display = reason.length > 50 ? reason.slice(0, 47) + "…" : reason;
+        return sciCall("switch_to_offline_driver", display, theme);
+      },
+    });
+
+    // ── Manage Tools ──────────────────────────────────────────────────────
+    pi.registerToolRenderer("manage_tools", {
+      renderCall(args: any, theme: any) {
+        const action = args?.action ?? "list";
+        const tools = args?.tools?.join(", ") ?? "";
+        const profile = args?.profile ?? "";
+        const detail = tools || profile || "";
+        return sciCall("manage_tools", `${action}${detail ? ` ${detail}` : ""}`, theme);
+      },
+    });
+
+    // ── Whoami ────────────────────────────────────────────────────────────
+    pi.registerToolRenderer("whoami", {
+      renderCall(_args: any, theme: any) {
+        return sciCall("whoami", "check auth", theme);
+      },
+    });
+  }
 
   // ── Keyboard shortcut: ctrl+` ────────────────────────────────
   // Cycles through: compact → raised → panel → focused → compact
