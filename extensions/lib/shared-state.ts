@@ -14,7 +14,7 @@ import type {
   RecoveryDashboardState,
 } from "../dashboard/types.ts";
 
-import type { EffortState } from "../effort/types.ts";
+import type { EffortState } from "../inference/types.ts";
 import type { ProviderRoutingPolicy } from "./model-routing.ts";
 import type { MemoryInjectionMetrics } from "../project-memory/injection-metrics.ts";
 import type { LifecycleMemoryMessage } from "../project-memory/types.ts";
@@ -83,7 +83,7 @@ export type {
   EffortModelTier,
   EffortName,
   ThinkingLevel,
-} from "../effort/types.ts";
+} from "../inference/types.ts";
 
 /** Event channel fired by producers after writing dashboard state. */
 export const DASHBOARD_UPDATE_EVENT = "dashboard:update" as const;

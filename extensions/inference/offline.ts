@@ -7,8 +7,8 @@ import {
   KNOWN_MODELS,
   PREFERRED_ORDER,
   PREFERRED_ORDER_CODE,
-} from "./lib/local-models.ts";
-import { filterDeprecated, type RegistryModel } from "./lib/model-routing.ts";
+} from "../lib/local-models.ts";
+import { filterDeprecated, type RegistryModel } from "../lib/model-routing.ts";
 
 // Re-export so existing importers (effort, cleave) continue to work.
 export { PREFERRED_ORDER, PREFERRED_ORDER_CODE };

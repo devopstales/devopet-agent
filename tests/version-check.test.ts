@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import * as assert from "node:assert/strict";
-import { isNewer } from "../extensions/version-check.ts";
+import { isNewer } from "../extensions/bootstrap/index.ts";
 
 describe("isNewer", () => {
   it("detects newer major", () => assert.equal(isNewer("1.0.0", "0.1.1"), true));
