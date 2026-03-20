@@ -538,10 +538,17 @@ async function spawnChildNative(
 	const args = [
 		"--prompt", prompt,
 		"--cwd", cwd,
-		"--bridge", native.bridgePath,
 		"--model", model,
 		"--max-turns", String(maxTurns),
 	];
+
+	// Only pass --bridge when the Rust binary doesn't have native providers
+	// for this model's provider. Native providers: anthropic, openai.
+	const provider = model.split(":")[0];
+	const nativeProviders = ["anthropic", "openai"];
+	if (!native.hasNativeProviders || !nativeProviders.includes(provider)) {
+		args.push("--bridge", native.bridgePath);
+	}
 
 	return new Promise<ChildResult>((resolve) => {
 		let stdout = "";

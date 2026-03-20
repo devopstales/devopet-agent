@@ -32,54 +32,54 @@ describe("resolveNativeAgent", () => {
 		delete process.env.OMEGON_AGENT_BINARY;
 	});
 
-	it("returns null when no binary exists and env is unset", () => {
-		// Point to a nonexistent binary to ensure no local build interferes
-		process.env.OMEGON_AGENT_BINARY = "/nonexistent/omegon-agent";
-		_clearNativeAgentCache();
-		// The env var path doesn't exist, so it falls through.
-		// But the local build might exist — clear env and test with a guaranteed-missing path.
-		delete process.env.OMEGON_AGENT_BINARY;
-		_clearNativeAgentCache();
-
+	it("returns correct shape when binary found", () => {
 		const result = resolveNativeAgent();
-		// Can't assert null because the dev build might exist in core/target/release/
-		// Instead, verify the shape is correct when it returns something
+		// Can't assert null because the dev build or PATH might exist
 		if (result) {
 			assert.ok(result.binaryPath, "binaryPath should be set");
 			assert.ok(result.bridgePath, "bridgePath should be set");
 			assert.ok(existsSync(result.binaryPath), "binary should exist");
 			assert.ok(result.bridgePath.endsWith("llm-bridge.mjs"), "bridge should be llm-bridge.mjs");
+			assert.equal(typeof result.hasNativeProviders, "boolean", "hasNativeProviders should be boolean");
 		}
-		// null is also valid — means no binary found
 	});
 
 	it("respects OMEGON_AGENT_BINARY env var", () => {
-		// Use the actual release binary if it exists
-		const devBinary = join(repoRoot, "core", "target", "release", "omegon-agent");
-		if (!existsSync(devBinary)) {
-			// Skip this test if no binary is built
-			return;
+		// Try both binary names (omegon and omegon-agent)
+		for (const name of ["omegon", "omegon-agent"]) {
+			const devBinary = join(repoRoot, "core", "target", "release", name);
+			if (existsSync(devBinary)) {
+				process.env.OMEGON_AGENT_BINARY = devBinary;
+				_clearNativeAgentCache();
+
+				const result = resolveNativeAgent();
+				assert.ok(result, "should resolve when env var points to existing binary");
+				assert.equal(result!.binaryPath, devBinary);
+				assert.ok(result!.bridgePath.includes("llm-bridge.mjs"));
+				return;
+			}
 		}
-
-		process.env.OMEGON_AGENT_BINARY = devBinary;
-		_clearNativeAgentCache();
-
-		const result = resolveNativeAgent();
-		assert.ok(result, "should resolve when env var points to existing binary");
-		assert.equal(result!.binaryPath, devBinary);
-		assert.ok(result!.bridgePath.includes("llm-bridge.mjs"));
+		// No binary built — skip
 	});
 
-	it("finds local development build", () => {
-		const devBinary = join(repoRoot, "core", "target", "release", "omegon-agent");
-		if (!existsSync(devBinary)) {
-			// Skip if no binary built
-			return;
-		}
+	it("finds local development build with omegon name", () => {
+		const devBinary = join(repoRoot, "core", "target", "release", "omegon");
+		if (!existsSync(devBinary)) return;
 
 		const result = resolveNativeAgent();
 		assert.ok(result, "should find the dev build");
 		assert.equal(result!.binaryPath, devBinary);
+	});
+
+	it("falls back to omegon-agent name", () => {
+		const newName = join(repoRoot, "core", "target", "release", "omegon");
+		const legacyName = join(repoRoot, "core", "target", "release", "omegon-agent");
+		// If only legacy name exists, it should still be found
+		if (!existsSync(legacyName) || existsSync(newName)) return;
+
+		const result = resolveNativeAgent();
+		assert.ok(result, "should find legacy name");
+		assert.equal(result!.binaryPath, legacyName);
 	});
 
 	it("caches the result", () => {
@@ -89,12 +89,16 @@ describe("resolveNativeAgent", () => {
 	});
 
 	it("bridge path points to core/bridge/llm-bridge.mjs", () => {
-		const devBinary = join(repoRoot, "core", "target", "release", "omegon-agent");
-		if (!existsSync(devBinary)) return;
-
 		const result = resolveNativeAgent();
-		assert.ok(result);
+		if (!result) return;
+
 		const expectedBridge = join(repoRoot, "core", "bridge", "llm-bridge.mjs");
 		assert.equal(result!.bridgePath, expectedBridge);
+	});
+
+	it("hasNativeProviders is true for resolved binaries", () => {
+		const result = resolveNativeAgent();
+		if (!result) return;
+		assert.ok(result.hasNativeProviders, "modern binaries should have native providers");
 	});
 });
