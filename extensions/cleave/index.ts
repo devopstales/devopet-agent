@@ -329,14 +329,24 @@ async function checkpointRelatedChanges(
 		throw new Error("Checkpoint cancelled before commit approval.");
 	}
 	const commitMessage = response && response.length > 0 ? response : suggested;
-	// Warn about submodule HEAD consistency — the checkpoint commits the outer
-	// pointer but if the submodule has uncommitted internal changes, the worktree
-	// will be created from a parent that pins the submodule to a stale SHA.
+	// Ensure submodule HEAD consistency before checkpoint.
+	// If a submodule has uncommitted internal changes, commit them inside the
+	// submodule first so the parent pointer captures the correct SHA.
 	const submodulePaths = parseGitmodules(repoPath);
 	const submoduleFiles = classification.checkpointFiles.filter((f) => submodulePaths.has(f));
-	if (submoduleFiles.length > 0) {
-		debug("cleave", `⚠️  checkpoint includes submodule path(s): ${submoduleFiles.join(", ")} — ` +
-			"ensure submodule HEAD includes all desired changes before cleave");
+	for (const subPath of submoduleFiles) {
+		const { join: pathJoin } = await import("node:path");
+		const subFullPath = pathJoin(repoPath, subPath);
+		// Check if submodule has uncommitted changes
+		const subStatus = await pi.exec("git", ["status", "--porcelain"], { cwd: subFullPath, timeout: 5_000 });
+		if (subStatus.stdout.trim()) {
+			debug("cleave", `committing ${subStatus.stdout.trim().split("\n").length} dirty file(s) inside submodule '${subPath}' before checkpoint`);
+			await pi.exec("git", ["add", "-A"], { cwd: subFullPath, timeout: 10_000 });
+			await pi.exec("git", ["commit", "-m", `chore(cleave): checkpoint submodule before cleave`], {
+				cwd: subFullPath,
+				timeout: 10_000,
+			});
+		}
 	}
 
 	const addResult = await pi.exec("git", ["add", "--", ...classification.checkpointFiles], { cwd: repoPath, timeout: 15_000 });
@@ -381,7 +391,8 @@ async function verifyCleanAfterAction(
 		cwd: repoPath,
 		timeout: 5_000,
 	});
-	const postState = inspectGitState(postStatus.stdout);
+	const submodulePaths = parseGitmodules(repoPath);
+	const postState = inspectGitState(postStatus.stdout, undefined, submodulePaths);
 	if (postState.entries.length === 0) return { clean: true, classification: null };
 
 	const postClassification = classifyPreflightDirtyPaths(
