@@ -1,7 +1,7 @@
 ---
 id: multi-instance-coordination
 title: Multi-instance Omegon coordination — parallel work streams on the same repo
-status: decided
+status: deferred
 parent: directive-branch-lifecycle
 related: [a2a-protocol-integration, cleave-process-tree]
 open_questions: []
