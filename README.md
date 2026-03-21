@@ -1,5 +1,7 @@
 # omegon-pi
 
+> **⚠️ No longer actively maintained.** This project is functional but not under active development. Contributions are welcome — if you're interested in taking over maintenance, open an issue.
+
 An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). omegon-pi bundles the pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
 
 > **Relationship to pi:** omegon-pi is not a fork. It installs pi as an npm dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without omegon-pi's extensions, install `@mariozechner/pi-coding-agent` directly.
