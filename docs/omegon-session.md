@@ -1,7 +1,7 @@
 ---
 id: omegon-session
 title: Omegon Session — provider-agnostic session identity and resumption
-status: exploring
+status: deferred
 related: [omega, model-degradation]
 tags: [architecture, orchestration, session, core]
 open_questions: []

@@ -1,7 +1,7 @@
 ---
 id: omegon-directive-authority
 title: Omegon directive authority — code-level opinions over filesystem discovery
-status: seed
+status: deferred
 parent: test-coverage-directive-gap
 tags: [architecture, directives, system-prompt, opinions, authority]
 open_questions: []
