@@ -1,4 +1,4 @@
-# Contributing to Omegon
+# Contributing to omegon-pi
 
 Guidelines for branching, merging, and collaborating on this repository.
 
@@ -161,7 +161,7 @@ cd omegon-pi
 omegon-pi                  # launch from any project dir
 ```
 
-Omegon depends on upstream `@mariozechner/pi-coding-agent` from npm — there is no vendored fork or submodule. To update the pi core version, bump the dependency in `package.json` and `npm install`.
+omegon-pi depends on upstream `@mariozechner/pi-coding-agent` from npm — there is no vendored fork or submodule. To update the pi core version, bump the dependency in `package.json` and `npm install`.
 
 ### Iterative Dev Loop
 

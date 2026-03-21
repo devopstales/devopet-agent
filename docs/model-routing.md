@@ -17,7 +17,7 @@ last_updated: 2026-03-10
 
 # Model Routing
 
-> Provider-aware model selection, effort tiers, cost control, and intelligent fallback — the control plane for all inference decisions across Omegon.
+> Provider-aware model selection, effort tiers, cost control, and intelligent fallback — the control plane for all inference decisions across omegon-pi.
 
 ## What It Does
 

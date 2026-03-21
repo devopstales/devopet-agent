@@ -1,276 +1,234 @@
-# Omegon
+# omegon-pi
 
-An opinionated distribution of [**pi**](https://github.com/badlogic/pi) — the coding agent by [Mario Zechner](https://github.com/badlogic). Omegon bundles pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and quality-of-life tools.
+An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). omegon-pi bundles the pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
 
-> **Relationship to pi:** Omegon is not a fork or replacement. It packages pi as a dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without Omegon's extensions, install `@mariozechner/pi-coding-agent` directly.
+> **Relationship to pi:** omegon-pi is not a fork. It installs pi as an npm dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without omegon-pi's extensions, install `@mariozechner/pi-coding-agent` directly.
 
-## Installation
+## Install
 
 ```bash
 npm install -g omegon-pi
 ```
 
-**Node requirement:** Omegon requires **Node.js 20+**. Node 18 will fail because bundled pi-tui uses modern Unicode regex features unsupported by older runtimes.
+Requires **Node.js 20+**.
 
-This installs the `omegon-pi` command globally. A legacy `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi transparently takes ownership of the lifecycle boundary so startup, update, verification, and restart all stay inside Omegon control. To switch back to standalone pi at any time:
+This installs the `omegon-pi` command globally. A `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi takes over the lifecycle boundary (startup, update, restart). To switch back to standalone pi:
 
 ```bash
 npm uninstall -g omegon-pi
 npm install -g @mariozechner/pi-coding-agent
 ```
 
-**First-time setup:**
+**First run:**
 
 ```bash
-omegon-pi   # start Omegon in any project directory
-/bootstrap  # check deps, install missing tools, configure preferences
+omegon-pi        # start in any project directory
+/bootstrap       # check deps, install missing tools, set preferences
 ```
 
-### Keeping up to date
+### Updates
 
 | Context | How |
 |--------|-----|
-| **Installed Omegon (`npm install -g omegon-pi`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon-pi` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
-| **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both pull, install dependencies, `npm link --force`, and stop at an explicit restart handoff. |
-| **Lightweight cache refresh only** | Run `/refresh`. This clears transient caches and reloads extensions, but it is not equivalent to package/runtime replacement. |
+| Installed via npm | `/update` from inside omegon-pi — installs latest, verifies binary, clears caches, prompts restart. |
+| Dev checkout | `/update` or `./scripts/install-pi.sh` — pulls, installs deps, `npm link`, prompts restart. |
+| Cache refresh only | `/refresh` — clears caches and reloads extensions without package replacement. |
 
-> Omegon depends on upstream `@mariozechner/pi-coding-agent` published to npm. When upstream releases a new version, update the dependency version in `package.json`.
-
-> **Note:** `/update` is the authoritative Omegon update path. It intentionally ends at a verified restart boundary rather than hot-swapping the running process after package/runtime mutation.
+omegon-pi depends on upstream `@mariozechner/pi-coding-agent` from npm. To pick up a new pi release, bump the version in `package.json`.
 
 ## Architecture
 
-![Omegon Architecture](docs/img/architecture.png)
+![Architecture](docs/img/architecture.png)
 
-Omegon extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+omegon-pi extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates**, loaded automatically on session start.
 
-### Development Methodology
+### Spec-driven development
 
-Omegon enforces **spec-first development** for non-trivial changes:
+omegon-pi enforces spec-first development for non-trivial changes:
 
-![Spec-Driven Pipeline](docs/img/spec-pipeline.png)
+![Spec Pipeline](docs/img/spec-pipeline.png)
 
-The full lifecycle: **design → propose → spec → plan → implement → verify → archive**. Given/When/Then scenarios are the source of truth for correctness — code implements the specs, not the reverse.
+The lifecycle: **design → propose → spec → plan → implement → verify → archive**. Given/When/Then scenarios are the source of truth — code implements the specs, not the reverse.
 
 ## Extensions
 
-### 📋 OpenSpec
+### OpenSpec
 
-Spec-driven development lifecycle — proposal → specs → design → tasks workflow with delta-spec merge on archive.
+Spec-driven development lifecycle — proposal → specs → design → tasks, with delta-spec merge on archive.
 
 - **Tool**: `openspec_manage`
 - **Commands**: `/opsx:propose`, `/opsx:spec`, `/opsx:ff`, `/opsx:status`, `/opsx:verify`, `/opsx:archive`, `/opsx:sync`
-- **Lifecycle stages**: proposed → specified → planned → implementing → verifying → archived
+- **Stages**: proposed → specified → planned → implementing → verifying → archived
 - **API contracts**: When a change involves a network API, derives an OpenAPI 3.1 spec from Given/When/Then scenarios; `/assess spec` validates implementation against it
 - Integrates with [OpenSpec CLI](https://github.com/Fission-AI/OpenSpec) profiles
 
-### 🪓 Cleave
+### Cleave
 
 Parallel task decomposition with dependency-ordered wave dispatch in isolated git worktrees.
 
 - **Tools**: `cleave_assess` (complexity evaluation), `cleave_run` (parallel dispatch)
 - **Commands**: `/cleave <directive>`, `/assess cleave`, `/assess diff`, `/assess spec`
-- **OpenSpec integration**: Uses `tasks.md` as the split plan when `openspec/` exists, enriches child tasks with design decisions and spec acceptance criteria, reconciles task completion on merge, guides through verify → archive
-- **Skill-aware dispatch**: Auto-matches skill files to children based on file scope patterns (e.g. `*.py` → python, `Containerfile` → oci). Annotations (`<!-- skills: python, k8s -->`) override auto-matching
-- **Model tier routing**: Each child resolves an execution tier — explicit annotation > skill-based hint > default. Provider-neutral tier labels resolve to concrete models through the session routing policy
-- **Adversarial review loop** (opt-in via `review: true`): After each child completes, an opus-tier reviewer checks for bugs, security issues, and spec compliance. Severity-gated: nits→accept, warnings→1 fix iteration, criticals→2 fixes then escalate, security→immediate escalate. Churn detection bails when >50% of issues reappear between rounds
-- **Large-run preflight**: Asks which provider to favor before expensive dispatches, preventing mid-run subscription exhaustion
+- **OpenSpec integration**: Uses `tasks.md` as the split plan when `openspec/` exists, enriches children with design context, reconciles on merge
+- **Skill-aware dispatch**: Matches skill files to children by file scope patterns (e.g. `*.py` → python, `Containerfile` → oci). `<!-- skills: python, k8s -->` annotations override
+- **Model tier routing**: Each child resolves a tier — explicit annotation > skill hint > default
+- **Review loop** (opt-in, `review: true`): After each child, a reviewer checks for bugs, security issues, and spec compliance. Severity-gated fix iterations with churn detection
+- **Large-run preflight**: Prompts for provider preference before expensive dispatches
 
-### 🌲 Design Tree
+### Design Tree
 
 Structured design exploration with persistent markdown documents — the upstream of OpenSpec.
 
-- **Tools**: `design_tree` (query), `design_tree_update` (create/mutate nodes)
+- **Tools**: `design_tree` (query), `design_tree_update` (create/mutate)
 - **Commands**: `/design list`, `/design new`, `/design update`, `/design branch`, `/design decide`, `/design implement`
-- **Document structure**: Frontmatter (status, tags, dependencies, priority, issue_type, open questions) + sections (Overview, Research, Decisions, Open Questions, Implementation Notes)
-- **Work triage**: `design_tree(action="ready")` returns all decided, dependency-resolved nodes sorted by priority — the session-start "what next?" query
-- **Blocked audit**: `design_tree(action="blocked")` returns all stalled nodes with each blocking dependency's id, title, and status
-- **Priority**: `set_priority` (1 = critical → 5 = trivial) on any node; `ready` auto-sorts by it
-- **Issue types**: `set_issue_type` classifies nodes as `epic | feature | task | bug | chore` — bugs and chores are now first-class tracked work
-- **Auto-transition**: Adding research or decisions to a `seed` node automatically transitions it to `exploring` and scaffolds the design spec — no manual ceremony
-- **Substance-over-ceremony gates**: `set_status(decided)` checks for open questions and recorded decisions instead of artifact directory existence. Design specs are auto-extracted from doc content and archived
-- **OpenSpec bridge**: `design_tree_update` with `action: "implement"` scaffolds `openspec/changes/<node-id>/` from a decided node's content, auto-checkouts the directive branch, forks a scoped memory mind, and sets design focus; `/cleave` executes it
-- **Full pipeline**: design → decide → implement (auto-checkout + mind fork) → `/cleave` → `/assess spec` → archive (mind merge-back + cleanup)
+- **Document structure**: Frontmatter (status, tags, deps, priority, issue type) + sections (Overview, Research, Decisions, Open Questions, Implementation Notes)
+- **Work triage**: `design_tree(action="ready")` returns decided, dependency-resolved nodes sorted by priority
+- **Blocked audit**: `design_tree(action="blocked")` shows stalled nodes with blocking dependency details
+- **Priority**: 1 (critical) → 5 (trivial); `ready` sorts by it
+- **Issue types**: `epic | feature | task | bug | chore`
+- **Auto-transition**: Adding research or decisions to a `seed` node transitions it to `exploring` automatically
+- **OpenSpec bridge**: `design_tree_update(action="implement")` scaffolds `openspec/changes/<node>/`, checks out a directive branch, forks a scoped memory mind, and sets focus
+- **Full pipeline**: design → decide → implement → `/cleave` → `/assess spec` → archive
 
-### 🧠 Project Memory
+### Project Memory
 
-Persistent, cross-session knowledge stored in SQLite. Accumulates architectural decisions, constraints, patterns, and known issues — retrieved semantically each session.
+Persistent, cross-session knowledge stored in SQLite. Accumulates architecture decisions, constraints, patterns, and known issues — retrieved semantically each session.
 
 - **11 tools**: `memory_store`, `memory_recall`, `memory_query`, `memory_supersede`, `memory_archive`, `memory_connect`, `memory_compact`, `memory_episodes`, `memory_focus`, `memory_release`, `memory_search_archive`
-- **Semantic retrieval**: Embedding-based search via Ollama (`qwen3-embedding`), falls back to FTS5 keyword search
+- **Semantic retrieval**: Embedding search via Ollama (`qwen3-embedding`), falls back to FTS5
 - **Background extraction**: Auto-discovers facts from tool output without interrupting work
-- **Episodic memory**: Generates session narratives at shutdown for "what happened last time" context
-- **Directive minds**: `implement` forks a scoped memory mind from `default`; all fact reads/writes auto-scope to the directive. `archive` ingests discoveries back to `default` and cleans up. Zero-copy fork with parent-chain inheritance — no fact duplication, parent embeddings and edges are reused
+- **Episodic memory**: Generates session narratives at shutdown
+- **Directive minds**: `implement` forks a scoped mind from `default`; reads/writes auto-scope to the directive. `archive` ingests discoveries back and cleans up. Zero-copy fork with parent-chain inheritance
 - **Global knowledge base**: Cross-project facts at `~/.pi/memory/global.db`
-- **Git sync**: Exports to JSONL for version-controlled knowledge sharing across machines; volatile runtime scoring metadata (confidence, reinforcement counts, decay scores) omitted from exports for stable diffs
-- **Auto-compact**: Context pressure monitoring with automatic compaction (absorbed from auto-compact extension)
-- **Session log**: Append-only structured session tracking (absorbed from session-log extension)
+- **Git sync**: Exports to JSONL for version-controlled knowledge sharing; volatile runtime metadata omitted for stable diffs
+- **Auto-compact**: Context pressure monitoring with automatic compaction
+- **Session log**: Append-only structured session tracking
 
 ![Memory Lifecycle](docs/img/memory-lifecycle.png)
 
-### 📊 Dashboard
+### Dashboard
 
-Live status panel showing design tree, OpenSpec changes, cleave dispatch, and git branches at a glance.
+Live status panel showing design tree, OpenSpec changes, cleave dispatch, and git branches.
 
-- **Commands**: `/dash` (toggle compact ↔ raised), `/dashboard` (open side panel)
+- **Commands**: `/dash` (toggle compact/raised), `/dashboard` (side panel)
 - **Compact mode**: Single footer line — design/openspec/cleave summaries + context gauge
-- **Raised mode**: Full-width expanded view (toggle with `/dash`)
-  - Git branch tree rooted at repo name, annotated with linked design nodes
-  - Two-column split at ≥120 terminal columns: design tree + cleave left, OpenSpec right
-  - Directive indicator: shows `▸ directive: name ✓` (branch match) or `▸ directive: name ⚠ main` (mismatch) when a directive mind is active
-  - Context gauge · model · thinking level in shared footer zone
-  - No line cap — renders as much content as needed
+- **Raised mode**: Full-width expanded view
+  - Git branch tree annotated with linked design nodes
+  - Two-column split at ≥120 columns: design tree + cleave left, OpenSpec right
+  - Directive indicator with branch match status
+  - Context gauge, model, thinking level in footer
 - **Keyboard**: `Ctrl+Shift+B` toggles raised/compact
-- **Terminal title**: Dynamic tab titles showing active cleave runs and git branch (absorbed from terminal-title extension)
-- **Core renderers**: Sci-UI rendering for Omegon's custom tools (absorbed from core-renderers extension)
 
-### 🌐 Web UI
+### Web UI
 
-Localhost-only, read-only HTTP dashboard that exposes live control-plane state as JSON. It binds to `127.0.0.1`, is not started automatically, and serves no mutation endpoints in the MVP.
+Localhost-only, read-only HTTP dashboard exposing live state as JSON. Binds to `127.0.0.1`, not started automatically.
 
 - **Command**: `/web-ui [start|stop|status|open]`
-- **Shell**: polling-first HTML dashboard
-- **Endpoints**: `GET /api/state`, plus slice routes `/api/session`, `/api/dashboard`, `/api/design-tree`, `/api/openspec`, `/api/cleave`, `/api/models`, `/api/memory`, `/api/health`
-- **State contract**: versioned `ControlPlaneState` (schema v1)
+- **Endpoints**: `/api/state`, `/api/session`, `/api/dashboard`, `/api/design-tree`, `/api/openspec`, `/api/cleave`, `/api/models`, `/api/memory`, `/api/health`
 
-### 🚀 Inference
+### Inference
 
-Unified inference management — local models, effort tiers, model budget control, and offline driver switching.
+Local models, effort tiers, model budget control, and offline driver switching.
 
 - **Tools**: `set_model_tier`, `set_thinking_level`, `switch_to_offline_driver`, `ask_local_model`, `list_local_models`, `manage_ollama`
 - **Commands**: `/local-models`, `/local-status`, `/effort <name>`, `/effort cap`, `/effort uncap`
-- **Effort tiers**: Seven named tiers using provider-neutral labels — tier labels resolve to concrete model IDs from whichever provider (Anthropic or OpenAI) the session routing policy prefers:
+- **Effort tiers**: Seven tiers from local-only to max capability. Tier labels resolve to concrete model IDs through the session's routing policy (Anthropic or OpenAI):
 
-| Tier | Name | Driver | Thinking | Review |
-|------|------|--------|----------|--------|
-| 1 | **Servitor** | local | off | local |
-| 2 | **Average** | local | minimal | local |
-| 3 | **Substantial** | victory | low | victory |
-| 4 | **Ruthless** | victory | medium | victory |
-| 5 | **Lethal** | victory | high | gloriana |
-| 6 | **Absolute** | gloriana | high | gloriana |
-| 7 | **Omnissiah** | gloriana | high | gloriana |
+| Tier | Driver | Thinking |
+|------|--------|----------|
+| 1 | local | off |
+| 2 | local | minimal |
+| 3 | mid | low |
+| 4 | mid | medium |
+| 5 | mid | high |
+| 6 | max | high |
+| 7 | max | high |
 
-- **Local inference**: Delegate sub-tasks to locally running LLMs via Ollama — zero API cost
-- **Model budget**: Switch model tiers to match task complexity and conserve API spend
-- **Offline driver**: Switch the driving model from cloud to a local Ollama model when connectivity drops
-- **Auto-discovery**: Available models detected on session start
-- **Hardware-aware selection**: Model registry covers 64GB (70B), 32GB (32B), 24GB (14B/MoE-30B), 16GB (8B), 8GB (4B)
+- **Local inference**: Delegate sub-tasks to Ollama — zero API cost
+- **Offline driver**: Switch from cloud to local when connectivity drops
+- **Hardware-aware**: Model registry covers 8GB–64GB systems
 
-### 🎭 Ambiance
+### Ambiance
 
-Atmospheric UI enhancements — themed loading messages and ambient scrolling text.
+Themed loading messages and ambient scrolling text during long operations.
 
-- **Spinner verbs**: Warhammer 40K-themed loading messages (consolidated from spinner-verbs extension)
-- **Sermon**: The Crawler's scrawl — ambient organic/computational text that scrolls beneath the spinner (consolidated from sermon extension)
-- **Sermon widget**: Visual component integration for ambient text display (consolidated from sermon-widget extension)
+### Render
 
-### 🎨 Render
-
-Generate images and diagrams directly in the terminal.
+Generate images and diagrams in the terminal.
 
 - **FLUX.1 image generation** via MLX on Apple Silicon — `generate_image_local`
 - **D2 diagrams** rendered inline — `render_diagram`
-- **Native SVG/PNG diagrams** for canonical motifs (pipeline, fanout, panel-split) — `render_native_diagram`
-- **Excalidraw** JSON-to-PNG rendering — `render_excalidraw`
-- **React composition stills** via Satori + resvg — `render_composition_still`
-- **React composition video** (animated GIF/MP4) via Satori + gifenc — `render_composition_video`
+- **Native SVG/PNG diagrams** (pipeline, fanout, panel-split motifs) — `render_native_diagram`
+- **Excalidraw** JSON-to-PNG — `render_excalidraw`
+- **React compositions** (still + animated GIF/MP4) via Satori — `render_composition_still`, `render_composition_video`
 
-### 🔍 Web Search
+### Web Search
 
 Multi-provider web search with deduplication.
 
 - **Tool**: `web_search`
 - **Providers**: Brave, Tavily, Serper (Google)
-- **Modes**: `quick` (single provider, fastest), `deep` (more results), `compare` (all providers, best for research)
+- **Modes**: `quick` (single provider), `deep` (more results), `compare` (all providers, deduped)
 
-### 🗂️ Tool Profiles
+### Tool Profiles
 
-Enable or disable tools and switch named profiles to keep the context window lean.
+Enable/disable tools and switch named profiles to keep the context window lean.
 
 - **Tool**: `manage_tools`
 - **Command**: `/profile [name|reset]`
-- Pre-built profiles for common workflows; per-tool enable/disable for fine-grained control
 
-### 📖 Vault
-
-Markdown viewport for project documentation — serves docs with wikilink navigation and graph view.
-
-- **Command**: `/vault`
-
-### 🔐 Secrets
-
-Resolve secrets from environment variables, shell commands, or system keychains — without storing values in config.
-
-- Declarative `@secret` annotations in extension headers
-- Sources: `env:`, `cmd:`, `keychain:`
-
-### 🌐 MCP Bridge
-
-Connect external MCP (Model Context Protocol) servers as native pi tools.
-
-- Bridges MCP tool schemas into pi's tool registry
-- Stdio transport for local MCP servers
-
-### 🔧 Utilities
+### Other extensions
 
 | Extension | Description |
 |-----------|-------------|
-| `00-splash` | Animated ASCII logo with glitch-convergence startup animation and loading checklist |
-| `bootstrap` | First-time setup — check/install dependencies, capture operator preferences, version checking (`/bootstrap`, `/refresh`, `/update`) |
-| `chronos` | Authoritative date/time from system clock — eliminates AI date math errors |
-| `01-auth` | Auth status, diagnosis, and refresh across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
+| `00-splash` | Startup animation and loading checklist |
+| `bootstrap` | First-time setup, dependency checking, version checking (`/bootstrap`, `/refresh`, `/update`) |
+| `chronos` | Authoritative date/time from system clock — prevents AI date math errors |
+| `01-auth` | Auth status and diagnostics across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
 | `defaults` | Deploys `AGENTS.md` and theme on first install; content-hash guard prevents overwriting customizations |
-| `style` | Alpharius design system reference (`/style`) |
-| `web-ui` | Localhost-only read-only HTTP dashboard and JSON control-plane endpoints (`/web-ui [start|stop|status|open]`) |
-
-**Note**: Several utility extensions have been absorbed into their logical hosts: `auto-compact` and `session-log` → `project-memory`, `version-check` → `bootstrap`, `terminal-title` and `core-renderers` → `dashboard`, `spinner-verbs`, `sermon`, and `sermon-widget` → `ambiance`.
+| `style` | Design system reference (`/style`) |
+| `vault` | Markdown viewport with wikilink navigation (`/vault`) |
+| `secrets` | Resolve secrets from env vars, shell commands, or system keychains |
+| `mcp-bridge` | Connect external MCP servers as native pi tools |
 
 ## Skills
 
-Skills provide specialized instructions the agent loads on-demand when a task matches.
+Skills are specialized instruction sets the agent loads on-demand when a task matches.
 
 | Skill | Description |
 |-------|-------------|
-| `openspec` | OpenSpec lifecycle — writing specs, deriving API contracts, generating tasks, verifying implementations |
-| `cleave` | Task decomposition, code assessment, OpenSpec lifecycle integration |
+| `openspec` | OpenSpec lifecycle — specs, API contracts, task generation, verification |
+| `cleave` | Task decomposition, code assessment, OpenSpec integration |
 | `git` | Conventional commits, semantic versioning, branch naming, changelogs |
-| `oci` | Container and artifact best practices — Containerfile authoring, multi-arch builds, registry auth |
-| `python` | Project setup (src/ layout, pyproject.toml), pytest, ruff, mypy, packaging, venv |
+| `oci` | Containerfile authoring, multi-arch builds, registry auth, image management |
+| `python` | Project setup, pytest, ruff, mypy, packaging, venv |
 | `rust` | Cargo, clippy, rustfmt, Zellij WASM plugin development |
-| `typescript` | Strict typing, async patterns, error handling, node:test conventions for Omegon |
-| `pi-extensions` | pi extension API — `registerCommand`, `registerTool`, event handlers, TUI context, common pitfalls |
-| `pi-tui` | TUI component patterns — `Component` interface, overlays, keyboard handling, theming, footer/widget APIs |
-| `security` | Input escaping, injection prevention, path traversal, process safety, secrets management |
-| `style` | Alpharius color system, typography, spacing — shared across TUI, D2 diagrams, and generated images |
-| `vault` | Obsidian-compatible markdown conventions — wikilinks, frontmatter, vault-friendly file organization |
+| `typescript` | Strict typing, async patterns, error handling, node:test |
+| `pi-extensions` | pi extension API — commands, tools, events, TUI context |
+| `pi-tui` | TUI component patterns — Component interface, overlays, keyboard, theming |
+| `security` | Input escaping, injection prevention, path traversal, process safety, secrets |
+| `style` | Color system, typography, spacing — shared across TUI, diagrams, and generated images |
+| `vault` | Obsidian-compatible markdown — wikilinks, frontmatter, vault-friendly organization |
 
 ## Prompt Templates
-
-Pre-built prompts for common workflows:
 
 | Template | Description |
 |----------|-------------|
 | `new-repo` | Scaffold a new repository with conventions |
-| `init` | First-session environment check — orient to a new project directory |
+| `init` | First-session environment check — orient to a new project |
 | `status` | Session orientation — load project state and show what's active |
 | `oci-login` | OCI registry authentication |
 
 ## Requirements
 
-**Required:**
 - **Node.js 20+**
-- `npm install -g omegon-pi` — installs the `omegon-pi` command with pi agent core bundled
+- `npm install -g omegon-pi`
 
-**Optional (installed by `/bootstrap`):**
+**Optional** (installed by `/bootstrap`):
 - [Ollama](https://ollama.ai) — local inference, offline mode, semantic memory search
 - [d2](https://d2lang.com) — diagram rendering
-- [mflux](https://github.com/filipstrand/mflux) — FLUX.1 image generation on Apple Silicon
+- [mflux](https://github.com/filipstrand/mflux) — FLUX.1 image generation (Apple Silicon)
 - API keys for web search (Brave, Tavily, or Serper)
-
-Run `/bootstrap` after install to check dependencies and configure preferences.
-
 
 ## License
 
