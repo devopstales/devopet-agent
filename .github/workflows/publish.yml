@@ -1,0 +1,86 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch: {}  # Manual trigger only
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Check if publish needed
+        id: check
+        run: |
+          LOCAL_VER=$(node -p "require('./package.json').version")
+          NPM_VER=$(npm view omegon-pi version 2>/dev/null || echo "0.0.0")
+          echo "version=$LOCAL_VER" >> $GITHUB_OUTPUT
+          if [ "$LOCAL_VER" = "$NPM_VER" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Version $LOCAL_VER already published — skipping"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Publishing: $LOCAL_VER (npm has $NPM_VER)"
+          fi
+
+      - name: Tag release
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          TAG="v${{ steps.check.outputs.version }}"
+          if ! git tag --list "$TAG" | grep -q "$TAG"; then
+            git tag "$TAG"
+            git push origin --tags
+          fi
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip == 'false'
+        run: npm install --ignore-scripts
+
+      - name: Pre-publish smoke test (pack → install → run)
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          TARBALL=$(npm pack 2>/dev/null | tail -1)
+          SMOKE_DIR=$(mktemp -d)
+          npm install -g "./$TARBALL" --prefix "$SMOKE_DIR" 2>&1
+
+          BINARY="$SMOKE_DIR/bin/omegon-pi"
+          if [ ! -f "$BINARY" ]; then
+            echo "FATAL: omegon-pi binary not found"
+            exit 1
+          fi
+
+          VERSION_OUT=$("$BINARY" --version 2>&1)
+          EXPECTED=${{ steps.check.outputs.version }}
+          if [ "$VERSION_OUT" != "$EXPECTED" ]; then
+            echo "FATAL: version mismatch — got '$VERSION_OUT', expected '$EXPECTED'"
+            exit 1
+          fi
+          echo "✓ Version: $VERSION_OUT"
+
+          HELP_OUT=$("$BINARY" --help 2>&1)
+          if echo "$HELP_OUT" | grep -qiE "Cannot find module|ENOENT|Failed to load extension"; then
+            echo "FATAL: extension errors detected"
+            echo "$HELP_OUT" | grep -iE "Cannot find module|ENOENT|Failed to load extension" | head -20
+            exit 1
+          fi
+          echo "✓ Smoke test passed"
+          rm -rf "$SMOKE_DIR" "./$TARBALL"
+
+      - name: Publish
+        if: steps.check.outputs.skip == 'false'
+        run: npm publish --access public
