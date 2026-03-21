@@ -156,6 +156,12 @@ export interface Fact {
   /** jj change ID at fact creation — permanent provenance anchor.
    *  Survives rebase/squash. Null for facts created outside jj repos. */
   jj_change_id: string | null;
+  /** Persona that owns this fact. Null = project-level fact. */
+  persona_id: string | null;
+  /** Memory layer: 'project' | 'persona' | 'working'. */
+  layer: string;
+  /** JSON array of domain tags (e.g. ["pcb","thermal"]). Null = untagged. */
+  tags: string | null;
 }
 
 export interface MindRecord {
@@ -320,7 +326,7 @@ export class FactStore {
   }
 
   /** Current schema version — bump when adding migrations */
-  static readonly SCHEMA_VERSION = 5;
+  static readonly SCHEMA_VERSION = 6;
 
   private getSchemaVersion(): number {
     try {
@@ -516,6 +522,24 @@ export class FactStore {
       // Indexes on migration-added columns are created by ensureIndexes().
       this.setSchemaVersion(5);
     }
+
+    // Migration 5→6: Persona system
+    //
+    // Adds persona ownership and memory layering to facts:
+    //   persona_id — which persona owns the fact (NULL = project-level)
+    //   layer      — memory layer: 'project' | 'persona' | 'working'
+    //   tags       — JSON array of domain tags (e.g. ["pcb","thermal"])
+    // All additive. Existing data reads cleanly with defaults.
+    if (current < 6) {
+      const addCol = (table: string, col: string, typedef: string = "TEXT") => {
+        try { this.db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${typedef}`).run(); } catch { /* exists */ }
+      };
+      addCol("facts", "persona_id");
+      addCol("facts", "layer", "TEXT NOT NULL DEFAULT 'project'");
+      addCol("facts", "tags");
+      // Indexes created by ensureIndexes().
+      this.setSchemaVersion(6);
+    }
   }
 
   private initSchema(): void {
@@ -679,6 +703,9 @@ export class FactStore {
     idx(`CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_fact_id) WHERE status = 'active'`);
     idx(`CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_fact_id) WHERE status = 'active'`);
     idx(`CREATE INDEX IF NOT EXISTS idx_edges_relation ON edges(relation) WHERE status = 'active'`);
+    // v6: persona system indexes
+    idx(`CREATE INDEX IF NOT EXISTS idx_facts_persona ON facts(persona_id) WHERE persona_id IS NOT NULL`);
+    idx(`CREATE INDEX IF NOT EXISTS idx_facts_layer ON facts(mind, layer) WHERE status = 'active'`);
   }
 
   // ---------------------------------------------------------------------------

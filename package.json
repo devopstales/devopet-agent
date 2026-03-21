@@ -1,6 +1,6 @@
 {
   "name": "omegon-pi",
-  "version": "0.14.4",
+  "version": "0.15.0",
   "description": "Omegon — an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
   "bin": {
     "omegon-pi": "bin/omegon-pi.mjs",
