@@ -1,7 +1,7 @@
 ---
 id: spinner-sermon
 title: Spinner Sermon — Crawler-style scrawling text during long operations
-status: exploring
+status: implemented
 tags: [ux, spinner, annihilation]
 open_questions:
   - What is the right scrawl speed — characters per second? Should it vary (faster bursts, pauses at punctuation)?

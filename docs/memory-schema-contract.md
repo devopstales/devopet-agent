@@ -1,7 +1,7 @@
 ---
 id: memory-schema-contract
 title: Memory Schema Contract
-status: resolved
+status: implemented
 tags: [architecture, memory, cross-repo]
 open_questions: []
 ---

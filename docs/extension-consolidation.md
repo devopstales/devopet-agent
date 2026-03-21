@@ -1,7 +1,7 @@
 ---
 id: extension-consolidation
 title: Extension Consolidation
-status: resolved
+status: implemented
 tags: [architecture, refactor, tech-debt]
 open_questions: []
 branches: ["feature/extension-consolidation"]
