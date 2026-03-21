@@ -1,6 +1,6 @@
 # omegon-pi
 
-> **⚠️ No longer actively maintained.** This project is functional but not under active development. Contributions are welcome — if you're interested in taking over maintenance, open an issue.
+> **⚠️ Deprecated.** omegon-pi has been superseded by the Rust implementation at [omegon.styrene.dev](https://omegon.styrene.dev). This TypeScript version is no longer maintained.
 
 An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). omegon-pi bundles the pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
 
