@@ -5,8 +5,7 @@ git/
 # per-install user state — theme choice, flags, etc.
 settings.json
 # submodule build artifacts and runtime state
-vendor/pi-mono/node_modules/
-vendor/pi-mono/packages/*/dist/
+
 package-lock.json
 *.db
 *.db-wal

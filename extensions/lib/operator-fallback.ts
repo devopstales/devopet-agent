@@ -1,4 +1,4 @@
-import type { Model } from "@styrene-lab/pi-ai";
+import type { Model } from "@mariozechner/pi-ai";
 import {
   classifyUpstreamFailure,
   resolveCapabilityRole,

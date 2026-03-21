@@ -15,15 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install pi-mono dependencies (for SDK packages)
-        run: cd vendor/pi-mono && npm ci --ignore-scripts
 
       - name: Check provider API drift
         id: drift

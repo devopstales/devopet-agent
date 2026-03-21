@@ -138,7 +138,7 @@ describe("bootstrap operator profile helpers", () => {
 describe("bootstrap omegon binary verification helpers", () => {
 	const resolution: PiResolutionInfo = {
 		omegonRoot: "/opt/homebrew/lib/node_modules/omegon-pi",
-		cli: "/opt/homebrew/lib/node_modules/omegon-pi/node_modules/@styrene-lab/pi-coding-agent/dist/cli.js",
+		cli: "/opt/homebrew/lib/node_modules/omegon-pi/node_modules/@mariozechner/pi-coding-agent/dist/cli.js",
 		resolutionMode: "npm",
 		agentDir: "/Users/test/.pi/agent",
 		stateDir: "/Users/test/.pi/agent",

@@ -15,7 +15,7 @@
  */
 
 import { execSync, spawn, type ChildProcess } from "node:child_process";
-import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const DEFAULT_PORT = 3333;
 const BINARY_NAME = "mdserve";

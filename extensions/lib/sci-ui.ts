@@ -14,8 +14,8 @@
  * NOTE: All classes use explicit field declarations (not constructor parameter
  * properties) to remain compatible with Node.js strip-only TypeScript mode.
  */
-import { truncateToWidth, visibleWidth } from "@styrene-lab/pi-tui";
-import type { Theme } from "@styrene-lab/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 
 export interface SciComponent {
 	render(width: number): string[];

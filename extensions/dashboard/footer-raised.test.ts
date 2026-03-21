@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { DashboardFooter } from "./footer.ts";
 import { sharedState } from "../lib/shared-state.ts";
 import type { DashboardState } from "./types.ts";
-import { visibleWidth } from "@styrene-lab/pi-tui";
+import { visibleWidth } from "@mariozechner/pi-tui";
 
 function makeTheme() {
   return {

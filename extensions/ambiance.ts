@@ -12,8 +12,8 @@
  * of the Crawler from Annihilation.
  */
 
-import type { ExtensionAPI, ExtensionContext, Theme } from "@styrene-lab/pi-coding-agent";
-import type { TUI, Component } from "@styrene-lab/pi-tui";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { TUI, Component } from "@mariozechner/pi-tui";
 
 // ═══════════════════════════════════════════════════════════════════
 // Spinner Verbs

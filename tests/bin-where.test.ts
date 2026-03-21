@@ -27,8 +27,8 @@ describe("omegon executable --where", () => {
 		assert.equal(result.status, 0, result.stderr);
 		const data = JSON.parse(result.stdout);
 		assert.match(data.omegonRoot, /omegon(-pi)?$/);
-		assert.match(data.cli, /(packages[\\/]coding-agent|node_modules[\\/]@styrene-lab[\\/]pi-coding-agent)[\\/]dist[\\/]cli\.js$/);
-		assert.ok(data.resolutionMode === "vendor" || data.resolutionMode === "npm");
+		assert.match(data.cli, /node_modules[\\/]@mariozechner[\\/]pi-coding-agent[\\/]dist[\\/]cli\.js$/);
+		assert.equal(data.resolutionMode, "npm");
 		assert.equal(data.executable, "omegon-pi");
 		assert.equal(data.agentDir, data.stateDir);
 		assert.match(data.stateDir, /[\\/]\.pi[\\/]agent$/);
@@ -68,7 +68,7 @@ describe("omegon startup state migration", () => {
 		const fakeHome = makeTmpDir("omegon-home-");
 		const fakeInstallRoot = makeTmpDir("omegon-install-");
 		const fakeBinDir = join(fakeInstallRoot, "bin");
-		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@styrene-lab", "pi-coding-agent", "dist");
+		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@mariozechner", "pi-coding-agent", "dist");
 		const sharedStateDir = join(fakeHome, ".pi", "agent");
 		const cliStub = join(fakeNodeModulesDir, "cli.js");
 		const omegonShim = join(fakeBinDir, "omegon-pi.mjs");
@@ -109,7 +109,7 @@ describe("omegon startup state migration", () => {
 		const fakeHome = makeTmpDir("omegon-home-");
 		const fakeInstallRoot = makeTmpDir("omegon-install-");
 		const fakeBinDir = join(fakeInstallRoot, "bin");
-		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@styrene-lab", "pi-coding-agent", "dist");
+		const fakeNodeModulesDir = join(fakeInstallRoot, "node_modules", "@mariozechner", "pi-coding-agent", "dist");
 		const sharedStateDir = join(fakeHome, ".pi", "agent");
 		const cliStub = join(fakeNodeModulesDir, "cli.js");
 		const omegonShim = join(fakeBinDir, "omegon-pi.mjs");

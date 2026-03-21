@@ -10,7 +10,7 @@
  *   /bootstrap          — Run interactive setup (install missing deps + profile)
  *   /bootstrap status   — Show dependency checklist without installing
  *   /bootstrap install  — Install all missing core + recommended deps
- *   /update-pi          — Update pi binary to latest @styrene-lab/pi-coding-agent release
+ *   /update-pi          — Update pi binary to latest @mariozechner/pi-coding-agent release
  *   /update-pi --dry-run — Check for update without installing
  *
  * Guards:
@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync,
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir, tmpdir } from "node:os";
-import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import { checkAllProviders, type AuthResult } from "../01-auth/auth.ts";
 import { loadPiConfig } from "../lib/model-preferences.ts";
@@ -659,35 +659,7 @@ async function updateDevMode(
 		steps.push(upToDate ? "✓ omegon: already up to date" : `✓ omegon: ${summary}`);
 	}
 
-	// ── Step 2: update submodule (pi-mono fork) ──────────────────────
-	ctx.ui.notify("▸ Updating pi-mono submodule…", "info");
-	const sub = await run(
-		"git", ["submodule", "update", "--init", "--recursive"],
-		{ cwd: omegonRoot },
-	);
-	if (sub.code !== 0) {
-		steps.push(`⚠ submodule update failed: ${sub.stderr.trim().split("\n")[0]}`);
-	} else {
-		steps.push("✓ pi-mono submodule synced");
-	}
-
-	// ── Step 3: build pi-mono ────────────────────────────────────────
-	if (dryRun) {
-		steps.push("· build: skipped (dry run)");
-	} else {
-		ctx.ui.notify("▸ Building pi-mono…", "info");
-		const piMonoRoot = join(omegonRoot, "vendor/pi-mono");
-		const build = await run("npm", ["run", "build"], { cwd: piMonoRoot });
-		if (build.code !== 0) {
-			const errLine = build.stderr.trim().split("\n").filter(l => !l.startsWith("npm warn")).pop() ?? "unknown error";
-			steps.push(`✗ build failed: ${errLine}`);
-			ctx.ui.notify(`Update incomplete:\n${steps.join("\n")}`, "warning");
-			return;
-		}
-		steps.push("✓ pi-mono built");
-	}
-
-	// ── Step 4: npm install (pick up any new deps) ───────────────────
+	// ── Step 2: npm install (pick up any new/updated deps) ──────────
 	if (dryRun) {
 		steps.push("· npm install: skipped (dry run)");
 	} else {

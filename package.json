@@ -8,23 +8,18 @@
   },
   "type": "module",
   "bundleDependencies": [
-    "@styrene-lab/pi-coding-agent",
-    "@styrene-lab/pi-agent-core",
-    "@styrene-lab/pi-ai",
-    "@styrene-lab/pi-tui",
+    "@mariozechner/pi-coding-agent",
+    "@mariozechner/pi-agent-core",
+    "@mariozechner/pi-ai",
+    "@mariozechner/pi-tui",
     "@modelcontextprotocol/sdk"
   ],
   "scripts": {
-    "prepack": "node scripts/prepack.mjs",
-    "postpack": "node scripts/postpack.mjs",
     "preinstall": "sh ./scripts/preinstall.sh",
     "test": "npx tsx --test tests/*.test.ts extensions/**/*.test.ts",
     "typecheck": "npx tsc --noEmit",
     "check:lifecycle": "npx tsx extensions/openspec/lifecycle-files.ts",
-    "check": "npx tsc --noEmit && npm run check:lifecycle && npx tsx --test extensions/*.test.ts extensions/**/*.test.ts",
-    "build:pi": "cd vendor/pi-mono && npm run build",
-    "update:pi": "git -C vendor/pi-mono pull --ff-only origin main && npm run build:pi",
-    "setup": "git submodule update --init --recursive && cd vendor/pi-mono && npm install && npm run build && cd ../.. && npm link --force"
+    "check": "npx tsc --noEmit && npm run check:lifecycle && npx tsx --test extensions/*.test.ts extensions/**/*.test.ts"
   },
   "keywords": [
     "pi-package",
@@ -86,15 +81,15 @@
     "@aws-sdk/client-bedrock-runtime": "^3.983.0",
     "@google/genai": "^1.40.0",
     "@mariozechner/jiti": "^2.6.2",
+    "@mariozechner/pi-agent-core": "^0.61.1",
+    "@mariozechner/pi-ai": "^0.61.1",
+    "@mariozechner/pi-coding-agent": "^0.61.1",
+    "@mariozechner/pi-tui": "^0.61.1",
     "@mistralai/mistralai": "1.14.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@resvg/resvg-js": "^2.6.2",
     "@silvia-odwyer/photon-node": "^0.3.4",
     "@sinclair/typebox": "^0.34.48",
-    "@styrene-lab/pi-agent-core": "file:./vendor/pi-mono/packages/agent",
-    "@styrene-lab/pi-ai": "file:./vendor/pi-mono/packages/ai",
-    "@styrene-lab/pi-coding-agent": "file:./vendor/pi-mono/packages/coding-agent",
-    "@styrene-lab/pi-tui": "file:./vendor/pi-mono/packages/tui",
     "@types/mime-types": "^2.1.4",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
@@ -121,6 +116,7 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3"
   }

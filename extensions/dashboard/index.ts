@@ -14,8 +14,8 @@
  * Subscribes to "dashboard:update" events for live re-rendering.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@styrene-lab/pi-coding-agent";
-import type { OverlayHandle } from "@styrene-lab/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { OverlayHandle } from "@mariozechner/pi-tui";
 import { basename } from "path";
 import { DASHBOARD_UPDATE_EVENT } from "../lib/shared-state.ts";
 import { getSharedBridge, buildSlashCommandResult } from "../lib/slash-command-bridge.ts";
@@ -568,7 +568,7 @@ export default function (pi: ExtensionAPI) {
   if (typeof (pi as any).registerToolRenderer === "function") {
 
     // ── View ──────────────────────────────────────────────────────────────
-    pi.registerToolRenderer("view", {
+    (pi as any).registerToolRenderer("view", {
       renderCall(args: any, theme: any) {
         const p = shortenPath(args?.path);
         const page = args?.page ? ` p${args.page}` : "";
@@ -577,7 +577,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Web Search ────────────────────────────────────────────────────────
-    pi.registerToolRenderer("web_search", {
+    (pi as any).registerToolRenderer("web_search", {
       renderCall(args: any, theme: any) {
         const query = args?.query ?? "";
         const mode = args?.mode ?? "quick";
@@ -588,7 +588,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Chronos ───────────────────────────────────────────────────────────
-    pi.registerToolRenderer("chronos", {
+    (pi as any).registerToolRenderer("chronos", {
       renderCall(args: any, theme: any) {
         const sub = args?.subcommand ?? "week";
         const expr = args?.expression ? ` "${args.expression}"` : "";
@@ -597,7 +597,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Render Diagram (D2) ───────────────────────────────────────────────
-    pi.registerToolRenderer("render_diagram", {
+    (pi as any).registerToolRenderer("render_diagram", {
       renderCall(args: any, theme: any) {
         const title = args?.title ?? "diagram";
         return sciCall("render_diagram", title, theme);
@@ -605,7 +605,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Render Native Diagram ─────────────────────────────────────────────
-    pi.registerToolRenderer("render_native_diagram", {
+    (pi as any).registerToolRenderer("render_native_diagram", {
       renderCall(args: any, theme: any) {
         const title = args?.title ?? "diagram";
         return sciCall("render_native_diagram", title, theme);
@@ -613,7 +613,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Render Excalidraw ─────────────────────────────────────────────────
-    pi.registerToolRenderer("render_excalidraw", {
+    (pi as any).registerToolRenderer("render_excalidraw", {
       renderCall(args: any, theme: any) {
         const p = shortenPath(args?.path);
         return sciCall("render_excalidraw", p, theme);
@@ -621,7 +621,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Generate Image Local ──────────────────────────────────────────────
-    pi.registerToolRenderer("generate_image_local", {
+    (pi as any).registerToolRenderer("generate_image_local", {
       renderCall(args: any, theme: any) {
         const prompt = args?.prompt ?? "";
         const preset = args?.preset ?? "schnell";
@@ -631,7 +631,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Render Composition Still ──────────────────────────────────────────
-    pi.registerToolRenderer("render_composition_still", {
+    (pi as any).registerToolRenderer("render_composition_still", {
       renderCall(args: any, theme: any) {
         const p = shortenPath(args?.composition_path);
         const frame = args?.frame != null ? ` f${args.frame}` : "";
@@ -640,7 +640,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Render Composition Video ──────────────────────────────────────────
-    pi.registerToolRenderer("render_composition_video", {
+    (pi as any).registerToolRenderer("render_composition_video", {
       renderCall(args: any, theme: any) {
         const p = shortenPath(args?.composition_path);
         const frames = args?.duration_in_frames ?? "?";
@@ -650,7 +650,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Model Tier ────────────────────────────────────────────────────────
-    pi.registerToolRenderer("set_model_tier", {
+    (pi as any).registerToolRenderer("set_model_tier", {
       renderCall(args: any, theme: any) {
         const tier = args?.tier ?? "?";
         return sciCall("set_model_tier", `→ ${tier}`, theme);
@@ -658,7 +658,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Thinking Level ────────────────────────────────────────────────────
-    pi.registerToolRenderer("set_thinking_level", {
+    (pi as any).registerToolRenderer("set_thinking_level", {
       renderCall(args: any, theme: any) {
         const level = args?.level ?? "?";
         return sciCall("set_thinking_level", `→ ${level}`, theme);
@@ -666,7 +666,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Ask Local Model ───────────────────────────────────────────────────
-    pi.registerToolRenderer("ask_local_model", {
+    (pi as any).registerToolRenderer("ask_local_model", {
       renderCall(args: any, theme: any) {
         const model = args?.model ?? "auto";
         const prompt = args?.prompt ?? "";
@@ -676,7 +676,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Manage Ollama ─────────────────────────────────────────────────────
-    pi.registerToolRenderer("manage_ollama", {
+    (pi as any).registerToolRenderer("manage_ollama", {
       renderCall(args: any, theme: any) {
         const action = args?.action ?? "?";
         const model = args?.model ? ` ${args.model}` : "";
@@ -685,14 +685,14 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── List Local Models ─────────────────────────────────────────────────
-    pi.registerToolRenderer("list_local_models", {
+    (pi as any).registerToolRenderer("list_local_models", {
       renderCall(_args: any, theme: any) {
         return sciCall("list_local_models", "inventory", theme);
       },
     });
 
     // ── Switch Offline Driver ─────────────────────────────────────────────
-    pi.registerToolRenderer("switch_to_offline_driver", {
+    (pi as any).registerToolRenderer("switch_to_offline_driver", {
       renderCall(args: any, theme: any) {
         const reason = args?.reason ?? "";
         const display = reason.length > 50 ? reason.slice(0, 47) + "…" : reason;
@@ -701,7 +701,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Manage Tools ──────────────────────────────────────────────────────
-    pi.registerToolRenderer("manage_tools", {
+    (pi as any).registerToolRenderer("manage_tools", {
       renderCall(args: any, theme: any) {
         const action = args?.action ?? "list";
         const tools = args?.tools?.join(", ") ?? "";
@@ -712,7 +712,7 @@ export default function (pi: ExtensionAPI) {
     });
 
     // ── Whoami ────────────────────────────────────────────────────────────
-    pi.registerToolRenderer("whoami", {
+    (pi as any).registerToolRenderer("whoami", {
       renderCall(_args: any, theme: any) {
         return sciCall("whoami", "check auth", theme);
       },

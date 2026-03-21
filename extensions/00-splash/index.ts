@@ -9,9 +9,9 @@
  * minimal branded header with version + condensed help.
  */
 
-import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
-import type { Component, TUI } from "@styrene-lab/pi-tui";
-import { truncateToWidth } from "@styrene-lab/pi-tui";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { Component, TUI } from "@mariozechner/pi-tui";
+import { truncateToWidth } from "@mariozechner/pi-tui";
 import {
   LOGO_LINES,
   WORDMARK_LINES,

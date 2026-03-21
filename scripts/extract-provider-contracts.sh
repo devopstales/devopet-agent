@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PI_MONO="${1:-vendor/pi-mono}"
+PI_MONO="${1:-node_modules/@mariozechner}"
 ANTH_SDK="$PI_MONO/node_modules/@anthropic-ai/sdk"
 OAI_SDK="$PI_MONO/node_modules/openai"
 AI_PROVIDERS="$PI_MONO/packages/ai/dist/providers"

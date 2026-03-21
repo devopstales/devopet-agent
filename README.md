@@ -2,7 +2,7 @@
 
 An opinionated distribution of [**pi**](https://github.com/badlogic/pi) — the coding agent by [Mario Zechner](https://github.com/badlogic). Omegon bundles pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and quality-of-life tools.
 
-> **Relationship to pi:** Omegon is not a fork or replacement. It packages pi as a dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. The core pi packages are migrating to the styrene-lab-owned npm scope (`@styrene-lab/pi-coding-agent` and related packages) so package ownership matches the `styrene-lab/omegon-pi` product boundary. Older `@cwilson613/*` package names are compatibility debt during the transition, not the long-term release boundary. If you want standalone pi without Omegon's extensions, install `@mariozechner/pi-coding-agent` directly.
+> **Relationship to pi:** Omegon is not a fork or replacement. It packages pi as a dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without Omegon's extensions, install `@mariozechner/pi-coding-agent` directly.
 
 ## Installation
 
@@ -34,7 +34,7 @@ omegon-pi   # start Omegon in any project directory
 | **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both follow the same lifecycle contract: pull/sync, build, refresh dependencies, `npm link --force`, verify the active `omegon-pi` target, then stop at an explicit restart handoff. |
 | **Lightweight cache refresh only** | Run `/refresh`. This clears transient caches and reloads extensions, but it is not equivalent to package/runtime replacement. |
 
-> The patched fork syncs from upstream daily via GitHub Actions. Bug fixes and new AI provider support land automatically. If a sync PR has conflicts, they are surfaced for manual review before merging — upstream changes are never silently dropped.
+> Omegon depends on upstream `@mariozechner/pi-coding-agent` published to npm. When upstream releases a new version, update the dependency version in `package.json`.
 
 > **Note:** `/update` is the authoritative Omegon update path. It intentionally ends at a verified restart boundary rather than hot-swapping the running process after package/runtime mutation.
 
@@ -42,7 +42,7 @@ omegon-pi   # start Omegon in any project directory
 
 ![Omegon Architecture](docs/img/architecture.png)
 
-Omegon extends `@styrene-lab/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
+Omegon extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates** — loaded automatically on session start.
 
 ### Development Methodology
 
@@ -261,7 +261,7 @@ Pre-built prompts for common workflows:
 
 **Required:**
 - `omegon-pi` — install via `npm install -g omegon-pi`; launch via `omegon-pi`
-- `@styrene-lab/pi-coding-agent` ≥ 0.57 underpins Omegon's bundled agent core and tracks a patched fork of [badlogic/pi-mono](https://github.com/badlogic/pi-mono). Fork source: [cwilson613/pi-mono](https://github.com/cwilson613/pi-mono)
+- `@mariozechner/pi-coding-agent` ≥ 0.61 — the upstream pi agent core from [badlogic/pi](https://github.com/badlogic/pi)
 
 **Optional (installed by `/bootstrap`):**
 - [Ollama](https://ollama.ai) — local inference, offline mode, semantic memory search
@@ -271,15 +271,6 @@ Pre-built prompts for common workflows:
 
 Run `/bootstrap` after install to check dependencies and configure preferences.
 
-## Why a Patched Fork?
-
-Upstream [`badlogic/pi-mono`](https://github.com/badlogic/pi-mono) is the canonical pi coding agent. Omegon depends on a fork rather than the upstream package for two reasons:
-
-1. **OAuth login reliability** — upstream had no fetch timeout on OAuth token exchange calls. A slow or unreachable endpoint would hang the login UI indefinitely with no recovery path. Fixed in [`packages/ai/src/utils/oauth/`](https://github.com/cwilson613/pi-mono/tree/main/packages/ai/src/utils/oauth).
-
-2. **Bracketed-paste stuck state** — a missing end-marker (e.g. from a large paste that split across chunks) would leave `isInPaste = true` permanently, silently swallowing all subsequent keystrokes including Enter. Fixed with a 500ms watchdog timer and Escape-to-clear in [`packages/tui/src/components/input.ts`](https://github.com/cwilson613/pi-mono/blob/main/packages/tui/src/components/input.ts).
-
-Both fixes were submitted as PRs to upstream ([#2060](https://github.com/badlogic/pi-mono/pull/2060), [#2061](https://github.com/badlogic/pi-mono/pull/2061)) but were closed without merge. The fork is maintained independently under the `@styrene-lab/*` npm scope.
 
 ## License
 

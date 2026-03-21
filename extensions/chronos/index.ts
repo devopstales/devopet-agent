@@ -8,7 +8,7 @@
  */
 
 import { StringEnum } from "../lib/typebox-helpers";
-import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import {
 	computeWeek,

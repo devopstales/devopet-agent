@@ -5,9 +5,7 @@
  * Keeps mutable user state in the shared pi-compatible agent directory while
  * injecting Omegon-packaged resources from the installed package root.
  *
- * Resolution order for the underlying agent core:
- *   1. vendor/pi-mono (dev mode — git submodule present)
- *   2. node_modules/@styrene-lab/pi-coding-agent (installed via npm)
+ * Resolution: node_modules/@mariozechner/pi-coding-agent (upstream pi)
  */
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,10 +18,8 @@ const defaultStateDir = join(homedir(), ".pi", "agent");
 const stateDir = process.env.PI_CODING_AGENT_DIR || defaultStateDir;
 const usingExplicitStateOverride = Boolean(process.env.PI_CODING_AGENT_DIR);
 
-const vendorCli = join(omegonRoot, "vendor/pi-mono/packages/coding-agent/dist/cli.js");
-const npmCli = join(omegonRoot, "node_modules/@styrene-lab/pi-coding-agent/dist/cli.js");
-const cli = existsSync(vendorCli) ? vendorCli : npmCli;
-const resolutionMode = cli === vendorCli ? "vendor" : "npm";
+const cli = join(omegonRoot, "node_modules/@mariozechner/pi-coding-agent/dist/cli.js");
+const resolutionMode = "npm";
 
 function migrateLegacyStatePath(relativePath, kind = "file") {
   if (usingExplicitStateOverride) {

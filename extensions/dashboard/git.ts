@@ -7,8 +7,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { visibleWidth } from "@styrene-lab/pi-tui";
-import type { Theme } from "@styrene-lab/pi-coding-agent";
+import { visibleWidth } from "@mariozechner/pi-tui";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 
 // Shared ASCII-compat flag — same logic as footer.ts
 const useAscii = (() => {

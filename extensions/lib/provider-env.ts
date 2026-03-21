@@ -23,7 +23,7 @@ import { homedir } from "node:os";
  * (vercel-ai-gateway, zai, minimax, opencode, kimi-coding) are omitted —
  * add them here if they gain routing relevance.
  *
- * SYNC CHECK: compare against vendor/pi-mono/packages/ai/dist/env-api-keys.js
+ * SYNC CHECK: compare against @mariozechner/pi-ai/dist/env-api-keys.js
  * when updating.
  */
 export interface ProviderEnvEntry {

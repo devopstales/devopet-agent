@@ -16,7 +16,7 @@
  *           /providers, /context
  */
 
-import type { ExtensionAPI } from "@styrene-lab/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import effortExtension from "./effort.ts";
 import budgetExtension from "./budget.ts";
