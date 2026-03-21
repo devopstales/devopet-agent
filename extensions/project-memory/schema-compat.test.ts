@@ -10,11 +10,15 @@
 
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { FactStore } from "./factstore.ts";
+
+const __here = dirname(fileURLToPath(import.meta.url));
+const CONTRACT_PATH = join(__here, "schema-contract.json");
 
 /** Create a Rust-shaped v4 database — the schema omegon-memory wrote before
  *  the v5 alignment fix. Missing: created_session, superseded_at, archived_at,
@@ -368,6 +372,54 @@ describe("Rust schema compatibility", () => {
       assert.ok(facts.length >= 1);
       const result = store.storeFact({ section: "Decisions", content: "Cross-runtime decision" });
       assert.ok(result.id);
+      store.close();
+    });
+  });
+
+  describe("schema contract validation", () => {
+    it("TS-created DB satisfies the Rust schema contract", () => {
+      // Fresh TS DB — should have ALL columns the Rust contract declares
+      const store = new FactStore(dir);
+      const db = (store as any).db;
+      const contract = JSON.parse(readFileSync(CONTRACT_PATH, "utf-8"));
+
+      for (const [table, expectedCols] of Object.entries(contract.tables) as [string, string[]][]) {
+        if (table.endsWith("_fts")) continue;
+        let actualCols: string[];
+        try {
+          actualCols = db.prepare(`PRAGMA table_info(${table})`).all().map((c: any) => c.name);
+        } catch {
+          assert.fail(`Table '${table}' required by Rust contract does not exist`);
+          continue;
+        }
+        for (const col of expectedCols) {
+          assert.ok(actualCols.includes(col),
+            `Rust contract requires '${table}.${col}' but TS schema is missing it`);
+        }
+      }
+      store.close();
+    });
+
+    it("Rust-shaped DB satisfies the contract after TS migration", () => {
+      createRustV4DB(join(dir, "facts.db"));
+      const store = new FactStore(dir);
+      const db = (store as any).db;
+      const contract = JSON.parse(readFileSync(CONTRACT_PATH, "utf-8"));
+
+      for (const [table, expectedCols] of Object.entries(contract.tables) as [string, string[]][]) {
+        if (table.endsWith("_fts")) continue;
+        let actualCols: string[];
+        try {
+          actualCols = db.prepare(`PRAGMA table_info(${table})`).all().map((c: any) => c.name);
+        } catch {
+          assert.fail(`Table '${table}' required by Rust contract does not exist after migration`);
+          continue;
+        }
+        for (const col of expectedCols) {
+          assert.ok(actualCols.includes(col),
+            `Rust contract requires '${table}.${col}' but it's missing after TS migration of Rust v4 DB`);
+        }
+      }
       store.close();
     });
   });
