@@ -31,7 +31,7 @@ omegon-pi   # start Omegon in any project directory
 | Context | How |
 |--------|-----|
 | **Installed Omegon (`npm install -g omegon-pi`)** | Run `/update` from inside Omegon. Omegon installs the latest package, verifies the active `omegon-pi` command still resolves to Omegon, clears caches, then asks you to restart Omegon. |
-| **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both follow the same lifecycle contract: pull/sync, build, refresh dependencies, `npm link --force`, verify the active `omegon-pi` target, then stop at an explicit restart handoff. |
+| **Dev checkout / contributor workflow** | Run `/update` or `./scripts/install-pi.sh`. Both pull, install dependencies, `npm link --force`, and stop at an explicit restart handoff. |
 | **Lightweight cache refresh only** | Run `/refresh`. This clears transient caches and reloads extensions, but it is not equivalent to package/runtime replacement. |
 
 > Omegon depends on upstream `@mariozechner/pi-coding-agent` published to npm. When upstream releases a new version, update the dependency version in `package.json`.
@@ -260,8 +260,8 @@ Pre-built prompts for common workflows:
 ## Requirements
 
 **Required:**
-- `omegon-pi` — install via `npm install -g omegon-pi`; launch via `omegon-pi`
-- `@mariozechner/pi-coding-agent` ≥ 0.61 — the upstream pi agent core from [badlogic/pi](https://github.com/badlogic/pi)
+- **Node.js 20+**
+- `npm install -g omegon-pi` — installs the `omegon-pi` command with pi agent core bundled
 
 **Optional (installed by `/bootstrap`):**
 - [Ollama](https://ollama.ai) — local inference, offline mode, semantic memory search
