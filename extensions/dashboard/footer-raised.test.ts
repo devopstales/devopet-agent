@@ -23,7 +23,7 @@ function makeFooterData() {
 
 function makeContext() {
   return {
-    cwd: "/Users/cwilson/workspace/ai/omegon",
+    cwd: "/home/user/project",
     model: {
       provider: "openai-codex",
       id: "gpt-5.4",
