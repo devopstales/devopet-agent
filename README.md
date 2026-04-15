@@ -1,15 +1,15 @@
-# omegon-pi
+# devopet-agent
 
-> **⚠️ Deprecated.** omegon-pi has been superseded by the Rust implementation at [omegon.styrene.dev](https://omegon.styrene.dev). This TypeScript version is no longer maintained.
+An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). devopet-agent bundles the pi core with omegon-pi extensions and it's own for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
 
-An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). omegon-pi bundles the pi core with extensions for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
+> **Relationship to omegon-pi:** devopet-agent is a fork of omegon-pi. It installs pi as an npm dependency and layers extensions on top. All credit for the omegon-pi coding agent goes to the omegon-pi contributors. If you want standalone omegon-pi without devopet-agent's extensions, install `omegon-pi` directly.
+> **Relationship to pi:** omegon-pi is not a fork of pi. It installs pi as an npm dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without omegon-pi's extensions, install `@mariozechner/pi-coding-agent` directly.
 
-> **Relationship to pi:** omegon-pi is not a fork. It installs pi as an npm dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without omegon-pi's extensions, install `@mariozechner/pi-coding-agent` directly.
 
 ## Install
 
 ```bash
-npm install -g omegon-pi
+npm install -g devopet-agent
 ```
 
 Requires **Node.js 20+**.
@@ -17,14 +17,14 @@ Requires **Node.js 20+**.
 This installs the `omegon-pi` command globally. A `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi takes over the lifecycle boundary (startup, update, restart). To switch back to standalone pi:
 
 ```bash
-npm uninstall -g omegon-pi
+npm uninstall -g devopet-agent
 npm install -g @mariozechner/pi-coding-agent
 ```
 
 **First run:**
 
 ```bash
-omegon-pi        # start in any project directory
+devopet-agent        # start in any project directory
 /bootstrap       # check deps, install missing tools, set preferences
 ```
 
@@ -32,21 +32,21 @@ omegon-pi        # start in any project directory
 
 | Context | How |
 |--------|-----|
-| Installed via npm | `/update` from inside omegon-pi — installs latest, verifies binary, clears caches, prompts restart. |
+| Installed via npm | `/update` from inside devopet-agent — installs latest, verifies binary, clears caches, prompts restart. |
 | Dev checkout | `/update` or `./scripts/install-pi.sh` — pulls, installs deps, `npm link`, prompts restart. |
 | Cache refresh only | `/refresh` — clears caches and reloads extensions without package replacement. |
 
-omegon-pi depends on upstream `@mariozechner/pi-coding-agent` from npm. To pick up a new pi release, bump the version in `package.json`.
+devopet-agent depends on upstream `@mariozechner/pi-coding-agent` from npm. To pick up a new pi release, bump the version in `package.json`.
 
 ## Architecture
 
 ![Architecture](docs/img/architecture.png)
 
-omegon-pi extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates**, loaded automatically on session start.
+devopet-agent extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates**, loaded automatically on session start.
 
 ### Spec-driven development
 
-omegon-pi enforces spec-first development for non-trivial changes:
+devopet-agent enforces spec-first development for non-trivial changes:
 
 ![Spec Pipeline](docs/img/spec-pipeline.png)
 
@@ -224,7 +224,7 @@ Skills are specialized instruction sets the agent loads on-demand when a task ma
 ## Requirements
 
 - **Node.js 20+**
-- `npm install -g omegon-pi`
+- `npm install -g devopet-agent`
 
 **Optional** (installed by `/bootstrap`):
 - [Ollama](https://ollama.ai) — local inference, offline mode, semantic memory search
