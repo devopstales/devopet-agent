@@ -4,21 +4,21 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
-export interface OmegonSubprocessSpec {
+export interface devopetSubprocessSpec {
   command: string;
   argvPrefix: string[];
   omegonEntry: string;
 }
 
-let cached: OmegonSubprocessSpec | null = null;
+let cached: devopetSubprocessSpec | null = null;
 
 /**
- * Resolve the canonical Omegon-owned subprocess entrypoint without relying on PATH.
+ * Resolve the canonical devopet-owned subprocess entrypoint without relying on PATH.
  *
  * Internal helpers should spawn `process.execPath` with `bin/omegon-pi.mjs` explicitly,
  * rather than assuming a `pi` or `omegon` binary on PATH points back to this install.
  */
-export function resolveOmegonSubprocess(): OmegonSubprocessSpec {
+export function resolvedevopetSubprocess(): devopetSubprocessSpec {
   if (cached) return cached;
 
   const here = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +37,7 @@ export function resolveOmegonSubprocess(): OmegonSubprocessSpec {
  * Resolved native agent binary specification.
  *
  * When available, cleave children can be dispatched to this binary instead
- * of spawning a full Node.js + Omegon TS process. The native binary is
+ * of spawning a full Node.js + devopet TS process. The native binary is
  * faster to start, uses less memory, and has the core 4 tools built in
  * (read, write, edit, bash).
  */

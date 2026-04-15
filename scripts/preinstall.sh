@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Pre-install hook for omegon.
 #
-# Omegon is an opinionated distribution of pi (https://github.com/badlogic/pi)
+# devopet is an opinionated distribution of pi (https://github.com/badlogic/pi)
 # that bundles extensions, themes, skills, and memory on top of the core
 # pi coding agent by Mario Zechner (@badlogic).
 #
@@ -10,7 +10,7 @@
 # a bin link if another package already owns it, so this script removes the
 # standalone pi package before omegon installs — preventing an EEXIST error.
 #
-# This is NOT hostile. Omegon depends on and includes the same pi core.
+# This is NOT hostile. devopet depends on and includes the same pi core.
 # If you want standalone pi back, just:
 #   npm uninstall -g omegon
 #   npm install -g @mariozechner/pi-coding-agent
@@ -21,7 +21,7 @@ node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 
 if [ "$node_major" -lt 20 ]; then
   echo ""
   echo "  omegon: Unsupported Node.js runtime detected ($(node -v 2>/dev/null || echo unknown))."
-  echo "  omegon: Omegon requires Node.js 20 or later because bundled pi-tui uses modern Unicode regex features."
+  echo "  omegon: devopet requires Node.js 20 or later because bundled pi-tui uses modern Unicode regex features."
   echo "  omegon: Upgrade Node.js to 20+ and retry the install/update."
   echo ""
   exit 1
@@ -35,7 +35,7 @@ for pkg in @styrene-lab/pi-coding-agent @cwilson613/pi-coding-agent @mariozechne
   if npm ls -g "$pkg" --depth=0 >/dev/null 2>&1; then
     echo ""
     echo "  omegon: Found standalone pi package ($pkg)."
-    echo "  omegon: Omegon bundles pi core and registers the same 'pi' command."
+    echo "  omegon: devopet bundles pi core and registers the same 'pi' command."
     echo "  omegon: Removing $pkg to avoid bin conflict..."
     echo "  omegon: (To restore standalone pi later: npm install -g $pkg)"
     echo ""

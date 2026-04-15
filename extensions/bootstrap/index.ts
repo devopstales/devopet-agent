@@ -1,5 +1,5 @@
 /**
- * bootstrap — First-time setup and dependency management for Omegon.
+ * bootstrap — First-time setup and dependency management for devopet.
  *
  * On first session start after install, presents a friendly checklist of
  * external dependencies grouped by tier (core / recommended / optional).
@@ -258,7 +258,7 @@ async function ensureOperatorProfile(pi: ExtensionAPI, ctx: CommandContext): Pro
 	ctx.ui.notify(`Operator capability setup — ${formatProviderSetupSummary(readiness)}`, "info");
 	const proceed = await ctx.ui.confirm(
 		"Configure operator capability profile?",
-		"This captures cloud/local fallback preferences so Omegon avoids unsafe automatic model switches.",
+		"This captures cloud/local fallback preferences so devopet avoids unsafe automatic model switches.",
 	);
 	if (!proceed) {
 		const fallback = synthesizeSafeDefaultProfile(readiness);
@@ -282,11 +282,11 @@ async function ensureOperatorProfile(pi: ExtensionAPI, ctx: CommandContext): Pro
 			: "anthropic";
 	const allowCloudCrossProviderFallback = await ctx.ui.confirm(
 		"Allow same-role cloud fallback?",
-		"If your preferred cloud provider is unavailable, may Omegon retry the same capability role with another cloud provider?",
+		"If your preferred cloud provider is unavailable, may devopet retry the same capability role with another cloud provider?",
 	);
 	const automaticLightLocalFallback = await ctx.ui.confirm(
 		"Allow automatic light local fallback?",
-		"Allow Omegon to use local models automatically for lightweight work when cloud options are unavailable?",
+		"Allow devopet to use local models automatically for lightweight work when cloud options are unavailable?",
 	);
 	const heavyLocalSelection = await ctx.ui.select(
 		"Heavy local fallback policy:",
@@ -357,7 +357,7 @@ export default function (pi: ExtensionAPI) {
     notifiedVersion = latest;
     pi.sendMessage({
       customType: "view",
-      content: `**Omegon update available:** v${installed} → v${latest}\n\nRun \`pi update\` to upgrade.`,
+      content: `**devopet update available:** v${installed} → v${latest}\n\nRun \`pi update\` to upgrade.`,
       display: true,
     });
   }
@@ -389,7 +389,7 @@ export default function (pi: ExtensionAPI) {
 		const coreMissing = missing.filter((s) => s.dep.tier === "core");
 		const recMissing = missing.filter((s) => s.dep.tier === "recommended");
 
-		let msg = "Welcome to Omegon! ";
+		let msg = "Welcome to devopet! ";
 		if (coreMissing.length > 0) {
 			msg += `${coreMissing.length} core dep${coreMissing.length > 1 ? "s" : ""} missing. `;
 		}
@@ -413,7 +413,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("bootstrap", {
-		description: "First-time setup — check/install Omegon dependencies and capture operator fallback preferences",
+		description: "First-time setup — check/install devopet dependencies and capture operator fallback preferences",
 		handler: async (args, ctx) => {
 			const sub = args.trim().toLowerCase();
 			const cmdCtx: CommandContext = {
@@ -458,7 +458,7 @@ export default function (pi: ExtensionAPI) {
 	//   Installed (no .git):     npm install -g omegon@latest → verify → restart handoff
 	// Replaces the old split update mental model with a singular-package lifecycle.
 	pi.registerCommand("update", {
-		description: "Run the authoritative Omegon update lifecycle, then hand off to restart",
+		description: "Run the authoritative devopet update lifecycle, then hand off to restart",
 		handler: async (args, ctx) => {
 			const dryRun = args.trim() === "--dry-run";
 			const here = dirname(fileURLToPath(import.meta.url));
@@ -484,12 +484,12 @@ export default function (pi: ExtensionAPI) {
 
 	// --- /restart: full process restart ---
 	pi.registerCommand("restart", {
-		description: "Restart Omegon (clears cache, spawns fresh process)",
+		description: "Restart devopet (clears cache, spawns fresh process)",
 		handler: async (_args, ctx) => {
 			clearJitiCache(ctx);
-			ctx.ui.notify("Restarting Omegon…", "info");
+			ctx.ui.notify("Restarting devopet…", "info");
 			await new Promise((r) => setTimeout(r, 500));
-			restartOmegon();
+			restartdevopet();
 		},
 	});
 }
@@ -497,14 +497,14 @@ export default function (pi: ExtensionAPI) {
 // ── /update helpers ──────────────────────────────────────────────────────
 
 /**
- * Replace the current Omegon process with a fresh instance.
+ * Replace the current devopet process with a fresh instance.
  *
  * Writes a tiny shell script that sleeps briefly (so this process can fully
- * exit and release the terminal), then exec's the new Omegon. This avoids
+ * exit and release the terminal), then exec's the new devopet. This avoids
  * two TUI processes fighting over the same terminal simultaneously.
  */
 /**
- * Restart Omegon by exiting with code 75.
+ * Restart devopet by exiting with code 75.
  *
  * The bin/omegon-pi.mjs wrapper runs the CLI in a subprocess loop. When it sees
  * exit code 75 (EX_TEMPFAIL), it re-spawns a fresh CLI process. Because the
@@ -512,7 +512,7 @@ export default function (pi: ExtensionAPI) {
  * CLI always owns the terminal and can receive input — no detached spawn,
  * no competing with the shell for stdin.
  */
-function restartOmegon(): never {
+function restartdevopet(): never {
 	const RESTART_EXIT_CODE = 75;
 	process.exit(RESTART_EXIT_CODE);
 }
@@ -551,7 +551,7 @@ export interface PiResolutionInfo {
 	stateDir?: string;
 }
 
-export interface OmegonBinaryVerification {
+export interface devopetBinaryVerification {
 	ok: boolean;
 	executableName: string;
 	executablePath: string;
@@ -574,23 +574,23 @@ async function getActiveExecutablePath(executableName = "omegon-pi"): Promise<st
 	return which.code === 0 ? which.stdout.trim() : "";
 }
 
-export function validateOmegonBinaryVerification(
+export function validatedevopetBinaryVerification(
 	executableName: string,
 	executablePath: string,
 	realExecutablePath: string,
 	resolution: PiResolutionInfo,
-): OmegonBinaryVerification {
-	const binaryLooksOwnedByOmegon = /[\\/]omegon(?:-pi)?[\\/]/.test(realExecutablePath) || /[\\/]omegon(?:-pi)?[\\/]bin[\\/](?:omegon-pi|pi)(?:\.mjs)?$/.test(realExecutablePath);
+): devopetBinaryVerification {
+	const binaryLooksOwnedBydevopet = /[\\/]omegon(?:-pi)?[\\/]/.test(realExecutablePath) || /[\\/]omegon(?:-pi)?[\\/]bin[\\/](?:omegon-pi|pi)(?:\.mjs)?$/.test(realExecutablePath);
 	if (!/omegon(?:-pi)?(?:[\\/]|$)/.test(resolution.omegonRoot)) {
-		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} resolved to non-Omegon root: ${resolution.omegonRoot}` };
+		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} resolved to non-devopet root: ${resolution.omegonRoot}` };
 	}
-	if (!binaryLooksOwnedByOmegon) {
-		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} symlink target does not appear to point at Omegon: ${realExecutablePath}` };
+	if (!binaryLooksOwnedBydevopet) {
+		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} symlink target does not appear to point at devopet: ${realExecutablePath}` };
 	}
 	return { ok: true, executableName, executablePath, realExecutablePath, resolution };
 }
 
-async function inspectActiveOmegonBinary(): Promise<OmegonBinaryVerification> {
+async function inspectActivedevopetBinary(): Promise<devopetBinaryVerification> {
 	const executableName = "omegon-pi";
 	const executablePath = await getActiveExecutablePath(executableName);
 	if (!executablePath) {
@@ -599,17 +599,17 @@ async function inspectActiveOmegonBinary(): Promise<OmegonBinaryVerification> {
 	const realExecutablePath = normalizeExecutablePath(executablePath);
 	const probe = await run(executablePath, ["--where"]);
 	if (probe.code !== 0) {
-		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active omegon binary did not return Omegon resolution metadata" };
+		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active omegon binary did not return devopet resolution metadata" };
 	}
 	try {
 		const resolution = JSON.parse(probe.stdout.trim()) as PiResolutionInfo;
-		return validateOmegonBinaryVerification(executableName, executablePath, realExecutablePath, resolution);
+		return validatedevopetBinaryVerification(executableName, executablePath, realExecutablePath, resolution);
 	} catch {
 		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active omegon returned invalid verification metadata" };
 	}
 }
 
-function formatVerification(verification: OmegonBinaryVerification): string {
+function formatVerification(verification: devopetBinaryVerification): string {
 	if (!verification.ok || !verification.resolution) {
 		return `✗ omegon-pi target verification failed${verification.reason ? `: ${verification.reason}` : ""}`;
 	}
@@ -692,7 +692,7 @@ async function updateDevMode(
 		ctx.ui.notify(`Dry run:\n${steps.join("\n")}`, "info");
 		return;
 	}
-	const verification = await inspectActiveOmegonBinary();
+	const verification = await inspectActivedevopetBinary();
 	if (!verification.ok) {
 		steps.push(formatVerification(verification));
 		ctx.ui.notify(`Update incomplete:\n${steps.join("\n")}`, "warning");
@@ -703,12 +703,12 @@ async function updateDevMode(
 	// ── Step 7: clear cache + restart ────────────────────────────────
 	const cleared = clearJitiCache(ctx);
 	if (cleared > 0) steps.push(`✓ cleared ${cleared} cached transpilations`);
-	steps.push("✓ update complete — restarting Omegon…");
+	steps.push("✓ update complete — restarting devopet…");
 	ctx.ui.notify(steps.join("\n"), "info");
 
 	// Brief pause so the user sees the summary before the terminal resets
 	await new Promise((r) => setTimeout(r, 1500));
-	restartOmegon();
+	restartdevopet();
 }
 
 /** Installed mode: npm install -g omegon@latest → verify → cache clear → restart handoff. */
@@ -754,7 +754,7 @@ async function updateInstalledMode(
 
 	const confirmed = await ctx.ui.confirm(
 		"Update omegon-pi?",
-		`Install ${PKG}@${latestVersion} globally via npm?\n\nThis will update Omegon, its bundled agent core, extensions, themes, and skills.\nRestart Omegon after the update completes.`,
+		`Install ${PKG}@${latestVersion} globally via npm?\n\nThis will update devopet, its bundled agent core, extensions, themes, and skills.\nRestart devopet after the update completes.`,
 	);
 	if (!confirmed) {
 		ctx.ui.notify("Update cancelled.", "info");
@@ -768,10 +768,10 @@ async function updateInstalledMode(
 		return;
 	}
 
-	const verification = await inspectActiveOmegonBinary();
+	const verification = await inspectActivedevopetBinary();
 	if (!verification.ok) {
 		ctx.ui.notify(
-			`Updated to ${PKG}@${latestVersion}, but post-install verification failed.\n${formatVerification(verification)}\nResolve the Omegon binary target before restarting Omegon.`,
+			`Updated to ${PKG}@${latestVersion}, but post-install verification failed.\n${formatVerification(verification)}\nResolve the devopet binary target before restarting devopet.`,
 			"warning",
 		);
 		return;
@@ -782,12 +782,12 @@ async function updateInstalledMode(
 		`✅ Updated to ${PKG}@${latestVersion}.` +
 		`\n${formatVerification(verification)}` +
 		(cleared > 0 ? `\nCleared ${cleared} cached transpilations.` : "") +
-		"\nRestarting Omegon…",
+		"\nRestarting devopet…",
 		"info"
 	);
 
 	await new Promise((r) => setTimeout(r, 1500));
-	restartOmegon();
+	restartdevopet();
 }
 
 async function interactiveSetup(pi: ExtensionAPI, ctx: CommandContext): Promise<void> {
@@ -857,7 +857,7 @@ async function interactiveSetup(pi: ExtensionAPI, ctx: CommandContext): Promise<
 	if (!hasAnyCloudKey) {
 		summary.push(
 			"🔑 **No cloud API keys detected.**\n" +
-			"Omegon needs at least one provider key to function. The fastest options:\n" +
+			"devopet needs at least one provider key to function. The fastest options:\n" +
 			"  • Anthropic: `/secrets configure ANTHROPIC_API_KEY` (get key at console.anthropic.com)\n" +
 			"  • OpenAI: `/secrets configure OPENAI_API_KEY` (get key at platform.openai.com)\n" +
 			"  • GitHub Copilot: `/login github` (requires Copilot subscription)",
@@ -873,7 +873,7 @@ async function interactiveSetup(pi: ExtensionAPI, ctx: CommandContext): Promise<
 		summary.push("🎉 Setup complete! All core and recommended dependencies are available.");
 		markDone();
 	} else if (stillMissing.length === 0) {
-		summary.push("✅ Dependencies installed. Configure an API key (see above) to start using Omegon.");
+		summary.push("✅ Dependencies installed. Configure an API key (see above) to start using devopet.");
 		markDone();
 	} else {
 		summary.push(

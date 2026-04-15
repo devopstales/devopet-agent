@@ -15,7 +15,7 @@ import {
 	saveOperatorProfile,
 	summarizeProviderReadiness,
 	synthesizeSafeDefaultProfile,
-	validateOmegonBinaryVerification,
+	validatedevopetBinaryVerification,
 	type OperatorCapabilityProfile,
 	type PiResolutionInfo,
 } from "./index.ts";
@@ -145,7 +145,7 @@ describe("bootstrap omegon binary verification helpers", () => {
 	};
 
 	it("accepts an active omegon-pi binary owned by omegon", () => {
-		const result = validateOmegonBinaryVerification(
+		const result = validatedevopetBinaryVerification(
 			"omegon-pi",
 			"/opt/homebrew/bin/omegon-pi",
 			"/opt/homebrew/lib/node_modules/omegon-pi/bin/omegon-pi.mjs",
@@ -156,18 +156,18 @@ describe("bootstrap omegon binary verification helpers", () => {
 	});
 
 	it("rejects binaries whose resolved omegon root is not omegon", () => {
-		const result = validateOmegonBinaryVerification(
+		const result = validatedevopetBinaryVerification(
 			"omegon-pi",
 			"/usr/local/bin/omegon-pi",
 			"/usr/local/lib/node_modules/other-tool/bin/omegon-pi.mjs",
 			{ ...resolution, omegonRoot: "/usr/local/lib/node_modules/other-tool" },
 		);
 		assert.equal(result.ok, false);
-		assert.match(result.reason ?? "", /non-Omegon root/i);
+		assert.match(result.reason ?? "", /non-devopet root/i);
 	});
 
 	it("accepts a legacy pi alias when it re-enters the omegon-owned shim", () => {
-		const result = validateOmegonBinaryVerification(
+		const result = validatedevopetBinaryVerification(
 			"pi",
 			"/opt/homebrew/bin/pi",
 			"/opt/homebrew/lib/node_modules/omegon-pi/bin/pi.mjs",
@@ -177,14 +177,14 @@ describe("bootstrap omegon binary verification helpers", () => {
 	});
 
 	it("rejects binaries whose realpath does not point at omegon", () => {
-		const result = validateOmegonBinaryVerification(
+		const result = validatedevopetBinaryVerification(
 			"omegon-pi",
 			"/usr/local/bin/omegon-pi",
 			"/usr/local/lib/node_modules/some-other-tool/bin/omegon-pi.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, false);
-		assert.match(result.reason ?? "", /does not appear to point at Omegon/i);
+		assert.match(result.reason ?? "", /does not appear to point at devopet/i);
 	});
 });
 

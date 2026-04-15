@@ -1,9 +1,9 @@
 {
-  "name": "omegon-pi",
+  "name": "devopet-agent",
   "version": "0.15.0",
-  "description": "Omegon — an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
+  "description": "devopet — an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
   "bin": {
-    "omegon-pi": "bin/omegon-pi.mjs",
+    "devopet-agent": "bin/omegon-pi.mjs",
     "pi": "bin/pi.mjs"
   },
   "type": "module",
@@ -19,7 +19,8 @@
     "test": "npx tsx --test tests/*.test.ts extensions/**/*.test.ts",
     "typecheck": "npx tsc --noEmit",
     "check:lifecycle": "npx tsx extensions/openspec/lifecycle-files.ts",
-    "check": "npx tsc --noEmit && npm run check:lifecycle && npx tsx --test extensions/*.test.ts extensions/**/*.test.ts"
+    "check": "npx tsc --noEmit && npm run check:lifecycle && npx tsx --test extensions/*.test.ts extensions/**/*.test.ts",
+    "start": "node bin/devopet-agent.mjs"
   },
   "keywords": [
     "pi-package",
@@ -30,12 +31,12 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/styrene-lab/omegon-pi.git"
+    "url": "https://github.com/styrene-lab/devopet-agent.git"
   },
   "bugs": {
-    "url": "https://github.com/styrene-lab/omegon/issues"
+    "url": "https://github.com/styrene-lab/devopet/issues"
   },
-  "homepage": "https://github.com/styrene-lab/omegon#readme",
+  "homepage": "https://github.com/styrene-lab/devopet#readme",
   "optionalDependencies": {
     "@mariozechner/clipboard": "0.3.2"
   },

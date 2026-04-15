@@ -1,13 +1,13 @@
 /**
  * cleave/dispatcher — Child process dispatch and monitoring.
  *
- * Spawns Omegon-owned subprocesses for each child task, using the same
+ * Spawns devopet-owned subprocesses for each child task, using the same
  * subagent pattern as pi's example extension. Each child runs in
  * its own git worktree with an isolated context.
  *
  * Supports two backends:
- * - "cloud": spawns a full Omegon child process (uses cloud API)
- * - "local": spawns Omegon with --model pointing to a local Ollama model
+ * - "cloud": spawns a full devopet child process (uses cloud API)
+ * - "local": spawns devopet with --model pointing to a local Ollama model
  *
  * The dispatcher handles:
  * - Dependency-ordered wave execution
@@ -27,7 +27,7 @@ import { sendRpcCommand, buildPromptCommand, parseRpcEventStream, mapEventToProg
 import { executeWithReview, type ReviewConfig, type ReviewExecutor, DEFAULT_REVIEW_CONFIG } from "./review.ts";
 import { saveState } from "./workspace.ts";
 import { resolveTier, getDefaultPolicy, getViableModels, type ProviderRoutingPolicy, type RegistryModel } from "../lib/model-routing.ts";
-import { resolveOmegonSubprocess, resolveNativeAgent, type NativeAgentSpec } from "../lib/omegon-subprocess.ts";
+import { resolvedevopetSubprocess, resolveNativeAgent, type NativeAgentSpec } from "../lib/omegon-subprocess.ts";
 import { registerCleaveProc, deregisterCleaveProc, killCleaveProc } from "./subprocess-tracker.ts";
 
 // ─── Large-run threshold ────────────────────────────────────────────────────
@@ -410,7 +410,7 @@ async function spawnChildPipe(
 	localModel?: string,
 	onLine?: (line: string) => void,
 ): Promise<ChildResult> {
-	const omegon = resolveOmegonSubprocess();
+	const omegon = resolvedevopetSubprocess();
 	const args = [...omegon.argvPrefix, "-p", "--no-session"];
 	if (localModel) {
 		args.push("--model", localModel);
@@ -523,7 +523,7 @@ async function spawnChildPipe(
  *   turn limits, retry, stuck detection, and auto-validation
  *
  * This is Ship of Theseus Plank #1 — headless cleave children execute in
- * the Rust loop instead of spawning a full TS Omegon process.
+ * the Rust loop instead of spawning a full TS devopet process.
  */
 async function spawnChildNative(
 	native: NativeAgentSpec,
@@ -690,7 +690,7 @@ async function spawnChildRpc(
 	onEvent?: (event: RpcChildEvent) => void,
 	idleTimeoutMs: number = IDLE_TIMEOUT_MS,
 ): Promise<RpcChildResult> {
-	const omegon = resolveOmegonSubprocess();
+	const omegon = resolvedevopetSubprocess();
 	const args = [...omegon.argvPrefix, "--mode", "rpc", "--no-session"];
 	if (localModel) {
 		args.push("--model", localModel);

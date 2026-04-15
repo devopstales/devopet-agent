@@ -190,7 +190,7 @@ describe("FactStore", () => {
   });
 
   it("searchFacts handles apostrophes and quote-like user text without FTS syntax errors", () => {
-    store.storeFact({ section: "Architecture", content: "User's auth token is reused by Omegon" });
+    store.storeFact({ section: "Architecture", content: "User's auth token is reused by devopet" });
     store.storeFact({ section: "Decisions", content: "Dont prompt for login again" });
 
     const results = store.searchFacts("user's auth");

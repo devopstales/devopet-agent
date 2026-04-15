@@ -428,15 +428,15 @@ export default function (pi: ExtensionAPI) {
       renderTitle(); // Initial title render
     });
 
-    // Non-blocking capability health check — probes Omegon's own runtime deps
+    // Non-blocking capability health check — probes devopet's own runtime deps
     // (ollama, d2, pandoc, etc.) using the bootstrap DEPS registry.
-    // This is NOT a project linter — it tells the user which Omegon features
+    // This is NOT a project linter — it tells the user which devopet features
     // won't work in the current environment.
     setTimeout(async () => {
       try {
         const { DEPS } = await import("../bootstrap/deps.ts");
         // Probe runtime deps only — skip install-time bootstrapping tools (nix)
-        // that Omegon doesn't call directly at runtime.
+        // that devopet doesn't call directly at runtime.
         const INSTALL_ONLY = new Set(["nix"]);
         const probed = DEPS.filter(d => (d.tier === "core" || d.tier === "recommended") && !INSTALL_ONLY.has(d.id));
         const missing = probed.filter(d => !d.check());
@@ -444,11 +444,11 @@ export default function (pi: ExtensionAPI) {
 
         const summary = missing.map(d => d.name).join(", ");
         const details = missing.map(d => `• ${d.name} — ${d.purpose}`).join("\n");
-        ctx.ui.notify(`Missing Omegon deps: ${summary}`, "info");
+        ctx.ui.notify(`Missing devopet deps: ${summary}`, "info");
         pi.sendMessage({
           customType: "guardrail-health-check",
-          content: `[omegon startup check] Missing runtime dependencies: ${summary}.\n\n`
-            + `These Omegon features may not work:\n${details}\n\n`
+          content: `[devopet startup check] Missing runtime dependencies: ${summary}.\n\n`
+            + `These devopet features may not work:\n${details}\n\n`
             + `Run \`/bootstrap\` to install interactively.`,
           display: true,
         });

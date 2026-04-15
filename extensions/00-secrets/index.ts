@@ -66,7 +66,7 @@ function scanAnnotations(): {
   }
 
   addDir(join(homedir(), ".pi", "agent", "extensions"));
-  addDir(join(homedir(), ".pi", "agent", "git"));  // Omegon and other git packages
+  addDir(join(homedir(), ".pi", "agent", "git"));  // devopet and other git packages
 
   // Scan the package's own extensions/ directory (where this file lives).
   // Covers both dev (repo checkout) and npm-installed modes.

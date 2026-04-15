@@ -19,7 +19,7 @@ function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pro
 }
 
 describe("omegon executable --where", () => {
-	it("prints Omegon resolution metadata without starting interactive mode", () => {
+	it("prints devopet resolution metadata without starting interactive mode", () => {
 		const result = spawnSync(process.execPath, [OMEGON_BIN, "--where"], {
 			encoding: "utf8",
 			env: makeEnv(),

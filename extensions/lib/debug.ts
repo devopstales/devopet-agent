@@ -1,5 +1,5 @@
 /**
- * Shared debug logging for Omegon extensions.
+ * Shared debug logging for devopet extensions.
  *
  * Output goes to a log file (~/.pi/agent/omegon-debug.log) so it doesn't
  * corrupt the TUI. Tail the file in a separate terminal to watch live:
@@ -47,7 +47,7 @@ function isEnabled(scope: string): boolean {
 export const DEBUG_LOG_PATH = LOG_PATH;
 
 /**
- * Log a debug message to the Omegon debug log file.
+ * Log a debug message to the devopet debug log file.
  *
  * @param scope - Extension name (e.g. "dashboard", "openspec", "cleave")
  * @param tag - Sub-tag for the message (e.g. "render", "emitState", "session_start")

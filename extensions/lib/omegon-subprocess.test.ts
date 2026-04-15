@@ -8,14 +8,14 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { resolveOmegonSubprocess, resolveNativeAgent, _clearNativeAgentCache } from "./omegon-subprocess.ts";
+import { resolvedevopetSubprocess, resolveNativeAgent, _clearNativeAgentCache } from "./omegon-subprocess.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 
-describe("resolveOmegonSubprocess", () => {
+describe("resolvedevopetSubprocess", () => {
 	it("resolves to node + bin/omegon-pi.mjs", () => {
-		const spec = resolveOmegonSubprocess();
+		const spec = resolvedevopetSubprocess();
 		assert.ok(spec.command, "command should be set");
 		assert.ok(spec.omegonEntry.endsWith("bin/omegon-pi.mjs"), `expected omegon-pi.mjs, got: ${spec.omegonEntry}`);
 		assert.ok(spec.argvPrefix.length > 0, "argvPrefix should have at least one entry");

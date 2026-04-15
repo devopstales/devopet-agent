@@ -1,5 +1,5 @@
 /**
- * splash — Omegon branded startup splash with glitch-convergence logo animation.
+ * splash — Devopet branded startup splash with glitch-convergence logo animation.
  *
  * Replaces the default keybinding-hint header with an animated ASCII logo
  * that resolves from CRT noise, plus a loading checklist that tracks
@@ -16,9 +16,7 @@ import {
   LOGO_LINES,
   WORDMARK_LINES,
   LINE_WIDTH,
-  COMPACT_LOGO_LINES,
-  COMPACT_LINE_WIDTH,
-  COMPACT_MARK_ROWS,
+  MARK_ROWS,
   FRAME_INTERVAL_MS,
   TOTAL_FRAMES,
   HOLD_FRAMES,
@@ -36,7 +34,7 @@ import {
 // ---------------------------------------------------------------------------
 // Shared state — other extensions write here, splash reads during render
 // ---------------------------------------------------------------------------
-const SPLASH_KEY = Symbol.for("omegon:splash");
+const SPLASH_KEY = Symbol.for("devopet:splash");
 
 export interface SplashItem {
   label: string;
@@ -294,7 +292,7 @@ class BrandedHeader implements Component {
     if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
 
     const lines: string[] = [];
-    const logo = `${BOLD}${PRIMARY}omegon${RESET} ${DIM}v${this.version}${RESET}`;
+    const logo = `${BOLD}${PRIMARY}devopet${RESET} ${DIM}v${this.version}${RESET}`;
     const help = `${DIM}/ commands  ${PRIMARY}esc${RESET}${DIM} interrupt  ${PRIMARY}ctrl+c${RESET}${DIM} clear/exit${RESET}`;
     lines.push("");
     lines.push(truncateToWidth(` ${logo}   ${help}`, width));
@@ -426,7 +424,7 @@ export default function splashExtension(pi: ExtensionAPI): void {
 
   // Easter egg: /splash replays the animation fullscreen
   pi.registerCommand("splash", {
-    description: "Replay the Omegon splash animation",
+    description: "Replay the Devopet splash animation",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) return;
       const termWidth = process.stdout.columns ?? 80;
@@ -437,15 +435,10 @@ export default function splashExtension(pi: ExtensionAPI): void {
       let markRows: number;
       let logoWidth: number;
       const canFitFull = termWidth >= LINE_WIDTH + 4 && termRows >= LOGO_LINES.length + 4;
-      const canFitCompact = termWidth >= COMPACT_LINE_WIDTH + 4 && termRows >= COMPACT_LOGO_LINES.length + 4;
       if (canFitFull) {
         artLines = LOGO_LINES;
         markRows = 31;
         logoWidth = LINE_WIDTH;
-      } else if (canFitCompact) {
-        artLines = COMPACT_LOGO_LINES;
-        markRows = COMPACT_MARK_ROWS;
-        logoWidth = COMPACT_LINE_WIDTH;
       } else {
         artLines = WORDMARK_LINES;
         markRows = 0;
@@ -485,11 +478,9 @@ export default function splashExtension(pi: ExtensionAPI): void {
 
     // Four tiers based on terminal size:
     //   Full (sigil + wordmark): needs ~46 rows and LINE_WIDTH+4 cols (~84 cols)
-    //   Compact (smaller sigil + wordmark): needs ~34 rows and COMPACT_LINE_WIDTH+4 cols (~58 cols)
     //   Wordmark only: needs ~14 rows and LINE_WIDTH+4 cols
     //   Minimal (no animation): everything else
     const canFitFull = termWidth >= LINE_WIDTH + 4 && termRows >= LOGO_LINES.length + 6;
-    const canFitCompact = termWidth >= COMPACT_LINE_WIDTH + 4 && termRows >= COMPACT_LOGO_LINES.length + 6;
     const canFitWordmark = termWidth >= LINE_WIDTH + 4 && termRows >= WORDMARK_LINES.length + 6;
 
     // -----------------------------------------------------------------------
@@ -530,7 +521,7 @@ export default function splashExtension(pi: ExtensionAPI): void {
 
     let unsubInput: (() => void) | null = null;
 
-    if (!canFitCompact && !canFitWordmark) {
+    if (!canFitWordmark) {
       // Too small for any animation — minimal branded header, no splash gate
       state.active = false;
       ctx.ui.notify = originalNotify;
@@ -543,10 +534,6 @@ export default function splashExtension(pi: ExtensionAPI): void {
         artLines = LOGO_LINES;
         markRows = 31; // MARK_ROWS
         logoWidth = LINE_WIDTH;
-      } else if (canFitCompact) {
-        artLines = COMPACT_LOGO_LINES;
-        markRows = COMPACT_MARK_ROWS;
-        logoWidth = COMPACT_LINE_WIDTH;
       } else {
         artLines = WORDMARK_LINES;
         markRows = 0; // all wordmark

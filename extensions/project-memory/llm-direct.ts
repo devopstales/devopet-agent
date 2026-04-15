@@ -1,7 +1,7 @@
 /**
  * Direct HTTP LLM chat — zero subprocess overhead.
  *
- * Replaces spawnExtraction() which launched a full Omegon runtime just to
+ * Replaces spawnExtraction() which launched a full devopet runtime just to
  * make a single chat completion. Supports Anthropic, OpenAI, and Ollama
  * APIs directly via fetch().
  *

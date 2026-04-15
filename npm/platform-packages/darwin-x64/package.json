@@ -1,7 +1,7 @@
 {
   "name": "@styrene-lab/omegon-darwin-x64",
   "version": "0.10.7",
-  "description": "Omegon native agent binary for darwin x64",
+  "description": "devopet native agent binary for darwin x64",
   "license": "MIT",
   "repository": {
     "type": "git",

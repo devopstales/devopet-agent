@@ -428,7 +428,7 @@ export function buildCleaveItems(
 
 // ── System / Config tab ─────────────────────────────────────────
 
-/** Omegon env vars surfaced in the System tab */
+/** devopet env vars surfaced in the System tab */
 const PI_ENV_VARS: Array<{ key: string; description: string }> = [
   { key: "PI_CHILD",               description: "Non-empty when running as cleave child" },
   { key: "PI_OFFLINE",             description: "Force offline/local-only mode" },

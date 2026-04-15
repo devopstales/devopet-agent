@@ -145,7 +145,7 @@ export const PROFILES: Profile[] = [
   {
     id: "pi-dev",
     label: "Pi Development",
-    description: "All tools enabled — for working on Omegon itself",
+    description: "All tools enabled — for working on devopet itself",
     tools: ["*"],
     detect: (cwd) => {
       const piExts = readJsonField(cwd, "package.json", "pi") as { extensions?: string[] } | undefined;

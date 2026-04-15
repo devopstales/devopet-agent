@@ -17,7 +17,7 @@ export interface Dep {
 	id: string;
 	/** Human-readable name */
 	name: string;
-	/** What it does in Omegon context */
+	/** What it does in devopet context */
 	purpose: string;
 	/** Which extensions use it */
 	usedBy: string[];
@@ -50,7 +50,7 @@ export interface InstallOption {
  * Ensure well-known tool paths are on PATH before probing.
  *
  * Tools installed by Nix, Cargo, etc. land in directories that may not be
- * in the inherited PATH (e.g. Omegon launched from a shell that predates
+ * in the inherited PATH (e.g. devopet launched from a shell that predates
  * the install). We patch once at module load so every hasCmd() call sees them.
  */
 function ensureToolPaths(): void {
@@ -406,7 +406,7 @@ export function formatReport(statuses: DepStatus[]): string {
 		optional: "Optional (niche / platform-specific)",
 	};
 
-	const lines: string[] = ["# Omegon Dependencies\n"];
+	const lines: string[] = ["# devopet Dependencies\n"];
 
 	for (const tier of tiers) {
 		const group = statuses.filter((s) => s.dep.tier === tier);

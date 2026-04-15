@@ -1,5 +1,5 @@
 /**
- * Shared provider-aware model resolver for Omegon.
+ * Shared provider-aware model resolver for devopet.
  *
  * Keeps canonical compatibility tiers (local|retribution|victory|gloriana) stable while
  * also supporting public operator capability roles

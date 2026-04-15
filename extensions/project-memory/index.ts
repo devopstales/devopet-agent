@@ -617,7 +617,7 @@ Append-only record of development sessions. Read recent entries for context.
       }
     } catch (err: any) {
       const hint = /DLOPEN|NODE_MODULE_VERSION|compiled against/.test(err.message)
-        ? "\nFix: run `npm rebuild better-sqlite3` in the Omegon directory, then restart."
+        ? "\nFix: run `npm rebuild better-sqlite3` in the devopet directory, then restart."
         : "";
       ctx.ui.notify(
         `[project-memory] Failed to open project database: ${err.message}${hint}`,
@@ -632,7 +632,7 @@ Append-only record of development sessions. Read recent entries for context.
       globalStore = new FactStore(globalMemoryDir, { decay: GLOBAL_DECAY, dbName: "global.db" });
     } catch (err: any) {
       const hint = /DLOPEN|NODE_MODULE_VERSION|compiled against/.test(err.message)
-        ? "\nFix: run `npm rebuild better-sqlite3` in the Omegon directory, then restart."
+        ? "\nFix: run `npm rebuild better-sqlite3` in the devopet directory, then restart."
         : "";
       ctx.ui.notify(
         `[project-memory] Failed to open global database: ${err.message}${hint}`,

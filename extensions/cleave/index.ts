@@ -1454,7 +1454,7 @@ async function executeAssessDesign(
 
 	// Bridged / subprocess mode
 	// Prefer an in-process deterministic fallback so design assessment does not depend
-	// on a nested Omegon subprocess successfully loading a second extension graph.
+	// on a nested devopet subprocess successfully loading a second extension graph.
 	const tree = scanDesignDocs(path.join(cwd, "docs"));
 	const node = tree.nodes.get(nodeId);
 	if (!node) {
