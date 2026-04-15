@@ -3,6 +3,7 @@
 An opinionated distribution of [pi](https://github.com/badlogic/pi), the coding agent by [Mario Zechner](https://github.com/badlogic). devopet-agent bundles the pi core with omegon-pi extensions and it's own for persistent project memory, spec-driven development, local LLM inference, image generation, web search, parallel task decomposition, a live dashboard, and general quality-of-life tooling.
 
 > **Relationship to omegon-pi:** devopet-agent is a fork of omegon-pi. It installs pi as an npm dependency and layers extensions on top. All credit for the omegon-pi coding agent goes to the omegon-pi contributors. If you want standalone omegon-pi without devopet-agent's extensions, install `omegon-pi` directly.
+
 > **Relationship to pi:** omegon-pi is not a fork of pi. It installs pi as an npm dependency and layers extensions on top. All credit for the pi coding agent goes to Mario Zechner and the pi contributors. If you want standalone pi without omegon-pi's extensions, install `@mariozechner/pi-coding-agent` directly.
 
 
