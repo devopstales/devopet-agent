@@ -1,9 +1,9 @@
 /**
  * Shared debug logging for devopet extensions.
  *
- * Output goes to a log file (~/.pi/agent/omegon-debug.log) so it doesn't
+ * Output goes to a log file (~/.pi/agent/devopet-debug.log) so it doesn't
  * corrupt the TUI. Tail the file in a separate terminal to watch live:
- *   tail -f ~/.pi/agent/omegon-debug.log
+ *   tail -f ~/.pi/agent/devopet-debug.log
  *
  * Controlled by PI_DEBUG environment variable:
  *   PI_DEBUG=1           — all extensions
@@ -24,7 +24,7 @@ const debugScopes = new Set(
 );
 
 const LOG_DIR = join(homedir(), ".pi", "agent");
-const LOG_PATH = join(LOG_DIR, "omegon-debug.log");
+const LOG_PATH = join(LOG_DIR, "devopet-debug.log");
 let dirEnsured = false;
 
 function ensureDir(): void {

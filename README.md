@@ -15,7 +15,7 @@ npm install -g devopet-agent
 
 Requires **Node.js 20+**.
 
-This installs the `omegon-pi` command globally. A `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi takes over the lifecycle boundary (startup, update, restart). To switch back to standalone pi:
+This installs the `devopet-agent` command globally. A `pi` alias remains available for compatibility. If a standalone pi package is already installed, omegon-pi takes over the lifecycle boundary (startup, update, restart). To switch back to standalone pi:
 
 ```bash
 npm uninstall -g devopet-agent
@@ -43,7 +43,9 @@ devopet-agent depends on upstream `@mariozechner/pi-coding-agent` from npm. To p
 
 ![Architecture](docs/img/architecture.png)
 
-devopet-agent extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates**, loaded automatically on session start.
+devopet-agent extends `omegon-pi` with ...
+
+omegon-pi extends `@mariozechner/pi-coding-agent` with **21 extensions**, **12 skills**, and **4 prompt templates**, loaded automatically on session start.
 
 ### Spec-driven development
 

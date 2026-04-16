@@ -3,7 +3,7 @@
   "version": "0.15.0",
   "description": "devopet — an opinionated distribution of pi (by Mario Zechner) with extensions for lifecycle management, memory, orchestration, and visualization",
   "bin": {
-    "devopet-agent": "bin/omegon-pi.mjs",
+    "devopet": "bin/devopet-agent.mjs",
     "pi": "bin/pi.mjs"
   },
   "type": "module",
@@ -31,12 +31,12 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/styrene-lab/devopet-agent.git"
+    "url": "https://github.com/devopstales/devopet-agent.git"
   },
   "bugs": {
-    "url": "https://github.com/styrene-lab/devopet/issues"
+    "url": "https://github.com/devopstales/devopet/issues"
   },
-  "homepage": "https://github.com/styrene-lab/devopet#readme",
+  "homepage": "https://github.com/devopstales/devopet#readme",
   "optionalDependencies": {
     "@mariozechner/clipboard": "0.3.2"
   },

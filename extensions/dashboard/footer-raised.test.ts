@@ -749,14 +749,14 @@ describe("buildBranchTreeLines", () => {
   const theme = makeTheme() as any;
 
   it("zero branches returns just repoName", () => {
-    const lines = buildBranchTreeLines({ repoName: "omegon", currentBranch: null, allBranches: [] }, theme);
+    const lines = buildBranchTreeLines({ repoName: "devopet", currentBranch: null, allBranches: [] }, theme);
     assert.equal(lines.length, 1);
-    assert.ok(lines[0]!.includes("omegon"));
+    assert.ok(lines[0]!.includes("devopet"));
     assert.ok(!lines[0]!.includes("─"), "should have no connectors");
   });
 
   it("single branch uses a single-branch connector", () => {
-    const lines = buildBranchTreeLines({ repoName: "omegon", currentBranch: "main", allBranches: ["main"] }, theme);
+    const lines = buildBranchTreeLines({ repoName: "devopet", currentBranch: "main", allBranches: ["main"] }, theme);
     assert.equal(lines.length, 1);
     assert.ok(lines[0]!.includes("main"), lines[0]);
     assert.ok(lines[0]!.includes("---") || lines[0]!.includes("───"), lines[0]);
@@ -765,7 +765,7 @@ describe("buildBranchTreeLines", () => {
 
   it("two branches use a fork on first line and a last-branch connector on second", () => {
     const lines = buildBranchTreeLines({
-      repoName: "omegon",
+      repoName: "devopet",
       currentBranch: "main",
       allBranches: ["main", "feature/foo"],
     }, theme);
@@ -777,7 +777,7 @@ describe("buildBranchTreeLines", () => {
 
   it("three branches use fork, middle, and last connectors", () => {
     const lines = buildBranchTreeLines({
-      repoName: "omegon",
+      repoName: "devopet",
       currentBranch: "main",
       allBranches: ["main", "feature/foo", "feature/bar"],
     }, theme);
@@ -789,7 +789,7 @@ describe("buildBranchTreeLines", () => {
 
   it("indent on continuation lines matches the active renderer mode", () => {
     const vw = visibleWidth;
-    const repoName = "omegon";
+    const repoName = "devopet";
     const lines = buildBranchTreeLines({
       repoName,
       currentBranch: "main",
@@ -803,7 +803,7 @@ describe("buildBranchTreeLines", () => {
 
   it("annotation appears for a branch matching a design node's branches[]", () => {
     const lines = buildBranchTreeLines({
-      repoName: "omegon",
+      repoName: "devopet",
       currentBranch: "main",
       allBranches: ["main", "feature/my-work"],
       designNodes: [{ branches: ["feature/my-work"], title: "My Work Node" }],
@@ -816,7 +816,7 @@ describe("buildBranchTreeLines", () => {
 
   it("current branch is placed first regardless of sort order", () => {
     const lines = buildBranchTreeLines({
-      repoName: "omegon",
+      repoName: "devopet",
       currentBranch: "feature/current",
       allBranches: ["main", "feature/current", "feature/other"],
     }, theme);

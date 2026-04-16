@@ -4,7 +4,7 @@
  * Uses Symbol.for to share state across extension boundaries without imports.
  */
 
-const SPLASH_KEY = Symbol.for("omegon:splash");
+const SPLASH_KEY = Symbol.for("devopet:splash");
 
 interface SplashItem {
   label: string;

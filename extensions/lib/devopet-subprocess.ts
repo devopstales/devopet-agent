@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 export interface devopetSubprocessSpec {
   command: string;
   argvPrefix: string[];
-  omegonEntry: string;
+  devopetEntry: string;
 }
 
 let cached: devopetSubprocessSpec | null = null;
@@ -15,18 +15,18 @@ let cached: devopetSubprocessSpec | null = null;
 /**
  * Resolve the canonical devopet-owned subprocess entrypoint without relying on PATH.
  *
- * Internal helpers should spawn `process.execPath` with `bin/omegon-pi.mjs` explicitly,
- * rather than assuming a `pi` or `omegon` binary on PATH points back to this install.
+ * Internal helpers should spawn `process.execPath` with `bin/devopet-agent.mjs` explicitly,
+ * rather than assuming a `pi` or `devopet` binary on PATH points back to this install.
  */
 export function resolvedevopetSubprocess(): devopetSubprocessSpec {
   if (cached) return cached;
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const omegonEntry = join(here, "..", "..", "bin", "omegon-pi.mjs");
+  const devopetEntry = join(here, "..", "..", "bin", "devopet-agent.mjs");
   cached = {
     command: process.execPath,
-    argvPrefix: [omegonEntry],
-    omegonEntry,
+    argvPrefix: [devopetEntry],
+    devopetEntry,
   };
   return cached;
 }
@@ -42,7 +42,7 @@ export function resolvedevopetSubprocess(): devopetSubprocessSpec {
  * (read, write, edit, bash).
  */
 export interface NativeAgentSpec {
-  /** Path to the omegon binary */
+  /** Path to the devopet binary */
   binaryPath: string;
   /** Path to the LLM bridge script (passed via --bridge when native providers unavailable) */
   bridgePath: string;
@@ -56,14 +56,14 @@ let nativeCachedAt = 0;
 const NATIVE_CACHE_TTL_MS = 30_000;
 
 /**
- * Resolve the native omegon binary if available.
+ * Resolve the native devopet binary if available.
  *
  * Search order:
  * 1. OMEGON_AGENT_BINARY env var (explicit override for CI/testing)
- * 2. core/target/release/omegon (local development build)
- * 3. npm platform package (@styrene-lab/omegon-{platform})
- * 4. PATH lookup — find `omegon` on PATH if it's a native binary (not the JS shim)
- * 5. Legacy: core/target/release/omegon-agent or node_modules/.omegon/omegon-agent
+ * 2. core/target/release/devopet (local development build)
+ * 3. npm platform package (@styrene-lab/devopet-{platform})
+ * 4. PATH lookup — find `devopet` on PATH if it's a native binary (not the JS shim)
+ * 5. Legacy: core/target/release/devopet-agent or node_modules/.devopet/devopet-agent
  *
  * Returns null if no binary is found — callers must fall back to TS subprocess.
  * Result is cached for 30 s — long enough to avoid redundant stat() within a single
@@ -95,28 +95,28 @@ export function resolveNativeAgent(): NativeAgentSpec | null {
     return found(envPath);
   }
 
-  // 2. Local development build — try "omegon" first, then legacy "omegon-agent"
-  for (const name of ["omegon", "omegon-agent"]) {
+  // 2. Local development build — try "devopet" first, then legacy "devopet-agent"
+  for (const name of ["devopet", "devopet-agent"]) {
     const devBinary = join(repoRoot, "core", "target", "release", name);
     if (existsSync(devBinary)) {
       return found(devBinary);
     }
   }
 
-  // 3. npm platform package (@styrene-lab/omegon-{platform})
+  // 3. npm platform package (@styrene-lab/devopet-{platform})
   const platformPkg = resolvePlatformPackageBinary();
   if (platformPkg && existsSync(platformPkg)) {
     return found(platformPkg);
   }
 
-  // 4. PATH lookup — find `omegon` on PATH if it's a native binary
-  const pathBinary = resolveFromPath("omegon");
+  // 4. PATH lookup — find `devopet` on PATH if it's a native binary
+  const pathBinary = resolveFromPath("devopet");
   if (pathBinary) {
     return found(pathBinary);
   }
 
   // 5. Legacy npm install location
-  const npmBinary = join(repoRoot, "node_modules", ".omegon", "omegon-agent");
+  const npmBinary = join(repoRoot, "node_modules", ".devopet", "devopet-agent");
   if (existsSync(npmBinary)) {
     return found(npmBinary);
   }
@@ -126,18 +126,18 @@ export function resolveNativeAgent(): NativeAgentSpec | null {
 }
 
 /**
- * Resolve the omegon binary from the platform-specific npm package.
+ * Resolve the devopet binary from the platform-specific npm package.
  *
- * Maps `process.platform` + `process.arch` to `@styrene-lab/omegon-{platform}`
- * and finds the binary via createRequire resolution. Tries `omegon` first,
- * falls back to legacy `omegon-agent` name.
+ * Maps `process.platform` + `process.arch` to `@styrene-lab/devopet-{platform}`
+ * and finds the binary via createRequire resolution. Tries `devopet` first,
+ * falls back to legacy `devopet-agent` name.
  */
 function resolvePlatformPackageBinary(): string | null {
   const platformMap: Record<string, string> = {
-    "darwin-arm64": "@styrene-lab/omegon-darwin-arm64",
-    "darwin-x64": "@styrene-lab/omegon-darwin-x64",
-    "linux-x64": "@styrene-lab/omegon-linux-x64",
-    "linux-arm64": "@styrene-lab/omegon-linux-arm64",
+    "darwin-arm64": "@styrene-lab/devopet-darwin-arm64",
+    "darwin-x64": "@styrene-lab/devopet-darwin-x64",
+    "linux-x64": "@styrene-lab/devopet-linux-x64",
+    "linux-arm64": "@styrene-lab/devopet-linux-arm64",
   };
 
   const key = `${process.platform}-${process.arch}`;
@@ -150,8 +150,8 @@ function resolvePlatformPackageBinary(): string | null {
     const req = createRequire(join(repoRoot, "package.json"));
     const pkgJson = req.resolve(`${pkg}/package.json`);
     const pkgDir = dirname(pkgJson);
-    // Try "omegon" first, then legacy "omegon-agent"
-    for (const name of ["omegon", "omegon-agent"]) {
+    // Try "devopet" first, then legacy "devopet-agent"
+    for (const name of ["devopet", "devopet-agent"]) {
       const binary = join(pkgDir, name);
       if (existsSync(binary)) return binary;
     }
@@ -162,7 +162,7 @@ function resolvePlatformPackageBinary(): string | null {
 }
 
 /**
- * Find `omegon` on PATH and verify it's a native binary (not a JS shim).
+ * Find `devopet` on PATH and verify it's a native binary (not a JS shim).
  * Returns the absolute path if found and native, null otherwise.
  */
 function resolveFromPath(name: string): string | null {

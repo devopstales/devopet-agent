@@ -135,52 +135,52 @@ describe("bootstrap operator profile helpers", () => {
 	});
 });
 
-describe("bootstrap omegon binary verification helpers", () => {
+describe("bootstrap devopet binary verification helpers", () => {
 	const resolution: PiResolutionInfo = {
-		omegonRoot: "/opt/homebrew/lib/node_modules/omegon-pi",
-		cli: "/opt/homebrew/lib/node_modules/omegon-pi/node_modules/@mariozechner/pi-coding-agent/dist/cli.js",
+		devopetRoot: "/opt/homebrew/lib/node_modules/devopet-agent",
+		cli: "/opt/homebrew/lib/node_modules/devopet-agent/node_modules/@mariozechner/pi-coding-agent/dist/cli.js",
 		resolutionMode: "npm",
 		agentDir: "/Users/test/.pi/agent",
 		stateDir: "/Users/test/.pi/agent",
 	};
 
-	it("accepts an active omegon-pi binary owned by omegon", () => {
+	it("accepts an active devopet-agent binary owned by devopet", () => {
 		const result = validatedevopetBinaryVerification(
-			"omegon-pi",
-			"/opt/homebrew/bin/omegon-pi",
-			"/opt/homebrew/lib/node_modules/omegon-pi/bin/omegon-pi.mjs",
+			"devopet-agent",
+			"/opt/homebrew/bin/devopet-agent",
+			"/opt/homebrew/lib/node_modules/devopet-agent/bin/devopet-agent.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, true);
 		assert.equal(result.resolution?.stateDir, "/Users/test/.pi/agent");
 	});
 
-	it("rejects binaries whose resolved omegon root is not omegon", () => {
+	it("rejects binaries whose resolved devopet root is not devopet", () => {
 		const result = validatedevopetBinaryVerification(
-			"omegon-pi",
-			"/usr/local/bin/omegon-pi",
-			"/usr/local/lib/node_modules/other-tool/bin/omegon-pi.mjs",
-			{ ...resolution, omegonRoot: "/usr/local/lib/node_modules/other-tool" },
+			"devopet-agent",
+			"/usr/local/bin/devopet-agent",
+			"/usr/local/lib/node_modules/other-tool/bin/devopet-agent.mjs",
+			{ ...resolution, devopetRoot: "/usr/local/lib/node_modules/other-tool" },
 		);
 		assert.equal(result.ok, false);
 		assert.match(result.reason ?? "", /non-devopet root/i);
 	});
 
-	it("accepts a legacy pi alias when it re-enters the omegon-owned shim", () => {
+	it("accepts a legacy pi alias when it re-enters the devopet-owned shim", () => {
 		const result = validatedevopetBinaryVerification(
 			"pi",
 			"/opt/homebrew/bin/pi",
-			"/opt/homebrew/lib/node_modules/omegon-pi/bin/pi.mjs",
+			"/opt/homebrew/lib/node_modules/devopet-agent/bin/pi.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, true);
 	});
 
-	it("rejects binaries whose realpath does not point at omegon", () => {
+	it("rejects binaries whose realpath does not point at devopet", () => {
 		const result = validatedevopetBinaryVerification(
-			"omegon-pi",
-			"/usr/local/bin/omegon-pi",
-			"/usr/local/lib/node_modules/some-other-tool/bin/omegon-pi.mjs",
+			"devopet-agent",
+			"/usr/local/bin/devopet-agent",
+			"/usr/local/lib/node_modules/some-other-tool/bin/devopet-agent.mjs",
 			resolution,
 		);
 		assert.equal(result.ok, false);

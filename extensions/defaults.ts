@@ -16,8 +16,8 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 /**
  * Resolve the agent directory the same way pi's getAgentDir() does.
- * In standalone mode (PI_CODING_AGENT_DIR set to omegon root) this points
- * directly at the omegon repo, so theme/AGENTS.md deployment becomes
+ * In standalone mode (PI_CODING_AGENT_DIR set to devopet root) this points
+ * directly at the devopet repo, so theme/AGENTS.md deployment becomes
  * identity copies and is skipped by the content-equality guards.
  */
 const home = process.env.HOME || process.env.USERPROFILE || "~";
@@ -39,7 +39,7 @@ const THEMES_DIR = path.join(AGENT_DIR, "themes");
 const BUNDLED_THEMES = ["alpharius.json"] as const;
 
 /** Marker embedded in the deployed AGENTS.md to identify devopet ownership */
-const PIKIT_MARKER = "<!-- managed by omegon -->";
+const PIKIT_MARKER = "<!-- managed by devopet -->";
 const PIKIT_MARKER_LEGACY = "<!-- managed by pi-kit -->"; // legacy — still treated as owned
 
 /** Hash file tracks the last content we deployed, so we detect user edits */
@@ -241,7 +241,7 @@ export default function (pi: ExtensionAPI) {
               // File was modified externally — warn, don't overwrite
               if (ctx.hasUI) {
                 ctx.ui.notify(
-                  "devopet: ~/.pi/agent/AGENTS.md has local edits. Remove the omegon marker to keep them, or delete the file to re-deploy.",
+                  "devopet: ~/.pi/agent/AGENTS.md has local edits. Remove the devopet marker to keep them, or delete the file to re-deploy.",
                   "warning",
                 );
               }

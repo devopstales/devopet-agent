@@ -1,5 +1,5 @@
 /**
- * Tests for omegon-subprocess — native agent binary resolution.
+ * Tests for devopet-subprocess — native agent binary resolution.
  */
 
 import { describe, it, beforeEach, afterEach } from "node:test";
@@ -8,16 +8,16 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
-import { resolvedevopetSubprocess, resolveNativeAgent, _clearNativeAgentCache } from "./omegon-subprocess.ts";
+import { resolvedevopetSubprocess, resolveNativeAgent, _clearNativeAgentCache } from "./devopet-subprocess.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 
 describe("resolvedevopetSubprocess", () => {
-	it("resolves to node + bin/omegon-pi.mjs", () => {
+	it("resolves to node + bin/devopet-agent.mjs", () => {
 		const spec = resolvedevopetSubprocess();
 		assert.ok(spec.command, "command should be set");
-		assert.ok(spec.omegonEntry.endsWith("bin/omegon-pi.mjs"), `expected omegon-pi.mjs, got: ${spec.omegonEntry}`);
+		assert.ok(spec.devopetEntry.endsWith("bin/devopet-agent.mjs"), `expected devopet-agent.mjs, got: ${spec.devopetEntry}`);
 		assert.ok(spec.argvPrefix.length > 0, "argvPrefix should have at least one entry");
 	});
 });
@@ -45,8 +45,8 @@ describe("resolveNativeAgent", () => {
 	});
 
 	it("respects OMEGON_AGENT_BINARY env var", () => {
-		// Try both binary names (omegon and omegon-agent)
-		for (const name of ["omegon", "omegon-agent"]) {
+		// Try both binary names (devopet and devopet-agent)
+		for (const name of ["devopet", "devopet-agent"]) {
 			const devBinary = join(repoRoot, "core", "target", "release", name);
 			if (existsSync(devBinary)) {
 				process.env.OMEGON_AGENT_BINARY = devBinary;
@@ -62,8 +62,8 @@ describe("resolveNativeAgent", () => {
 		// No binary built — skip
 	});
 
-	it("finds local development build with omegon name", () => {
-		const devBinary = join(repoRoot, "core", "target", "release", "omegon");
+	it("finds local development build with devopet name", () => {
+		const devBinary = join(repoRoot, "core", "target", "release", "devopet");
 		if (!existsSync(devBinary)) return;
 
 		const result = resolveNativeAgent();
@@ -71,9 +71,9 @@ describe("resolveNativeAgent", () => {
 		assert.equal(result!.binaryPath, devBinary);
 	});
 
-	it("falls back to omegon-agent name", () => {
-		const newName = join(repoRoot, "core", "target", "release", "omegon");
-		const legacyName = join(repoRoot, "core", "target", "release", "omegon-agent");
+	it("falls back to devopet-agent name", () => {
+		const newName = join(repoRoot, "core", "target", "release", "devopet");
+		const legacyName = join(repoRoot, "core", "target", "release", "devopet-agent");
 		// If only legacy name exists, it should still be found
 		if (!existsSync(legacyName) || existsSync(newName)) return;
 

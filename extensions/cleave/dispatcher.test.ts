@@ -840,7 +840,7 @@ describe("timeout constants", () => {
 
 // ─── Native agent resolution ────────────────────────────────────────────────
 
-import { resolveNativeAgent, _clearNativeAgentCache, type NativeAgentSpec } from "../lib/omegon-subprocess.ts";
+import { resolveNativeAgent, _clearNativeAgentCache, type NativeAgentSpec } from "../lib/devopet-subprocess.ts";
 import { NATIVE_TIER_DEFAULTS } from "./dispatcher.ts";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";

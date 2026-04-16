@@ -8,25 +8,35 @@
  * Resolution: node_modules/@mariozechner/pi-coding-agent (upstream pi)
  */
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
-const omegonRoot = dirname(dirname(__filename));
+const devopetRoot = dirname(dirname(__filename));
 const defaultStateDir = join(homedir(), ".pi", "agent");
 const stateDir = process.env.PI_CODING_AGENT_DIR || defaultStateDir;
 const usingExplicitStateOverride = Boolean(process.env.PI_CODING_AGENT_DIR);
 
-const cli = join(omegonRoot, "node_modules/@mariozechner/pi-coding-agent/dist/cli.js");
+const cli = join(devopetRoot, "node_modules/@mariozechner/pi-coding-agent/dist/cli.js");
 const resolutionMode = "npm";
+
+/** Basename of how this process was invoked (npm shim, symlink, or script path). */
+function cliExecutableName() {
+  const arg = process.argv[1];
+  if (!arg) return "devopet";
+  let name = basename(arg);
+  if (name.endsWith(".mjs")) name = name.slice(0, -".mjs".length);
+  else if (name.endsWith(".cmd")) name = name.slice(0, -".cmd".length);
+  return name || "devopet";
+}
 
 function migrateLegacyStatePath(relativePath, kind = "file") {
   if (usingExplicitStateOverride) {
     return;
   }
 
-  const legacyPath = join(omegonRoot, relativePath);
+  const legacyPath = join(devopetRoot, relativePath);
   const targetPath = join(stateDir, relativePath);
   if (!existsSync(legacyPath) || existsSync(targetPath)) {
     return;
@@ -55,24 +65,24 @@ function injectBundledResourceArgs(argv) {
   // but still allow CLI-injected paths (our --extension manifest).
   // Extensions are NOT suppressed — project-local .pi/extensions/ should still work.
   injected.push("--no-skills", "--no-prompt-templates", "--no-themes");
-  pushPair("--extension", omegonRoot);
+  pushPair("--extension", devopetRoot);
   return injected;
 }
 
 if (process.argv.includes("--version") || process.argv.includes("-v")) {
-  const pkg = JSON.parse(readFileSync(join(omegonRoot, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(devopetRoot, "package.json"), "utf8"));
   process.stdout.write(pkg.version + "\n");
   process.exit(0);
 }
 
 if (process.argv.includes("--where")) {
   process.stdout.write(JSON.stringify({
-    omegonRoot,
+    devopetRoot,
     cli,
     resolutionMode,
     agentDir: stateDir,
     stateDir,
-    executable: "devopet-agent",
+    executable: cliExecutableName(),
   }, null, 2) + "\n");
   process.exit(0);
 }
@@ -130,9 +140,9 @@ function purgeSelfReferentialPackages() {
     const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
     if (!Array.isArray(settings.packages)) return;
     const selfPatterns = [
-      /github\.com\/cwilson613\/omegon/i,
+      /github\.com\/cwilson613\/devopet/i,
       /github\.com\/cwilson613\/pi-kit/i,
-      /github\.com\/styrene-lab\/omegon/i,
+      /github\.com\/styrene-lab\/devopet/i,
     ];
     const filtered = settings.packages.filter(
       (pkg) => !selfPatterns.some((re) => re.test(String(pkg))),
@@ -181,11 +191,11 @@ function showPreImportSpinner() {
   process.on("exit", restoreCursor);
 
   process.stdout.write(HIDE_CURSOR);
-  process.stdout.write(`\n  ${PRIMARY}omegon${RST} ${DIM}loading…${RST}`);
+  process.stdout.write(`\n  ${PRIMARY}devopet${RST} ${DIM}loading…${RST}`);
 
   const spinTimer = setInterval(() => {
     const s = spinner[frame % spinner.length];
-    process.stdout.write(`\r  ${PRIMARY}${s} omegon${RST} ${DIM}loading…${RST}`);
+    process.stdout.write(`\r  ${PRIMARY}${s} devopet${RST} ${DIM}loading…${RST}`);
     frame++;
   }, 80);
 

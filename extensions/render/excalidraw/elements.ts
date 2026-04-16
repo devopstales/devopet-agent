@@ -159,7 +159,7 @@ function measureTextApprox(
 }
 
 // ---------------------------------------------------------------------------
-// Semantic palette helpers (omegon addition)
+// Semantic palette helpers (devopet addition)
 // ---------------------------------------------------------------------------
 
 /**

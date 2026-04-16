@@ -27,7 +27,7 @@ import { sendRpcCommand, buildPromptCommand, parseRpcEventStream, mapEventToProg
 import { executeWithReview, type ReviewConfig, type ReviewExecutor, DEFAULT_REVIEW_CONFIG } from "./review.ts";
 import { saveState } from "./workspace.ts";
 import { resolveTier, getDefaultPolicy, getViableModels, type ProviderRoutingPolicy, type RegistryModel } from "../lib/model-routing.ts";
-import { resolvedevopetSubprocess, resolveNativeAgent, type NativeAgentSpec } from "../lib/omegon-subprocess.ts";
+import { resolvedevopetSubprocess, resolveNativeAgent, type NativeAgentSpec } from "../lib/devopet-subprocess.ts";
 import { registerCleaveProc, deregisterCleaveProc, killCleaveProc } from "./subprocess-tracker.ts";
 
 // ─── Large-run threshold ────────────────────────────────────────────────────
@@ -410,8 +410,8 @@ async function spawnChildPipe(
 	localModel?: string,
 	onLine?: (line: string) => void,
 ): Promise<ChildResult> {
-	const omegon = resolvedevopetSubprocess();
-	const args = [...omegon.argvPrefix, "-p", "--no-session"];
+	const devopet = resolvedevopetSubprocess();
+	const args = [...devopet.argvPrefix, "-p", "--no-session"];
 	if (localModel) {
 		args.push("--model", localModel);
 	}
@@ -421,7 +421,7 @@ async function spawnChildPipe(
 		let stderr = "";
 		let killed = false;
 
-		const proc = spawn(omegon.command, args, {
+		const proc = spawn(devopet.command, args, {
 			cwd,
 			stdio: ["pipe", "pipe", "pipe"],
 			detached: true,
@@ -513,7 +513,7 @@ async function spawnChildPipe(
 }
 
 /**
- * Spawn a child using the native omegon-agent binary (pipe mode).
+ * Spawn a child using the native devopet-agent binary (pipe mode).
  *
  * The Rust binary:
  * - Accepts task via --prompt (reads stdin if not provided, but we pass explicitly)
@@ -654,7 +654,7 @@ async function spawnChildNative(
 			resolve({
 				exitCode: 1,
 				stdout: "",
-				stderr: `Failed to spawn omegon-agent: ${err.message}`,
+				stderr: `Failed to spawn devopet-agent: ${err.message}`,
 			});
 		});
 	});
@@ -690,8 +690,8 @@ async function spawnChildRpc(
 	onEvent?: (event: RpcChildEvent) => void,
 	idleTimeoutMs: number = IDLE_TIMEOUT_MS,
 ): Promise<RpcChildResult> {
-	const omegon = resolvedevopetSubprocess();
-	const args = [...omegon.argvPrefix, "--mode", "rpc", "--no-session"];
+	const devopet = resolvedevopetSubprocess();
+	const args = [...devopet.argvPrefix, "--mode", "rpc", "--no-session"];
 	if (localModel) {
 		args.push("--model", localModel);
 	}
@@ -702,8 +702,8 @@ async function spawnChildRpc(
 		const events: RpcChildEvent[] = [];
 		let pipeBroken = false;
 
-		_dlog(`spawnChildRpc: cmd=${omegon.command} cwd=${cwd} signal=${!!signal} signalAborted=${signal?.aborted}`);
-		const proc = spawn(omegon.command, args, {
+		_dlog(`spawnChildRpc: cmd=${devopet.command} cwd=${cwd} signal=${!!signal} signalAborted=${signal?.aborted}`);
+		const proc = spawn(devopet.command, args, {
 			cwd,
 			stdio: ["pipe", "pipe", "pipe"],
 			detached: true,

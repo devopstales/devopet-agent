@@ -25,7 +25,7 @@ const allCleaveProcs = new Set<ChildProcess>();
 // On startup, cleanupOrphanedProcesses() scans for files whose parent PID
 // is dead and kills the orphaned children.
 
-const PID_FILE_PREFIX = "omegon-cleave-";
+const PID_FILE_PREFIX = "devopet-cleave-";
 const PID_FILE_SUFFIX = ".pids";
 
 function pidFilePath(): string {

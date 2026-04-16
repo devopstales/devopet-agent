@@ -1,11 +1,11 @@
 {
-  "name": "@styrene-lab/omegon-darwin-arm64",
-  "version": "0.10.7",
+  "name": "@devopstales/devopet-darwin-arm64",
+  "version": "0.1.0",
   "description": "devopet native agent binary for darwin arm64",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/styrene-lab/omegon"
+    "url": "https://github.com/devopstales/devopet-agent"
   },
   "os": [
     "darwin"
@@ -14,10 +14,10 @@
     "arm64"
   ],
   "bin": {
-    "omegon-agent": "omegon-agent"
+    "devopet-agent": "devopet"
   },
   "files": [
-    "omegon-agent"
+    "devopet"
   ],
   "publishConfig": {
     "access": "public"

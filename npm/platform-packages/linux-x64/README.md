@@ -1,8 +1,8 @@
-# @styrene-lab/omegon-linux-x64
+# @devopstales/devopet-linux-x64
 
 Platform-specific binary for the Omegon agent (linux/x64).
 
-This package is installed automatically as an optional dependency of `omegon`.
+This package is installed automatically as an optional dependency of `devopet`.
 You should not install this package directly.
 
-The binary is built from the [omegon-core](https://github.com/styrene-lab/omegon) Rust crate.
+The binary is built from the [devopet-agent](https://github.com/devopstales/devopet-agent) Rust crate.

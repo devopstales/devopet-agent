@@ -460,7 +460,7 @@ export class FactStore {
 
     // Migration 4→5: full Rust↔TS schema alignment
     //
-    // The Rust omegon-memory crate owns the canonical schema but may produce
+    // The Rust devopet-memory crate owns the canonical schema but may produce
     // DBs missing columns/tables that TS requires. This migration idempotently
     // brings ANY DB (Rust v4, Rust v5, or TS-created) to a state where all
     // TS code paths work. Every ALTER TABLE is wrapped in try/catch because

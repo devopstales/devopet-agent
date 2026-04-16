@@ -1,11 +1,11 @@
 /**
- * Native cleave dispatch — calls the Rust omegon-agent cleave subcommand.
+ * Native cleave dispatch — calls the Rust devopet-agent cleave subcommand.
  */
 
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { resolveNativeAgent } from "../lib/omegon-subprocess.ts";
+import { resolveNativeAgent } from "../lib/devopet-subprocess.ts";
 
 export interface NativeDispatchConfig {
 	planPath: string;
@@ -20,7 +20,7 @@ export interface NativeDispatchConfig {
 }
 
 /**
- * Native progress events emitted by the Rust omegon-agent cleave subcommand.
+ * Native progress events emitted by the Rust devopet-agent cleave subcommand.
  * Discriminated on the `event` field (matches Rust `#[serde(tag = "event")]`).
  */
 export type NativeProgressEvent =
@@ -113,7 +113,7 @@ export async function dispatchViaNative(
 			});
 		} catch (e: any) {
 			log(`spawn threw: ${e.message}`);
-			reject(new Error(`Failed to spawn omegon-agent cleave: ${e.message}`));
+			reject(new Error(`Failed to spawn devopet-agent cleave: ${e.message}`));
 			return;
 		}
 
@@ -185,7 +185,7 @@ export async function dispatchViaNative(
 
 		proc.on("error", (err) => {
 			log(`proc error event: ${err.message}`);
-			reject(new Error(`Failed to spawn omegon-agent cleave: ${err.message}`));
+			reject(new Error(`Failed to spawn devopet-agent cleave: ${err.message}`));
 		});
 
 		proc.on("close", (code, sig) => {

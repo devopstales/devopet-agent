@@ -177,7 +177,7 @@ export const FONT_FAMILIES = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Semantic palette (omegon addition, not from upstream)
+// Semantic palette (devopet addition, not from upstream)
 // ---------------------------------------------------------------------------
 
 export type SemanticPurpose =

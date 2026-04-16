@@ -1601,7 +1601,7 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 	if (process.env.PI_CHILD) return;
 
 	// ── Kill orphaned children from previous sessions ───────────────
-	// If a previous omegon session was killed (SIGKILL, crash, machine
+	// If a previous devopet session was killed (SIGKILL, crash, machine
 	// reboot), its detached children may still be alive. Clean them up
 	// before doing anything else.
 	const orphansKilled = cleanupOrphanedProcesses();
@@ -2596,7 +2596,7 @@ export default function cleaveExtension(pi: ExtensionAPI) {
 			fs.writeFileSync(planPath, params.plan_json, "utf-8");
 
 			// Resolve model for native dispatch
-			const { resolveNativeAgent } = await import("../lib/omegon-subprocess.ts");
+			const { resolveNativeAgent } = await import("../lib/devopet-subprocess.ts");
 			const nativeAgent = resolveNativeAgent();
 			if (!nativeAgent) {
 				throw new Error(

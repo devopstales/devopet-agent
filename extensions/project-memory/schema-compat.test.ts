@@ -1,6 +1,6 @@
 /**
  * Schema compatibility tests — verify TS FactStore can open and operate on
- * databases created by the Rust omegon-memory crate.
+ * databases created by the Rust devopet-memory crate.
  *
  * The Rust schema is the source of truth. It may be a superset of what TS
  * needs, but TS must never fail to open a Rust-created DB. These tests
@@ -20,7 +20,7 @@ import { FactStore } from "./factstore.ts";
 const __here = dirname(fileURLToPath(import.meta.url));
 const CONTRACT_PATH = join(__here, "schema-contract.json");
 
-/** Create a Rust-shaped v4 database — the schema omegon-memory wrote before
+/** Create a Rust-shaped v4 database — the schema devopet-memory wrote before
  *  the v5 alignment fix. Missing: created_session, superseded_at, archived_at,
  *  jj_change_id on facts; session_id, jj_change_id on episodes; episode_facts
  *  and episodes_vec tables. */

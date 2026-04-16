@@ -14,7 +14,7 @@
  *   /update-pi --dry-run — Check for update without installing
  *
  * Guards:
- *   - First-run detection via ~/.pi/agent/omegon-bootstrap-done marker (checks pi-kit-bootstrap-done as legacy fallback)
+ *   - First-run detection via ~/.pi/agent/devopet-bootstrap-done marker (checks pi-kit-bootstrap-done as legacy fallback)
  *   - Re-running /bootstrap is always safe (idempotent checks)
  *   - Never auto-installs anything — always asks or requires explicit command
  */
@@ -40,13 +40,13 @@ import { getDefaultPolicy, type ProviderRoutingPolicy } from "../lib/model-routi
 import { DEPS, checkAll, formatReport, bestInstallCmd, sortByRequires, type DepStatus, type DepTier } from "./deps.ts";
 
 const AGENT_DIR = join(homedir(), ".pi", "agent");
-const MARKER_PATH = join(AGENT_DIR, "omegon-bootstrap-done");
+const MARKER_PATH = join(AGENT_DIR, "devopet-bootstrap-done");
 const MARKER_PATH_LEGACY = join(AGENT_DIR, "pi-kit-bootstrap-done"); // legacy — treat as done if present
 const MARKER_VERSION = "2"; // bump to re-trigger bootstrap after adding operator profile capture
 
 // --- Version Check State (absorbed from version-check.ts) ---
 const REPO_OWNER = "styrene-lab";
-const REPO_NAME = "omegon-pi";
+const REPO_NAME = "devopet-pi";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const FETCH_TIMEOUT_MS = 10_000;
 
@@ -84,7 +84,7 @@ interface CommandContext {
 }
 
 function isFirstRun(): boolean {
-	// Check new marker first, then legacy pi-kit marker (omegon renamed from pi-kit) (migration: existing installs skip re-run)
+	// Check new marker first, then legacy pi-kit marker (devopet renamed from pi-kit) (migration: existing installs skip re-run)
 	if (existsSync(MARKER_PATH)) {
 		try {
 			const version = readFileSync(MARKER_PATH, "utf8").trim();
@@ -455,18 +455,18 @@ export default function (pi: ExtensionAPI) {
 	// --- /update: unified update command ---
 	// Detects dev vs installed mode and runs the appropriate lifecycle:
 	//   Dev mode  (.git exists): pull → submodule sync → build → dependency refresh → relink → verify → restart handoff
-	//   Installed (no .git):     npm install -g omegon@latest → verify → restart handoff
+	//   Installed (no .git):     npm install -g devopet@latest → verify → restart handoff
 	// Replaces the old split update mental model with a singular-package lifecycle.
 	pi.registerCommand("update", {
 		description: "Run the authoritative devopet update lifecycle, then hand off to restart",
 		handler: async (args, ctx) => {
 			const dryRun = args.trim() === "--dry-run";
 			const here = dirname(fileURLToPath(import.meta.url));
-		const omegonRoot = join(here, "..", "..");
-			const isDevMode = existsSync(join(omegonRoot, ".git"));
+		const devopetRoot = join(here, "..", "..");
+			const isDevMode = existsSync(join(devopetRoot, ".git"));
 
 			if (isDevMode) {
-				await updateDevMode(omegonRoot, dryRun, ctx);
+				await updateDevMode(devopetRoot, dryRun, ctx);
 			} else {
 				await updateInstalledMode(dryRun, ctx);
 			}
@@ -506,7 +506,7 @@ export default function (pi: ExtensionAPI) {
 /**
  * Restart devopet by exiting with code 75.
  *
- * The bin/omegon-pi.mjs wrapper runs the CLI in a subprocess loop. When it sees
+ * The bin/devopet-pi.mjs wrapper runs the CLI in a subprocess loop. When it sees
  * exit code 75 (EX_TEMPFAIL), it re-spawns a fresh CLI process. Because the
  * wrapper stays as the foreground process group leader throughout, the new
  * CLI always owns the terminal and can receive input — no detached spawn,
@@ -544,7 +544,7 @@ function clearJitiCache(_ctx?: unknown): number {
 }
 
 export interface PiResolutionInfo {
-	omegonRoot: string;
+	devopetRoot: string;
 	cli: string;
 	resolutionMode: "vendor" | "npm";
 	agentDir: string;
@@ -569,7 +569,7 @@ export function normalizeExecutablePath(executablePath: string): string {
 	}
 }
 
-async function getActiveExecutablePath(executableName = "omegon-pi"): Promise<string> {
+async function getActiveExecutablePath(executableName = "devopet-pi"): Promise<string> {
 	const which = await run("which", [executableName]);
 	return which.code === 0 ? which.stdout.trim() : "";
 }
@@ -580,9 +580,9 @@ export function validatedevopetBinaryVerification(
 	realExecutablePath: string,
 	resolution: PiResolutionInfo,
 ): devopetBinaryVerification {
-	const binaryLooksOwnedBydevopet = /[\\/]omegon(?:-pi)?[\\/]/.test(realExecutablePath) || /[\\/]omegon(?:-pi)?[\\/]bin[\\/](?:omegon-pi|pi)(?:\.mjs)?$/.test(realExecutablePath);
-	if (!/omegon(?:-pi)?(?:[\\/]|$)/.test(resolution.omegonRoot)) {
-		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} resolved to non-devopet root: ${resolution.omegonRoot}` };
+	const binaryLooksOwnedBydevopet = /[\\/]devopet(?:-pi)?[\\/]/.test(realExecutablePath) || /[\\/]devopet(?:-pi)?[\\/]bin[\\/](?:devopet-pi|pi)(?:\.mjs)?$/.test(realExecutablePath);
+	if (!/devopet(?:-pi)?(?:[\\/]|$)/.test(resolution.devopetRoot)) {
+		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} resolved to non-devopet root: ${resolution.devopetRoot}` };
 	}
 	if (!binaryLooksOwnedBydevopet) {
 		return { ok: false, executableName, executablePath, realExecutablePath, resolution, reason: `active ${executableName} symlink target does not appear to point at devopet: ${realExecutablePath}` };
@@ -591,52 +591,52 @@ export function validatedevopetBinaryVerification(
 }
 
 async function inspectActivedevopetBinary(): Promise<devopetBinaryVerification> {
-	const executableName = "omegon-pi";
+	const executableName = "devopet-pi";
 	const executablePath = await getActiveExecutablePath(executableName);
 	if (!executablePath) {
-		return { ok: false, executableName, executablePath: "", realExecutablePath: "", reason: "`omegon-pi` command not found on PATH" };
+		return { ok: false, executableName, executablePath: "", realExecutablePath: "", reason: "`devopet-pi` command not found on PATH" };
 	}
 	const realExecutablePath = normalizeExecutablePath(executablePath);
 	const probe = await run(executablePath, ["--where"]);
 	if (probe.code !== 0) {
-		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active omegon binary did not return devopet resolution metadata" };
+		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active devopet binary did not return devopet resolution metadata" };
 	}
 	try {
 		const resolution = JSON.parse(probe.stdout.trim()) as PiResolutionInfo;
 		return validatedevopetBinaryVerification(executableName, executablePath, realExecutablePath, resolution);
 	} catch {
-		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active omegon returned invalid verification metadata" };
+		return { ok: false, executableName, executablePath, realExecutablePath, reason: "active devopet returned invalid verification metadata" };
 	}
 }
 
 function formatVerification(verification: devopetBinaryVerification): string {
 	if (!verification.ok || !verification.resolution) {
-		return `✗ omegon-pi target verification failed${verification.reason ? `: ${verification.reason}` : ""}`;
+		return `✗ devopet-pi target verification failed${verification.reason ? `: ${verification.reason}` : ""}`;
 	}
 	return [
 		`✓ active ${verification.executableName}: ${verification.executablePath}`,
 		`✓ binary target: ${verification.realExecutablePath}`,
-		`✓ runtime root: ${verification.resolution.omegonRoot}`,
+		`✓ runtime root: ${verification.resolution.devopetRoot}`,
 		`✓ core resolution: ${verification.resolution.resolutionMode} (${verification.resolution.cli})`,
 	].join("\n");
 }
 
 /** Dev mode: git pull → submodule update → build → install deps → relink → verify → restart handoff. */
 async function updateDevMode(
-	omegonRoot: string,
+	devopetRoot: string,
 	dryRun: boolean,
 	ctx: { ui: { notify: (message: string, type?: "error" | "warning" | "info") => void } },
 ): Promise<void> {
 	const steps: string[] = [];
 
-	// ── Step 1: git pull omegon ──────────────────────────────────────
+	// ── Step 1: git pull devopet ──────────────────────────────────────
 	// If HEAD is detached (e.g. after a failed prior update or branch checkout),
 	// reattach to main before pulling — otherwise git pull silently fails and the
 	// rest of the pipeline builds stale code, producing a broken restart.
-	const headRef = await run("git", ["symbolic-ref", "--quiet", "HEAD"], { cwd: omegonRoot });
+	const headRef = await run("git", ["symbolic-ref", "--quiet", "HEAD"], { cwd: devopetRoot });
 	if (headRef.code !== 0) {
 		ctx.ui.notify("▸ Detached HEAD detected — checking out main…", "warning");
-		const checkout = await run("git", ["checkout", "main"], { cwd: omegonRoot });
+		const checkout = await run("git", ["checkout", "main"], { cwd: devopetRoot });
 		if (checkout.code !== 0) {
 			steps.push(`✗ could not checkout main: ${checkout.stderr.trim().split("\n")[0]}`);
 			ctx.ui.notify(`Update aborted (detached HEAD, checkout failed):\n${steps.join("\n")}`, "error");
@@ -645,8 +645,8 @@ async function updateDevMode(
 		steps.push("✓ reattached to main");
 	}
 
-	ctx.ui.notify("▸ Pulling omegon…", "info");
-	const pull = await run("git", ["pull", "--ff-only"], { cwd: omegonRoot });
+	ctx.ui.notify("▸ Pulling devopet…", "info");
+	const pull = await run("git", ["pull", "--ff-only"], { cwd: devopetRoot });
 	if (pull.code !== 0) {
 		// Non-ff merge needed — not fatal, just skip
 		const msg = pull.stderr.includes("fatal")
@@ -656,39 +656,39 @@ async function updateDevMode(
 	} else {
 		const summary = pull.stdout.trim().split("\n").pop() ?? "";
 		const upToDate = pull.stdout.includes("Already up to date");
-		steps.push(upToDate ? "✓ omegon: already up to date" : `✓ omegon: ${summary}`);
+		steps.push(upToDate ? "✓ devopet: already up to date" : `✓ devopet: ${summary}`);
 	}
 
 	// ── Step 2: npm install (pick up any new/updated deps) ──────────
 	if (dryRun) {
 		steps.push("· npm install: skipped (dry run)");
 	} else {
-		ctx.ui.notify("▸ Refreshing omegon dependencies…", "info");
-		const inst = await run("npm", ["install", "--install-links=false"], { cwd: omegonRoot });
+		ctx.ui.notify("▸ Refreshing devopet dependencies…", "info");
+		const inst = await run("npm", ["install", "--install-links=false"], { cwd: devopetRoot });
 		if (inst.code !== 0) {
 			steps.push(`⚠ npm install had issues (non-fatal)`);
 		} else {
-			steps.push("✓ omegon dependencies refreshed");
+			steps.push("✓ devopet dependencies refreshed");
 		}
 	}
 
-	// ── Step 5: relink omegon globally ───────────────────────────────
+	// ── Step 5: relink devopet globally ───────────────────────────────
 	if (dryRun) {
 		steps.push("· npm link --force: skipped (dry run)");
 	} else {
-		ctx.ui.notify("▸ Relinking omegon globally…", "info");
-		const link = await run("npm", ["link", "--force"], { cwd: omegonRoot });
+		ctx.ui.notify("▸ Relinking devopet globally…", "info");
+		const link = await run("npm", ["link", "--force"], { cwd: devopetRoot });
 		if (link.code !== 0) {
 			steps.push(`✗ npm link failed: ${(link.stderr.trim().split("\n").filter((l) => !l.startsWith("npm warn")).pop() ?? "unknown error")}`);
 			ctx.ui.notify(`Update incomplete:\n${steps.join("\n")}`, "warning");
 			return;
 		}
-		steps.push("✓ omegon relinked globally");
+		steps.push("✓ devopet relinked globally");
 	}
 
 	// ── Step 6: verify active binary target ──────────────────────────
 	if (dryRun) {
-		steps.push("· omegon target verification: skipped (dry run)");
+		steps.push("· devopet target verification: skipped (dry run)");
 		ctx.ui.notify(`Dry run:\n${steps.join("\n")}`, "info");
 		return;
 	}
@@ -711,7 +711,7 @@ async function updateDevMode(
 	restartdevopet();
 }
 
-/** Installed mode: npm install -g omegon@latest → verify → cache clear → restart handoff. */
+/** Installed mode: npm install -g devopet@latest → verify → cache clear → restart handoff. */
 async function updateInstalledMode(
 	dryRun: boolean,
 	ctx: {
@@ -721,7 +721,7 @@ async function updateInstalledMode(
 		};
 	},
 ): Promise<void> {
-	const PKG = "omegon-pi";
+	const PKG = "devopet-pi";
 
 	// Check latest version on npm
 	ctx.ui.notify(`Checking latest version of ${PKG}…`, "info");
@@ -753,7 +753,7 @@ async function updateInstalledMode(
 	if (dryRun) return;
 
 	const confirmed = await ctx.ui.confirm(
-		"Update omegon-pi?",
+		"Update devopet-pi?",
 		`Install ${PKG}@${latestVersion} globally via npm?\n\nThis will update devopet, its bundled agent core, extensions, themes, and skills.\nRestart devopet after the update completes.`,
 	);
 	if (!confirmed) {
