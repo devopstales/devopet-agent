@@ -7,8 +7,8 @@
  *
  * Resolution: node_modules/@mariozechner/pi-coding-agent (upstream pi)
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve as pathResolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +29,35 @@ function cliExecutableName() {
   if (name.endsWith(".mjs")) name = name.slice(0, -".mjs".length);
   else if (name.endsWith(".cmd")) name = name.slice(0, -".cmd".length);
   return name || "devopet";
+}
+
+/** Mirrors extensions/lib/devopet-config-paths.ts — keep in sync (bin must not depend on TS build). */
+function getDevopetGlobalConfigDirFromEnv() {
+  const raw = process.env.DEVOPET_CONFIG_HOME?.trim();
+  const home = homedir();
+  if (raw) {
+    if (raw === "~") return home;
+    if (raw.startsWith("~/")) return join(home, raw.slice(2));
+    return pathResolve(raw);
+  }
+  return join(home, ".devopet");
+}
+
+function findDevopetProjectConfigDirFrom(cwd) {
+  let cur = pathResolve(cwd);
+  for (;;) {
+    const candidate = join(cur, ".devopet");
+    try {
+      if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+    const parent = dirname(cur);
+    if (parent === cur) return null;
+    cur = parent;
+  }
 }
 
 function migrateLegacyStatePath(relativePath, kind = "file") {
@@ -83,6 +112,8 @@ if (process.argv.includes("--where")) {
     agentDir: stateDir,
     stateDir,
     executable: cliExecutableName(),
+    devopetConfigHome: getDevopetGlobalConfigDirFromEnv(),
+    devopetProjectConfigDir: findDevopetProjectConfigDirFrom(process.cwd()),
   }, null, 2) + "\n");
   process.exit(0);
 }

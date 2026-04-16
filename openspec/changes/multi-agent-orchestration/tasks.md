@@ -22,3 +22,10 @@
 
 - [ ] 5.1 Run `npm run check` if TypeScript touched; add or extend tests for YAML validation if implemented in-repo.
 - [ ] 5.2 Manual smoke: one team dispatch, one chain run, optional pipeline; confirm subagent widget visibility if applicable.
+
+## 6. pi-messenger-swarm (optional messaging)
+
+- [ ] 6.1 Evaluate **[pi-messenger-swarm](https://www.npmjs.com/package/pi-messenger-swarm)** (peer deps, `pi-tui` / `@mariozechner/pi-coding-agent` alignment, bundle size); decide **bundled dependency + `pi.extensions`** vs **documented `pi install npm:pi-messenger-swarm` only** per design decision 6.
+- [ ] 6.2 If bundling: add pinned dependency and extension registration; if not: add **README / docs** snippet with `pi install` and optional `git:` pin.
+- [ ] 6.3 Document **`.pi/messenger/`** layout, **`PI_MESSENGER_DIR`** / **`PI_MESSENGER_GLOBAL`**, channel-first **`send` with `to:`**, and **`/messenger`** overlay; add a **when to use** subsection (swarm vs teams vs cleave).
+- [ ] 6.4 Manual smoke: join messenger, post to `#memory`, create/claim a task if applicable; confirm no regressions when extension is absent (optional install path).

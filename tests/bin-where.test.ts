@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -20,18 +20,27 @@ function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pro
 
 describe("devopet executable --where", () => {
 	it("prints devopet resolution metadata without starting interactive mode", () => {
-		const result = spawnSync(process.execPath, [OMEGON_BIN, "--where"], {
-			encoding: "utf8",
-			env: makeEnv(),
-		});
-		assert.equal(result.status, 0, result.stderr);
-		const data = JSON.parse(result.stdout);
-		assert.match(data.devopetRoot, /devopet(-agent|-pi)?$/);
-		assert.match(data.cli, /node_modules[\\/]@mariozechner[\\/]pi-coding-agent[\\/]dist[\\/]cli\.js$/);
-		assert.equal(data.resolutionMode, "npm");
-		assert.equal(data.executable, "devopet-agent");
-		assert.equal(data.agentDir, data.stateDir);
-		assert.match(data.stateDir, /[\\/]\.pi[\\/]agent$/);
+		const emptyCwd = makeTmpDir("devopet-where-empty-");
+		try {
+			const result = spawnSync(process.execPath, [OMEGON_BIN, "--where"], {
+				cwd: emptyCwd,
+				encoding: "utf8",
+				env: makeEnv(),
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const data = JSON.parse(result.stdout);
+			assert.match(data.devopetRoot, /devopet(-agent|-pi)?$/);
+			assert.match(data.cli, /node_modules[\\/]@mariozechner[\\/]pi-coding-agent[\\/]dist[\\/]cli\.js$/);
+			assert.equal(data.resolutionMode, "npm");
+			assert.equal(data.executable, "devopet-agent");
+			assert.equal(data.agentDir, data.stateDir);
+			assert.match(data.stateDir, /[\\/]\.pi[\\/]agent$/);
+			assert.ok("devopetConfigHome" in data);
+			assert.match(data.devopetConfigHome, /[\\/]\.devopet$/);
+			assert.equal(data.devopetProjectConfigDir, null);
+		} finally {
+			rmSync(emptyCwd, { recursive: true, force: true });
+		}
 	});
 
 	it("reports devopet when invoked via an argv basename of devopet (e.g. npm bin shim)", () => {
@@ -46,6 +55,42 @@ describe("devopet executable --where", () => {
 			assert.equal(result.status, 0, result.stderr);
 			const data = JSON.parse(result.stdout);
 			assert.equal(data.executable, "devopet");
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	it("honors DEVOPET_CONFIG_HOME in devopetConfigHome", () => {
+		const base = makeTmpDir("devopet-cfghome-");
+		const custom = join(base, "my-devopet");
+		try {
+			const result = spawnSync(process.execPath, [OMEGON_BIN, "--where"], {
+				encoding: "utf8",
+				env: { ...makeEnv(), DEVOPET_CONFIG_HOME: custom },
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const data = JSON.parse(result.stdout);
+			assert.equal(data.devopetConfigHome, custom);
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+		}
+	});
+
+	it("reports devopetProjectConfigDir when cwd is under a .devopet directory", () => {
+		const tmp = makeTmpDir("devopet-projcfg-");
+		const dot = join(tmp, ".devopet");
+		const deep = join(tmp, "a", "b");
+		try {
+			mkdirSync(dot, { recursive: true });
+			mkdirSync(deep, { recursive: true });
+			const result = spawnSync(process.execPath, [OMEGON_BIN, "--where"], {
+				cwd: deep,
+				encoding: "utf8",
+				env: makeEnv(),
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const data = JSON.parse(result.stdout);
+			assert.equal(realpathSync(dot), realpathSync(data.devopetProjectConfigDir));
 		} finally {
 			rmSync(tmp, { recursive: true, force: true });
 		}

@@ -38,6 +38,7 @@ import {
 import { sharedState } from "../lib/shared-state.ts";
 import { getDefaultPolicy, type ProviderRoutingPolicy } from "../lib/model-routing.ts";
 import { DEPS, checkAll, formatReport, bestInstallCmd, sortByRequires, type DepStatus, type DepTier } from "./deps.ts";
+import { getDevopetGlobalConfigDir } from "../lib/devopet-config-paths.ts";
 
 const AGENT_DIR = join(homedir(), ".pi", "agent");
 const MARKER_PATH = join(AGENT_DIR, "devopet-bootstrap-done");
@@ -99,6 +100,7 @@ function isFirstRun(): boolean {
 
 function markDone(): void {
 	mkdirSync(AGENT_DIR, { recursive: true });
+	mkdirSync(getDevopetGlobalConfigDir(), { recursive: true });
 	writeFileSync(MARKER_PATH, MARKER_VERSION + "\n", "utf8");
 }
 

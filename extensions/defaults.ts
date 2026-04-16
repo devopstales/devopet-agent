@@ -14,6 +14,8 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
+import { getDevopetGlobalConfigDir } from "./lib/devopet-config-paths.ts";
+
 /**
  * Resolve the agent directory the same way pi's getAgentDir() does.
  * In standalone mode (PI_CODING_AGENT_DIR set to devopet root) this points
@@ -144,6 +146,12 @@ export default function (pi: ExtensionAPI) {
     // lighter/different terminal background. OSC 10/11 works on all modern terminals
     // including Kitty (confirmed — overrides conf-based colors at runtime).
     emitOsc10_11(ALPHARIUS_FG, ALPHARIUS_BG);
+
+    try {
+      fs.mkdirSync(getDevopetGlobalConfigDir(), { recursive: true });
+    } catch {
+      // Best effort — devopet-specific config root
+    }
 
     // Belt-and-suspenders: if Kitty remote control is available, also push via @ set-colors.
     // This survives cases where OSC sequences are swallowed by multiplexers.
