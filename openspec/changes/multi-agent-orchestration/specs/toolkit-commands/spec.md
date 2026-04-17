@@ -1,8 +1,11 @@
+> **OpenSpec change:** `multi-agent-orchestration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi) toolkit-commands** is a **behavioral reference**, not a mandatory dependency.
+
 ## ADDED Requirements
 
 ### Requirement: Markdown-defined slash commands
 
-The system SHALL support **dynamic slash commands** loaded from **Markdown** source files (**toolkit-commands** pattern), registering command names and behavior per the integrated extension’s schema.
+The system SHALL support **dynamic slash commands** loaded from **Markdown** source files (**toolkit-commands** pattern), registering command names and behavior per the devopet extension schema **consistent with** the agent-pi reference.
 
 #### Scenario: Command discovered
 

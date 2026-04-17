@@ -1,50 +1,56 @@
 ## Context
 
-- **[pi-rewind](https://github.com/arpagon/pi-rewind)** (MIT): `src/index.ts` wires Pi events; `src/ui.ts` (~33 LOC) handles **footer status**; `src/core.ts` is git-only. Install: `pi install npm:pi-rewind` per [README](https://github.com/arpagon/pi-rewind).
-- **devopet** **`extensions/dashboard/index.ts`** calls **`ctx.ui.setFooter(...)`** once and returns **`DashboardFooter`**, which **replaces** the default pi footer entirely.
+- **[pi-rewind](https://github.com/arpagon/pi-rewind)** (MIT): Reference for **`/rewind`**, **Esc+Esc**, git checkpoint refs, footer status patterns. Upstream layout: `src/index.ts` (hooks), `src/ui.ts` (footer), `src/core.ts` (git).
+- **devopet** **`extensions/dashboard/index.ts`** uses **`ctx.ui.setFooter`** with **`DashboardFooter`**—**one** active footer factory.
 
-**Problem:** If pi-rewind also registers footer updates via `setFooter` or internal TUI APIs, **only one** wins—or they **overwrite** each other. **Option B** explicitly merges checkpoint UI into **`DashboardFooter`** rather than stacking two footers.
+**Problem (unchanged):** Two extensions both fighting **`setFooter`** causes **one winner** or **flashing**. **Option B**: **merge** checkpoint UI into **`DashboardFooter`**.
+
+**Policy:** Implement rewind **in devopet `ExtensionAPI` code**; **[pi-rewind](https://github.com/arpagon/pi-rewind)** informs **behavior, git ref layout, and tests**. A **thin loader** to **`node_modules/pi-rewind`** MAY exist **only during migration**—remove when in-tree passes specs.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Ship **pi-rewind** behavior (checkpoints, `/rewind`, redo, safe restore) **bundled**.
-- Show **`◆ N checkpoints`** (or equivalent) **inside** dashboard footer HUD.
-- Avoid duplicate **setFooter** factories.
+- **Observable parity** with reference docs: checkpoints, **`/rewind`**, redo, safe restore, **Esc+Esc** where applicable.
+- **`◆ N checkpoints`** (or equivalent) **inside** dashboard footer HUD.
+- **Single** `setFooter` registration.
 
 **Non-Goals:**
 
-- Reimplement pi-rewind **core** git logic in devopet.
-- Guarantee pixel-identical footer to stock pi-rewind standalone.
+- Treating **`pi-rewind`** **npm** as the **only** shipping path once first-party code lands.
+- Pixel-identical footer to **standalone** upstream TUI—dashboard-integrated styling is OK.
 
 ## Decisions
 
-1. **Bundling**  
-   - **Choice**: **`pi-rewind`** in `dependencies` with semver pin; path `node_modules/pi-rewind/...` in `pi.extensions` (exact export path after `npm install`).
+1. **Implementation**  
+   - **Choice**: **First-party** module(s) under **`extensions/`** (e.g. **`rewind/`** or **`checkpoint-rewind/`**) registering hooks and commands **per** specs.  
+   - **Optional**: Temporary **dependency** on **`pi-rewind`** for parity spike—**not** long-term architecture.
 
-2. **Footer merge strategy** (pick one during implementation; ordered by preference)  
-   - **A. Shared state bridge**: pi-rewind (or a **tiny wrapper extension** loaded after pi-rewind) writes **checkpoint count** to **`sharedState`** / `dashboard:update` event; **`DashboardFooter`** reads it—**no fork** of pi-rewind if upstream adds a hook.  
-   - **B. Patch `node_modules`**: fragile—reject unless emergency.  
-   - **C. Fork `ui.ts` only** in `extensions/pi-rewind-ui-bridge/` that imports pi-rewind internals—only if A is impossible.
+2. **Footer merge strategy** (preference order)  
+   - **A. Shared state bridge**: Rewind extension publishes **checkpoint count** via **`sharedState`** / **`dashboard:update`**; **`DashboardFooter`** renders it—**preferred**.  
+   - **B. Patch `node_modules`**: **reject** unless emergency.  
+   - **C. Thin bridge** that re-exports only UI glue: **only** if A is impossible without upstream API.
 
 3. **Load order**  
-   - **Choice**: **`pi-rewind`** loads **before** **dashboard** so dashboard’s `setFooter` wins; **bridge** extension or **shared state** updates footer content from pi-rewind state **after** both load.
+   - **Choice**: Rewind extension loads **before** **dashboard** if needed so **`setFooter`** is **single**; **telemetry** updates footer **after** both load via **events/state**.
 
 4. **Esc+Esc**  
-   - **Choice**: Verify no conflict with pi-tui; document override if needed.
+   - **Choice**: Match reference behavior; document conflicts with **pi-tui** / dashboard.
+
+5. **Git core**  
+   - **Choice**: Implement **checkpoint git logic** **in-tree** **consistent with** reference **`core.ts`** semantics (refs paths, safety)—**not** “must import upstream `core.ts`” as permanent rule.
 
 ## Risks / Trade-offs
 
-- [Upstream API] pi-rewind may not export checkpoint count → **Mitigation**: read **git refs** under `refs/pi-checkpoints/` or file pi-rewind documents—**spike** in task 1.
-- [Maintenance] Bridge code on pi-rewind bumps → **Mitigation**: pin version; changelog watch.
+- **[Upstream API gap]** No exported checkpoint count → **Mitigation**: read **`refs/pi-checkpoints/`** or equivalent **documented** layout **matching** reference.
+- **[Maintenance]** In-tree git logic → **Mitigation**: tests against fixtures; **COMPAT.md** reference version.
 
 ## Migration Plan
 
-1. Add dep + extension; land footer merge; document.
-2. Rollback: remove dep and dashboard diff.
+1. Land first-party extension + footer merge + docs.
+2. Rollback: remove extension entry and dashboard diff.
 
 ## Open Questions
 
-- Does pi-rewind expose **checkpoint count** via **ExtensionContext**, **events**, or **only** internal `ui.ts`?
-- Exact string: **`◆ X checkpoints`** per [site](https://arpagon.github.io/pi-rewind/) — match or shorten for narrow terminals.
+- Monolith **`extensions/rewind/`** vs **split** dashboard bridge module.
+- Exact HUD string for narrow terminals.

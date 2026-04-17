@@ -1,3 +1,6 @@
+> **OpenSpec change:** `multi-agent-orchestration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi) subagent-widget** is a **behavioral reference**, not a mandatory dependency.
+
 ## ADDED Requirements
 
 ### Requirement: Background subagent visibility
@@ -7,7 +10,7 @@ The system SHALL provide **background subagent management** with **live status**
 #### Scenario: Widget shows status
 
 - **WHEN** one or more subagents are active or recently completed
-- **THEN** the UI SHALL display status information sufficient to distinguish agents and progress states per integrated extension behavior
+- **THEN** the UI SHALL display status information sufficient to distinguish agents and progress states per devopet extension behavior **consistent with** the reference model
 
 ### Requirement: Non-blocking orchestration
 

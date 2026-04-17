@@ -181,6 +181,26 @@ Enable/disable tools and switch named profiles to keep the context window lean.
 - **Tool**: `manage_tools`
 - **Command**: `/profile [name|reset]`
 
+### Security (permissions, guard, connect)
+
+devopet bundles **[pi-connect](https://www.npmjs.com/package/pi-connect)** (`/connect`, `/disconnect`), **[pi-permission-system](https://www.npmjs.com/package/pi-permission-system)** (policy `allow` / `deny` / `ask` in `pi-permissions.jsonc`), and **agent-pi–derived** extensions under `extensions/agent-pi-security/` (vendored from [agent-pi security-guard](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts)).
+
+| Layer | Role | Typical artifacts / commands |
+|-------|------|--------------------------------|
+| **Permissions** | Your rules for tools, bash, MCP, skills | `~/.pi/agent/pi-permissions.jsonc` (or `PI_CODING_AGENT_DIR`); see [pi-permission-system](https://github.com/MasuRii/pi-permission-system) |
+| **Security guard** | Baseline blocks (destructive bash, exfil patterns, injection in tool output) + audit log | `.pi/security-policy.yaml` (optional); `/security [status\|log\|policy\|reload]`; `.pi/security-audit.log` |
+| **Message integrity** | Repairs orphaned `tool_result` / `tool_use` pairs before API calls | (automatic `context` hook) |
+| **`/secure`** | Project AI security sweep and optional installer files | `/secure`, `/secure sweep`, `/secure install` |
+| **Connect** | Provider OAuth / API keys | `/connect`, `/disconnect` — unified picker ([pi-connect](https://github.com/hk-vk/pi-connect)) |
+
+**Precedence:** If both permission policy and the guard apply, **guard blocks win** for the same invocation when safety requires it.
+
+**Providers:** See [official pi provider docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md).
+
+**Sandbox:** Optional **[pi-sandbox](https://www.npmjs.com/package/pi-sandbox)** is not bundled here; install separately if you want OS-level sandboxing. Global `~/.pi/agent/sandbox.json` and project `.pi/sandbox.json` follow upstream precedence; use **`--no-sandbox`** on the CLI when supported by pi to disable. Sandbox complements (does not replace) permission policy and security-guard.
+
+**Examples:** `config/pi-permissions.example.jsonc`, `config/security-policy.example.yaml` — copy into your agent dir / project as needed (not overwritten on upgrade).
+
 ### Other extensions
 
 | Extension | Description |
@@ -195,6 +215,7 @@ Enable/disable tools and switch named profiles to keep the context window lean.
 | `vault` | Markdown viewport with wikilink navigation (`/vault`) |
 | `secrets` | Resolve secrets from env vars, shell commands, or system keychains |
 | `mcp-bridge` | Connect external MCP servers as native pi tools |
+| `agent-pi-security` | Message integrity guard, security-guard (`/security`), secure (`/secure`) — see **Security** above |
 
 ## Skills
 

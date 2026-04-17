@@ -1,8 +1,11 @@
+> **OpenSpec change:** `multi-agent-orchestration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi)** UX patterns are **behavioral references**.
+
 ## ADDED Requirements
 
 ### Requirement: Agent team switcher command
 
-The system SHALL expose **`/agents-team`** (or the exact spelling from [agent-pi](https://github.com/ruizrica/agent-pi) if different) so the user can **switch between configured agent teams** without editing config files manually for every switch.
+The system SHALL expose **`/agents-team`** (or the exact spelling **consistent with** [agent-pi](https://github.com/ruizrica/agent-pi) if different) so the user can **switch between configured agent teams** without editing config files manually for every switch.
 
 #### Scenario: User switches team
 

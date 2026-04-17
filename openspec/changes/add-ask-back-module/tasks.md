@@ -1,19 +1,29 @@
-## 1. Version and dependency spike
+## 1. Ask-user capability (first-party)
 
-- [ ] 1.1 Evaluate **peer/version** alignment: **`pi-ask-user`** and **`@tintinweb/pi-tasks`** against devopet’s **`@mariozechner/pi-coding-agent`** / **`pi-tui`** (note upstream **pi-tasks** README pins **^0.62.0** vs devopet **0.61.x**); record compatible version range or gap.
-- [ ] 1.2 Add **`pi-ask-user`** and **`@tintinweb/pi-tasks`** to **`package.json` `dependencies`** with chosen pins; run **`npm install`**; capture peer warnings.
+- [ ] 1.1 Scaffold **`extensions/<name>/`** (e.g. `ask-user` or under a combined `ask-back` module) implementing **`ask_user`** and UI **per** **`specs/pi-ask-user-bundling/spec.md`** (reference: **pi-ask-user**).
+- [ ] 1.2 Register in **`package.json` `pi.extensions`**; validate load order vs **dashboard** / **cleave** (no footer/overlay fights).
+- [ ] 1.3 Provide **ask-user** skill or **`skills/`** pointer **consistent with** reference **ask-user** skill semantics.
+- [ ] 1.4 Replace any **transitional** `node_modules/pi-ask-user` loader with in-tree code; drop **`pi-ask-user`** from **`dependencies`** when spec + tests pass.
+- [ ] 1.5 Tests: tool registration, one interactive round-trip (or mocked UI), headless fallback per spec.
 
-## 2. Manifest and load order
+## 2. Tasks capability (first-party)
 
-- [ ] 2.1 Register both packages in **`pi.extensions`** with stable **`node_modules/...`** entry paths; choose order relative to **`./extensions/dashboard`** and other UI extensions after smoke (no footer/widget fight).
-- [ ] 2.2 Smoke: session starts; **`ask_user`** appears in tool set; **`/tasks`** opens; task widget renders without crash.
+- [ ] 2.1 Scaffold **`extensions/<name>/`** implementing **Task*** tools, **`/tasks`**, widget, storage **per** **`specs/pi-tasks-bundling/spec.md`** (reference: **@tintinweb/pi-tasks**).
+- [ ] 2.2 Implement **`PI_TASKS`** / **`PI_TASKS_DEBUG`** and storage modes; prefer **`.devopet`** paths where **`devopet-config-folders`** applies—document mapping from **`.pi/tasks/`** if needed.
+- [ ] 2.3 **`TaskExecute`**: clear error when subagents unavailable—**in-tree** behavior matching reference, not only npm delegation.
+- [ ] 2.4 Replace transitional **`@tintinweb/pi-tasks`** loader; drop npm dep when done.
+- [ ] 2.5 Tests: **`/tasks`**, at least one Task tool, **`TaskExecute`** without subagents path.
 
-## 3. Documentation
+## 3. Version spike (only if shims remain temporarily)
 
-- [ ] 3.1 README (or dedicated doc): **ask-back** overview—**pi-ask-user** (**`ask_user`**, skill) + **pi-tasks** (**Task***, widget, **`PI_TASKS`**); links to npm and GitHub repos.
-- [ ] 3.2 Document **optional** **`@tintinweb/pi-subagents`** for **`TaskExecute`**; clarify v1 may omit it.
+- [ ] 3.1 If npm packages are used **only** as bootstrap, record compatible pins in a **`COMPAT.md`** (optional) and remove when shims go away.
 
-## 4. Verification
+## 4. Documentation
 
-- [ ] 4.1 **`npm run check`** if TypeScript or manifests change; fix regressions.
-- [ ] 4.2 Manual: one **`ask_user`** round-trip; create/list/update a task; confirm **`PI_TASKS=off`** path if documented.
+- [ ] 4.1 README (or **docs/**): **ask-back** overview—**devopet extension names**, **`ask_user`** + **tasks** together, **`PI_TASKS`**, links to **pi-ask-user** / **pi-tasks** repos as **references**.
+- [ ] 4.2 Document optional **`@tintinweb/pi-subagents`** for full **`TaskExecute`** cascade.
+
+## 5. Verification
+
+- [ ] 5.1 **`npm run check`**.
+- [ ] 5.2 Manual: **`ask_user`** round-trip; task create/list/update; **`PI_TASKS=off`** if documented.

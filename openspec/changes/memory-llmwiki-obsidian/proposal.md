@@ -4,8 +4,6 @@ Project memory today **prefers semantic retrieval** powered by embeddings. Imple
 
 Separately, the **LLM Wiki** pattern (Karpathy-style personal knowledge bases) pairs well with **Obsidian** vaults (`raw/`, `wiki/`, `[[wikilinks]]`). Users want **devopet memory** to **feed or sync** with that workflow so facts and narratives can be **reviewed and linked in Obsidian**, optionally using community tooling such as **obsidian-llm-wiki** / **`olw`** pipelines—**without requiring local Ollama** if cloud models are used for embeddings or compilation.
 
-*(You wrote “opsidian”; this change assumes **Obsidian**.)*
-
 ## What Changes
 
 - **Embedding provider resolution**: Treat **local Ollama** as **optional**, not the implicit default when no API keys exist—e.g. require explicit opt-in and/or successful healthcheck before selecting `ollama`; otherwise resolve to **FTS5-only** mode without failed startup noise.

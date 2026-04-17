@@ -1,3 +1,6 @@
+> **OpenSpec change:** `operational-modes`.  
+> **Implementation:** first-party mode cycler in **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi)** **mode-cycler** patterns are a **behavioral reference**, not a mandatory package import.
+
 ## ADDED Requirements
 
 ### Requirement: Mode cycle order
@@ -16,16 +19,16 @@ The system SHALL cycle operational modes in this **fixed order**: **NORMAL → P
 
 ### Requirement: Shift+Tab binding
 
-The system SHALL bind **Shift+Tab** to **mode cycling** (mode-cycler) as the **primary** chord documented for operators, unless a documented platform conflict requires a different default.
+The system SHALL bind **Shift+Tab** to **mode cycling** as the **primary** chord documented for operators, unless a documented platform conflict requires a different default.
 
 #### Scenario: User cycles with Shift+Tab
 
 - **WHEN** the user presses **Shift+Tab** in an interactive TUI session
 - **THEN** the operational mode SHALL advance one step in the cycle order
 
-### Requirement: mode-cycler integration
+### Requirement: Mode cycler behavior (first-party)
 
-The implementation SHALL integrate or reproduce **`mode-cycler`** behavior consistent with [agent-pi](https://github.com/ruizrica/agent-pi) so mode switches are centralized and testable.
+The implementation SHALL provide **centralized, testable** mode switching **consistent with** [agent-pi](https://github.com/ruizrica/agent-pi) **mode-cycler** semantics, implemented **in devopet extension code**—not by requiring an upstream **`mode-cycler`** package as the integration surface.
 
 #### Scenario: Repeated cycles are stable
 

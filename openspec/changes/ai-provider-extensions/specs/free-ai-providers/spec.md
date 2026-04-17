@@ -1,54 +1,57 @@
+> **OpenSpec change:** `ai-provider-extensions`.  
+> **Implementation:** first-party extension(s) under **`extensions/`** (e.g. free-tier providers module). **[pi-free](https://www.npmjs.com/package/pi-free)** is a **behavioral reference**, not a mandatory bundled npm package.
+
 ## ADDED Requirements
 
-### Requirement: pi-free extension is loaded
+### Requirement: Free-provider extension is loaded
 
-The system SHALL include the **pi-free** Pi extension such that its registered providers and slash commands are available in the devopet runtime when no conflicting configuration disables it.
+The system SHALL include a **devopet-owned** extension that registers free/low-friction providers and slash commands **per** this spec, listed in **`package.json` `pi.extensions`** when the feature is enabled.
 
 #### Scenario: Extension present in manifest
 
 - **WHEN** devopet starts with default extension configuration for this change
-- **THEN** the pi-free extension package SHALL be listed among loaded extensions per the project manifest
+- **THEN** the free-provider extension SHALL be listed among loaded extensions per the project manifest
 
-### Requirement: Qwen OAuth via pi-free
+### Requirement: Qwen OAuth
 
-The system SHALL support **Qwen** models and OAuth device flow through pi-free’s documented commands (e.g. `/login qwen`, `/logout qwen`) without requiring devopet-specific forks of the OAuth implementation.
+The system SHALL support **Qwen** models and OAuth device flow through documented commands **consistent with** the pi-free reference (e.g. login/logout patterns), implemented **in-tree**.
 
 #### Scenario: User authenticates Qwen
 
-- **WHEN** the user runs the documented Qwen login command from pi-free
-- **THEN** the interactive OAuth flow SHALL complete per upstream behavior and Qwen-prefixed models SHALL become selectable when authorized
+- **WHEN** the user runs the documented Qwen login command
+- **THEN** the interactive OAuth flow SHALL complete and Qwen-prefixed models SHALL become selectable when authorized
 
 ### Requirement: Kilo and NVIDIA providers
 
-The system SHALL expose **Kilo** and **NVIDIA NIM** model families through pi-free’s provider registration, subject to user authentication and API keys documented for pi-free.
+The system SHALL expose **Kilo** and **NVIDIA NIM** model families through **first-party** provider registration, subject to authentication and API keys **documented for devopet** (reference: pi-free).
 
 #### Scenario: NVIDIA key configured
 
-- **WHEN** the operator sets a valid NVIDIA API key via `~/.pi/free.json` or documented environment variables
-- **THEN** NVIDIA-registered models SHALL appear in the model selection surface per pi-free behavior
+- **WHEN** the operator sets a valid NVIDIA API key via documented config or environment variables
+- **THEN** NVIDIA-registered models SHALL appear in the model selection surface
 
 #### Scenario: Kilo OAuth
 
 - **WHEN** the user runs the documented Kilo login command
-- **THEN** Kilo OAuth SHALL complete per pi-free and additional Kilo models MAY become available per upstream rules
+- **THEN** Kilo OAuth SHALL complete and additional Kilo models MAY become available per documented rules
 
-### Requirement: Ollama Cloud via pi-free catalog
+### Requirement: Ollama Cloud (free catalog)
 
-The system SHALL allow access to **Ollama Cloud** free-tier models registered by pi-free when `ollama_api_key` and related pi-free settings are configured, without devopet blocking upstream registration.
+The system SHALL allow access to **Ollama Cloud** free-tier models **when** API keys and settings are configured **consistent with** the pi-free reference model, without devopet blocking registration **unless** overlap policy with the Ollama-first extension requires it (see **`ollama-flex-endpoints`** spec).
 
 #### Scenario: Ollama Cloud key set
 
-- **WHEN** `ollama_api_key` is set in `~/.pi/free.json` or equivalent env vars per pi-free
-- **THEN** Ollama Cloud models exposed by pi-free SHALL be selectable according to pi-free’s free vs paid toggle rules
+- **WHEN** `ollama_api_key` (or devopet-standard equivalent) is set per documentation
+- **THEN** Ollama Cloud models exposed by this extension SHALL be selectable according to documented toggle rules
 
 ### Requirement: Documentation
 
-User-facing documentation SHALL reference pi-free for provider lists, `~/.pi/free.json` schema pointers, toggle commands, and links to the upstream repository for issue reporting.
+User-facing documentation SHALL name the **devopet extension**, config file locations (prefer **`~/.devopet`** / **`.devopet/`** where **`devopet-config-folders`** applies), toggle commands, and link **pi-free** as **reference** for provider semantics and upstream issue history.
 
 #### Scenario: Operator finds setup steps
 
 - **WHEN** an operator reads devopet documentation for additional free providers
-- **THEN** they SHALL find pi-free named as the implementation and pointers to OAuth and API key setup
+- **THEN** they SHALL find the first-party extension described and pointers to OAuth/API key setup
 
 ## REMOVED Requirements
 

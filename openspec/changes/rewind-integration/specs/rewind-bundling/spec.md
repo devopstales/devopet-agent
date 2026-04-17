@@ -1,31 +1,30 @@
+> **OpenSpec change:** `rewind-integration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[pi-rewind](https://github.com/arpagon/pi-rewind)** is a **behavioral reference**, not a mandatory npm dependency.
+
 ## ADDED Requirements
 
-### Requirement: npm package bundled
+### Requirement: Rewind capability via devopet-owned extension
 
-The system SHALL declare **`pi-rewind`** as a **dependency** in `package.json` with a **pinned or semver-bounded** version compatible with devopet’s **`@mariozechner/pi-coding-agent`** and **`pi-tui`** peers.
+The system SHALL provide **turn-based git checkpoints**, **`/rewind`**, **diff preview**, **redo**, and **safe restore** through a **first-party** extension registered in **`package.json` `pi.extensions`**. **Observable behavior** SHALL be **consistent with** **[pi-rewind](https://github.com/arpagon/pi-rewind)** documentation (hooks, git refs, commands), unless this spec explicitly narrows scope.
 
-#### Scenario: Install succeeds
+#### Scenario: Package builds and extension loads
 
-- **WHEN** an operator runs `npm install` in the devopet repo
-- **THEN** `pi-rewind` SHALL resolve without peer dependency failures or SHALL document required pi version bumps
+- **WHEN** the devopet package is built and started in a git project with the extension enabled
+- **THEN** rewind hooks SHALL run (e.g. session / turn-end checkpoint scheduling) **without crash** and **consistent with** the reference model
 
-### Requirement: Extension registration
+#### Scenario: User-facing commands
 
-The system SHALL register **pi-rewind** in **`package.json` `pi.extensions`** using the correct entry path to the extension’s main module after install.
+- **WHEN** the user types **`/rewind`** or uses **Esc+Esc** (double Escape) per documented behavior
+- **THEN** the checkpoint browser / quick rewind / restore flows SHALL be available **consistent with** [pi-rewind](https://github.com/arpagon/pi-rewind), subject to devopet keybinding conflict documentation
 
-#### Scenario: Extension loads
+### Requirement: No mandatory pi-rewind npm package
 
-- **WHEN** devopet starts in a git project
-- **THEN** pi-rewind hooks SHALL run per upstream behavior (e.g. `session_start`, `turn_end` checkpoint scheduling) without crashing
+The **long-term** architecture **SHALL NOT** require **`pi-rewind`** as a **runtime npm dependency** once the first-party implementation satisfies the scenarios above; a **transitional** dependency MAY exist **only** during migration and **SHALL** be removed when superseded (document in **COMPAT.md**).
 
-### Requirement: User-facing commands
+#### Scenario: Dependency hygiene
 
-The system SHALL expose **`/rewind`** and **Esc+Esc** (double Escape) behavior as implemented by pi-rewind, subject to keybinding conflict resolution documented for devopet.
-
-#### Scenario: Rewind command exists
-
-- **WHEN** the user types `/rewind` in an interactive session
-- **THEN** the checkpoint browser / restore flow SHALL be available per [pi-rewind](https://github.com/arpagon/pi-rewind)
+- **WHEN** in-tree rewind code is complete and tested
+- **THEN** **`package.json`** **SHOULD NOT** list **`pi-rewind`** unless a documented exception remains
 
 ## REMOVED Requirements
 

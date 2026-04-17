@@ -1,30 +1,36 @@
-## 1. Dependencies and compatibility
+## 1. Scaffold and registration
 
-- [ ] 1.1 Verify peer version ranges: compare `pi-permission-system`, **`pi-connect`**, and optional `pi-sandbox` peer deps against devopet’s `@mariozechner/pi-coding-agent` / `pi-ai` / `pi-tui` versions; record matrix in design or a short `COMPAT.md` note if needed.
-- [ ] 1.2 Add `pi-permission-system` and **`pi-connect`** to `package.json` `dependencies` with pinned/compatible versions; run `npm install` and fix any peer warnings.
-- [ ] 1.3 If sandbox is in scope for this change, add `pi-sandbox` (and confirm `@carderne/sandbox-runtime` resolution); otherwise document “install separately” and skip dependency.
+- [ ] 1.1 Create `extensions/permission-manager/` with `index.ts` exporting a default `ExtensionAPI` function (async if dynamic imports are needed)
+- [ ] 1.2 Add `./extensions/permission-manager` to `package.json` `pi.extensions` in the correct order relative to `ai-provider-connect` and `security-engine`
+- [ ] 1.3 Document load-order rationale in `index.ts` header comment (mirror `ai-provider-connect` / `security-engine` style)
 
-## 2. agent-pi security extensions (vendor)
+## 2. Policy loading and validation
 
-- [ ] 2.1 Review [agent-pi](https://github.com/ruizrica/agent-pi) license; **pin a commit** and vendor **`extensions/security-guard.ts`**, **`extensions/lib/security-engine.ts`** (and any required **lib/** siblings), **`extensions/secure`** (or equivalent), **`extensions/message-integrity-guard`**, fixing import paths for devopet layout.
-- [ ] 2.2 Register vendored extensions in `package.json` `pi.extensions` with **hook order** validated: integrity → guard → permission (exact order per smoke test); document in `design.md`.
+- [ ] 2.1 Implement resolver for `~/.devopet/permissions.jsonc` and optional `.devopet/permissions.jsonc` with local-over-global merge rules per spec
+- [ ] 2.2 Validate `defaultPolicy` and category maps; reject invalid `allow`/`deny`/`ask` tokens with actionable errors
+- [ ] 2.3 Align shape with **pi-permission-system** documented schema; add inline references to upstream README where fields match
 
-## 3. Extension wiring (pi-connect + permissions)
+## 3. Hooks and enforcement
 
-- [ ] 3.1 Register **`pi-connect`** and `pi-permission-system` in `package.json` under `pi.extensions` with **validated load order** so **`/connect`** registers as a single unified flow; document final order in `design.md` or README.
-- [ ] 3.2 If optional sandbox is bundled, register `pi-sandbox` with ordering documented (permissions vs sandbox vs guard—confirm no hook conflict).
-- [ ] 3.3 Smoke-test: **`/connect`** picker, **`/disconnect`**, **`/security status`**, **`/secure`** (if non-destructive), blocked **`rm -rf`**-class command; then `node bin/devopet-agent.mjs --where`.
+- [ ] 3.1 Register `before_agent_start` / `tool_call` / bash (and MCP/skills/special per Pi API availability) to apply allow/deny/ask
+- [ ] 3.2 Integrate with `security-engine`: remove or gate direct `pi-permission-system` import so only one enforcement path runs; keep integrity/guard ordering as needed
+- [ ] 3.3 Ensure default `deny`; `ask` blocks until user decision; update local or global config with user decision
+- [ ] 3.4 Document in `index.ts` (or `README` under the extension) that **OS-level sandboxing is not a substitute** for these hooks for in-process tools; if bash OS sandbox is ever composed in, bash policy and prompts still go through this hook layer per spec
 
-## 4. Defaults and documentation
+## 4. Interactive elevation (pi-sandbox-inspired)
 
-- [ ] 4.1 Add example **`pi-permissions.jsonc`** and optional **`.pi/security-policy.yaml`** starter under `config/` or docs without overwriting user files on upgrade.
-- [ ] 4.2 Update root `README.md` (security section): **permissions vs guard vs sandbox** matrix; **`/connect`** / pi-connect; **three-hook** model; **`/secure`**; **message-integrity-guard**; links to [security-guard.ts](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts) and [official pi providers](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md).
-- [ ] 4.3 Document sandbox paths (`sandbox.json`, `.pi/sandbox.json`), `--no-sandbox`, and interaction with permission policy and security-guard.
+- [ ] 4.1 Implement prompt flow: abort, allow once, allow for session; allow for project; allow globally; optional persist allow per design;
+- [ ] 4.2 Add session-scoped allow cache keyed by rule class; clear on session end if required by Pi lifecycle
+- [ ] 4.3 Prevent duplicate prompts for the same gated action after session allow (integration test)
 
-## 5. Verification
+## 5. Config, docs, and tests
 
-- [ ] 5.1 Manual test: deny `write` in permission policy; test parse-error fallback.
-- [ ] 5.2 Manual test: security-guard blocks a known-bad bash pattern; audit log entry appears when enabled.
-- [ ] 5.3 Manual test: **`/connect`** with pi-connect + all security extensions loaded.
-- [ ] 5.4 If sandbox bundled: bash wrap / denyWrite tests per prior scope.
-- [ ] 5.5 Run `npm run check` (or project CI script) and fix regressions.
+- [ ] 5.1 Add or update `config/permissions.example.jsonc` to match implemented schema
+- [ ] 5.2 Add `tests/permission-manager.test.ts` (or extend existing) for parse errors, merge precedence, YOLO when no config files, and at least one hook/permission path when policy exists
+- [ ] 5.3 Run `npm run check` (typecheck + tests) and fix regressions
+
+## 6. Footer and YOLO
+
+- [ ] 6.1 On `session_start` (when `ctx.hasUI`), call `ctx.ui.setStatus("permission-manager", …)` with **`YOLO`** when neither `~/.devopet/permissions.jsonc` nor `.devopet/permissions.jsonc` exists; otherwise show **policy** active (short text per theme conventions)
+- [ ] 6.2 Update **`security-engine`** and/or **`extensions/dashboard/footer.ts`** (or equivalent) so **message-integrity**, **security-guard**, **perms**, and **secure** appear in the footer/status strip per spec—via multiple `setStatus` keys or one aggregated line
+- [ ] 6.3 Document **YOLO** vs **policy** in `config/permissions.example.jsonc` header comment or extension README

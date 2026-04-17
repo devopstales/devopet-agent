@@ -1,3 +1,6 @@
+> **OpenSpec change:** `multi-agent-orchestration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi) pipeline-team** is a **behavioral reference**, not a mandatory dependency.
+
 ## ADDED Requirements
 
 ### Requirement: Pipeline definition file

@@ -1,3 +1,6 @@
+> **OpenSpec change:** `operational-modes`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. Prompt patterns **may align with** [agent-pi](https://github.com/ruizrica/agent-pi) as a **reference**.
+
 ## ADDED Requirements
 
 ### Requirement: Tailored system prompt per mode

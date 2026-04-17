@@ -1,51 +1,59 @@
 ## Context
 
-- **[pi-free](https://www.npmjs.com/package/pi-free)** (MIT, `apmantza/pi-free`): Pi extension registering **many free-model providers**, OAuth for **Qwen**, **Kilo**, **Cline**, API keys in **`~/.pi/free.json`**, toggles like `/zen-toggle`, `/nvidia-toggle`, `/ollama-toggle`, and includes **Ollama Cloud** models when `ollama_api_key` is set.
-- **[@0xkobold/pi-ollama](https://www.npmjs.com/package/@0xkobold/pi-ollama)** (MIT): Focused **Ollama** integration—**local** (`OLLAMA_HOST`), **cloud** (`OLLAMA_HOST_CLOUD` / `cloudUrl`), **`baseUrl` override** for custom servers, **`/api/show`** for context length and capabilities, commands `/ollama-status`, `/ollama-models`, `/ollama-info`. Peer: `pi-coding-agent >= 0.65.2`.
+- **[pi-connect](https://www.npmjs.com/package/pi-connect)** (MIT): Reference for unified **`/connect`** picker (OAuth + API keys). Historically loaded via explicit path from `node_modules`; **this change** treats that as **one possible bootstrap**, not the product definition.
+- **[pi-free](https://www.npmjs.com/package/pi-free)** (MIT): Reference for **many free-model providers**, OAuth (Qwen, Kilo, Cline), **`~/.pi/free.json`**, toggles, **Ollama Cloud** catalog entries.
+- **[@0xkobold/pi-ollama](https://www.npmjs.com/package/@0xkobold/pi-ollama)** (MIT): Reference for **Ollama**—local, **custom `baseUrl`**, cloud URL + **`/v1`**, **`/api/show`** metadata, status commands.
 
-devopet currently pins specific `pi-*` versions in `package.json`; both packages declare peers on `pi-ai` / `pi-coding-agent` / `pi-tui` that **must match** the monorepo versions devopet ships.
+**devopet policy:** Ship **custom extensions** under **`extensions/`** that **implement** these capabilities using **`@mariozechner/pi-coding-agent` `ExtensionAPI`**, taking **behavioral cues** from the references (docs, UX, provider IDs) without **requiring** “always import npm package X” as the long-term architecture.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Ship a **clear combination**: pi-free for breadth (Qwen OAuth, Kilo, NVIDIA, etc.) + pi-ollama for **accurate Ollama UX** and **custom remote endpoints**.
-- **Version-verify** both packages against devopet’s pi stack before merging.
-- **Document** overlap and recommended settings so users are not flooded with duplicate Ollama cloud entries—or explicitly accept duplicates with naming distinction.
+- **Observable parity**: Operators get **`/connect`**, extended free providers, and Ollama flexibility **as specified** in delta specs; tests and manual checks compare against **reference docs**, not “did we call into npm.”
+- **Repo ownership**: Logic lives where we can patch, audit, and align with **`add-permission-manager`**, **`devopet-config-folders`**, and security stack ordering.
+- **Explicit overlap rules** for Ollama when both “free catalog” and “Ollama-first” surfaces exist—**one** coherent story in README.
 
 **Non-Goals:**
 
-- Implementing new providers inside devopet core.
-- Guaranteeing availability or SLAs of third-party free tiers.
+- Pledging to **vendor-fork** upstream repos as separate products.
+- Implementing **new** proprietary providers inside core unrelated to the references.
 
 ## Decisions
 
-1. **Bundling strategy**  
-   - **Choice**: Add both **`pi-free`** and **`@0xkobold/pi-ollama`** as **npm dependencies** and list them in **`pi.extensions`** in dependency order (pi-ollama before or after pi-free per load-order testing—**TBD in implementation**).  
-   - **Alternative**: Document-only install — rejected for “devopet includes more providers” product goal.
+1. **`/connect` placement**  
+   - **Choice**: **First-party** **`extensions/ai-provider-connect`** (name MAY evolve) registers **before** **`security-engine`** so auth surfaces exist before permission and guard hooks.  
+   - **Implementation**: **In-tree** `ExtensionAPI` registration, commands, and auth store usage **consistent with** pi-connect **semantics**. Optional: retain a **thin loader** to upstream during migration; **remove** once in-tree path is complete.
 
-2. **Ollama overlap**  
-   - **Choice**: Prefer **pi-ollama** as the **source of truth** for **local + custom URL + `/api/show`**; use pi-free for **Ollama Cloud free catalog** only if non-duplicative, **or** disable pi-free’s Ollama provider via upstream config if available, **or** document “duplicate model names” and let users hide models via `hidden_models` in `free.json`. Exact approach **validated during implementation** against actual model registration IDs.
+2. **No “npm = product”**  
+   - **Choice**: **Capabilities** are satisfied by **devopet code**; **[pi-connect](https://www.npmjs.com/package/pi-connect)** / **[pi-free](https://www.npmjs.com/package/pi-free)** / **[@0xkobold/pi-ollama](https://www.npmjs.com/package/@0xkobold/pi-ollama)** are **references** for behavior, CLI shape, and compatibility testing—not mandatory runtime entrypoints.  
+   - **Rationale**: Matches **`add-permission-manager`** (first-party permission layer) and avoids peer-pin churn from multiple `pi-*` packages.
 
-3. **Qwen / Kilo / NVIDIA**  
-   - **Choice**: Rely on **pi-free** implementations; devopet only ensures extension loads and links to [pi-free README](https://github.com/apmantza/pi-free) for `/login qwen`, `/login kilo`, and NVIDIA key setup.
+3. **Free providers extension**  
+   - **Choice**: Dedicated **first-party** extension module (e.g. **`extensions/free-ai-providers/`** or merged behind a clear facade) implementing provider registration, OAuth flows, and config **per** **`specs/free-ai-providers/spec.md`**. Config paths **prefer** **`~/.devopet`** / **`.devopet/`** when **`devopet-config-folders`** applies; document migration from **`~/.pi/free.json`**.
 
-4. **Config paths**  
-   - **Choice**: Follow upstream: `~/.pi/free.json`, global `~/.pi/agent/settings.json` for pi-ollama `ollama` block; note **`devopet-config-folders`** change if future `~/.devopet` redirects apply.
+4. **Ollama extension**  
+   - **Choice**: **First-party** Ollama module **per** **`specs/ollama-flex-endpoints/spec.md`**; **pi-ollama** npm is **reference only** unless a thin adapter is temporarily retained.
+
+5. **Ollama overlap**  
+   - **Choice**: **Single** “owner” for **local + custom URL + `/api/show`** (Ollama-first extension); **free catalog** MAY register cloud-only paths **without** duplicating model IDs—**validated in implementation** with `hidden_models`-style escapes documented if needed.
+
+6. **Qwen / Kilo / NVIDIA**  
+   - **Choice**: Implemented **inside** the free-providers extension (or submodules), guided by **pi-free** docs as **reference**, not as a hard dependency.
 
 ## Risks / Trade-offs
 
-- [Peer mismatch] Extension breaks on pi upgrade → **Mitigation**: pin versions, run smoke test (model picker lists providers).
-- [Duplicate Ollama entries] Confusing UX → **Mitigation**: decision §2 + docs.
-- [OAuth / API keys] Users may commit secrets → **Mitigation**: document `.gitignore` for local config; never log keys.
+- **[More code to maintain]** vs npm re-export → **Mitigation**: modular `extensions/` layout, spec scenarios, focused tests.
+- **[Drift from upstream]** → **Mitigation**: link reference versions in **COMPAT.md** as **compatibility targets**; periodic diff against upstream changelogs.
+- **[OAuth / API keys]** → **Mitigation**: document `.gitignore`; never log secrets.
 
 ## Migration Plan
 
-1. Add deps + extension entries; release minor version with CHANGELOG.
-2. No data migration; existing `settings.json` gains optional `ollama` key.
-3. Rollback: remove deps and manifest lines.
+1. Land first-party behaviors per tasks; keep or remove npm shims per rollout.
+2. Document config path migration (**`~/.pi/...`** → **`~/.devopet/...`** where applicable).
+3. Rollback: revert extension entries and restore previous loader if needed.
 
 ## Open Questions
 
-- Minimum **pi-coding-agent** version bump required for `@0xkobold/pi-ollama` peers vs devopet’s current pin.
-- Whether to expose **feature flags** in devopet to enable only pi-free **or** only pi-ollama for minimal installs.
+- Whether **one** combined “ai providers” extension vs **three** top-level entries yields clearer load order.
+- Minimum **pi-coding-agent** version for any new `ExtensionAPI` surfaces used by in-tree code.

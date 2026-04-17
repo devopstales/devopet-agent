@@ -1,0 +1,10 @@
+# Example only — optional project override at .pi/security-policy.yaml
+# (vendored from agent-pi security-guard; see extensions/agent-pi-security/lib/security-engine.ts)
+#
+# blocked_commands:
+#   - pattern: "example\\s+pattern"
+#     description: "Example rule"
+#     severity: "block"
+#     category: "destructive"
+
+blocked_commands: []

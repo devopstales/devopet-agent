@@ -1,53 +1,56 @@
 ## Context
 
-- **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** ([repo](https://github.com/edlsh/pi-ask-user)): MIT; registers tool **`ask_user`**; peers: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@sinclair/typebox`; ships **`skills/ask-user/SKILL.md`** for decision-gating flows.
-- **[@tintinweb/pi-tasks](https://www.npmjs.com/package/@tintinweb/pi-tasks)** ([repo](https://github.com/tintinweb/pi-tasks)): MIT; seven **Task*** tools, **`/tasks`**, persistent widget, file-backed store under **`.pi/tasks/`**, config **`tasks-config.json`**; **`TaskExecute`** optionally integrates with **`@tintinweb/pi-subagents`** via pi eventbus RPC.
+- **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** ([repo](https://github.com/edlsh/pi-ask-user)): Reference for **`ask_user`**, searchable split-pane UI, overlay mode, **ask-user** skill patterns; peers on **`@mariozechner/pi-coding-agent`**, **`pi-tui`**.
+- **[@tintinweb/pi-tasks](https://www.npmjs.com/package/@tintinweb/pi-tasks)** ([repo](https://github.com/tintinweb/pi-tasks)): Reference for **Task*** tools, **`/tasks`**, widget, **`.pi/tasks/`**-style storage, **`tasks-config.json`**, **`PI_TASKS`**; **`TaskExecute`** optionally uses **`@tintinweb/pi-subagents`**.
 - **devopet** already loads many extensions (dashboard, cleave, web-ui, …); new UI surfaces must not assume exclusive footer or single overlay.
+
+**Policy:** Implement **ask-back** as **first-party `ExtensionAPI` modules** under **`extensions/`**, using the references for **behavior, CLI shape, and test baselines**—not as mandatory **`import` from `node_modules`** in the long term. A **thin loader** to upstream packages MAY exist **only during migration**.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Ship **pi-ask-user** and **@tintinweb/pi-tasks** as **first-class optional bundled extensions** with **pinned** versions tested against devopet’s pi stack.
-- Document **install**, **load order rationale**, **env** (`PI_TASKS`, `PI_TASKS_DEBUG`), and **when to use** ask vs tasks vs both.
-- Preserve upstream **standalone-mode** behavior when subagents are absent (**TaskExecute** error path).
+- **Observable parity** with reference docs: **`ask_user`**, task tools, **`/tasks`**, widget, env vars, **`TaskExecute`** error path without subagents.
+- **Repo ownership**: patchable codepaths; clear ordering next to **dashboard** / **cleave**.
+- **Documentation** that names **devopet extensions** and links references for deep dives.
 
 **Non-Goals:**
 
-- Forking either upstream package into `extensions/` for v1.
-- Implementing a custom “ask-back” runtime beyond wiring and docs—**behavior** stays upstream.
-- Guaranteeing **pi-subagents** in the same change unless explicitly added later.
+- Treating **npm install pi-ask-user** as the **product definition** once in-tree paths land.
+- Implementing a **different** “ask-back” product unrelated to the reference semantics without a new change.
 
 ## Decisions
 
-1. **Dependency pinning**  
-   - **Choice**: Add both packages to **`dependencies`** with versions resolved after **`npm install`** against devopet’s current **`@mariozechner/pi-coding-agent`** / **`pi-tui`**. If `@tintinweb/pi-tasks` declares **`^0.62.x`** while devopet is **`0.61.x`**, **spike** compatibility (patch range, upstream issue, or temporary docs-only install)—record outcome in tasks.  
-   - **Alternative**: Git pin for pi-tasks only—higher maintenance.
+1. **Implementation strategy**  
+   - **Choice**: **Capabilities** are satisfied by **devopet code**; **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** and **[@tintinweb/pi-tasks](https://www.npmjs.com/package/@tintinweb/pi-tasks)** are **references** for behavior and compatibility testing.  
+   - **Optional**: retain **transitional** dynamic import from **`node_modules`** until in-tree implementations pass spec scenarios; **remove** shims when done.
 
 2. **Extension order**  
-   - **Choice**: Place **`pi-ask-user`** and **`pi-tasks`** after **core/bootstrap/auth** and **before or after dashboard** based on spike: **dashboard** should remain authoritative for **`setFooter`** if conflicts appear; task widget is **above editor** per upstream—usually orthogonal to dashboard footer.  
-   - **TBD**: exact index in `pi.extensions` array after smoke.
+   - **Choice**: Register **after** core/bootstrap/auth; order **ask** vs **tasks** vs **dashboard** by smoke: **dashboard** remains authoritative for **`setFooter`** if conflicts appear; task widget **above editor** (reference model) should stay **orthogonal** to dashboard footer where possible.  
+   - **TBD**: exact indices after implementation.
 
 3. **pi-subagents**  
-   - **Choice (v1)**: **Do not** add **`@tintinweb/pi-subagents`** unless **`TaskExecute`** is required for a documented devopet workflow; document that **`TaskExecute`** errors without it.  
-   - **Follow-up change** if users need full cascade execution.
+   - **Choice (v1)**: **Do not** require **`@tintinweb/pi-subagents`**; **`TaskExecute`** SHALL surface the same **clear unavailable** semantics as the reference when subagents are absent—implemented **in-tree**, not only by delegating to npm.
 
-4. **Skills/prompts**  
-   - **Choice**: Rely on **upstream bundled ask-user skill** inside **`pi-ask-user`**; devopet may **duplicate a pointer** in README only—no copy unless license/loading requires.
+4. **Skills**  
+   - **Choice**: Ship or document an **ask-user** skill **consistent with** the reference **ask-user** skill (path MAY live under **`skills/`** or extension-bundled); **pi-ask-user** package skill is **reference** for content shape.
+
+5. **Config paths**  
+   - **Choice**: Prefer **`~/.devopet`** / **`.devopet/`** for devopet-specific file layout when **`devopet-config-folders`** applies; document equivalence to **`.pi/tasks/`** for operators migrating from reference installs.
 
 ## Risks / Trade-offs
 
-- [Peer mismatch] Upstream requires newer pi than devopet → **Mitigation**: version spike; defer bundling one package if blocked.
-- [UI clutter] Widget + overlay + dashboard → **Mitigation**: docs; optional env to disable tasks (`PI_TASKS=off`).
-- [Maintenance] Two third-party extensions → **Mitigation**: semver pins; changelog watch.
+- **[More code vs npm re-export]** → **Mitigation**: modular **`extensions/`**, spec scenarios, focused tests.
+- **[UI clutter]** Widget + overlay + dashboard → **Mitigation**: docs; **`PI_TASKS=off`**-style disable per reference.
+- **[Drift from reference]** → **Mitigation**: periodic diff against upstream changelogs; version notes in a small **COMPAT.md** if added.
 
 ## Migration Plan
 
-1. Land dependencies + manifest entries + README section.
-2. Release note: new tools and `/tasks`.
-3. Rollback: remove extension entries and dependencies (users lose bundled path; can still `pi install` manually).
+1. Land first-party behaviors per tasks; remove npm shims when specs pass.
+2. Release note: new tools and **`/tasks`** entrypoints from devopet extensions.
+3. Rollback: revert extension entries (and deps if any).
 
 ## Open Questions
 
-- Exact **semver** for `@tintinweb/pi-tasks` given devopet’s **0.61.x** pi packages.
-- Whether **cleave** or **dashboard** events need explicit integration hooks (likely none for v1).
+- **One** combined **`extensions/ask-back/`** facade vs **two** top-level extensions (`ask-user`, `tasks`).
+- Exact **semver** alignment for **`@mariozechner/pi-coding-agent`** surfaces used by in-tree code vs reference peer ranges.

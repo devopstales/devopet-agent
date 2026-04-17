@@ -1,3 +1,6 @@
+> **OpenSpec change:** `multi-agent-orchestration`.  
+> **Implementation:** first-party extension(s) under **`extensions/`**. **[agent-pi](https://github.com/ruizrica/agent-pi) agent-team** is a **behavioral reference**, not a mandatory dependency.
+
 ## ADDED Requirements
 
 ### Requirement: Team definition file
@@ -11,7 +14,7 @@ The system SHALL support a **`agents/teams.yaml`** (or equivalent path documente
 
 ### Requirement: Dispatch-only orchestration
 
-The **primary agent** in team mode SHALL act as a **dispatch-only orchestrator**, delegating work to specialist agents via **`dispatch_agent`** (or the pi-supported equivalent exposed by the integrated extension), without silently bypassing the team ordering semantics defined upstream.
+The **primary agent** in team mode SHALL act as a **dispatch-only orchestrator**, delegating work to specialist agents via **`dispatch_agent`** (or the pi-supported equivalent implemented by the devopet extension), without silently bypassing the team ordering semantics **consistent with** the agent-pi reference.
 
 #### Scenario: Delegation to specialist
 

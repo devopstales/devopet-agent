@@ -1,0 +1,24 @@
+{
+  // Example only — copy to ~/.pi/agent/pi-permissions.jsonc (or path implied by PI_CODING_AGENT_DIR).
+  // See pi-permission-system README for full schema.
+  "defaultPolicy": {
+    "tools": "ask",
+    "bash": "ask",
+    "mcp": "ask",
+    "skills": "ask",
+    "special": "ask"
+  },
+  "tools": {
+    "read": "allow",
+    "write": "ask"
+  },
+  "bash": {
+    "git status": "allow",
+    "git *": "ask"
+  },
+  "mcp": {},
+  "skills": {
+    "*": "ask"
+  },
+  "special": {}
+}

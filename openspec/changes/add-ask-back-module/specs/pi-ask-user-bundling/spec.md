@@ -1,36 +1,39 @@
+> **OpenSpec change:** `add-ask-back-module`.  
+> **Implementation:** first-party extension under **`extensions/`** (e.g. **`ask-user`** or part of **`ask-back`**). **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** is a **behavioral reference**, not a mandatory npm dependency.
+
 ## ADDED Requirements
 
-### Requirement: pi-ask-user dependency and manifest registration
+### Requirement: ask_user via devopet-owned extension
 
-The system SHALL declare **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** as an **`npm` dependency** with a **pinned or semver-bounded** version compatible with devopet’s **`@mariozechner/pi-coding-agent`** and **`pi-tui`** peers, and SHALL register the extension in **`package.json` `pi.extensions`** using the correct path to the package entry after install.
+The system SHALL provide the **`ask_user`** tool (and related interactive UI) through a **first-party** extension registered in **`package.json` `pi.extensions`**. **Observable behavior** SHALL be **consistent with** **[pi-ask-user](https://www.npmjs.com/package/pi-ask-user)** documentation: searchable/split-pane UX, overlay mode where applicable, and invocability under normal pi tool policy unless this spec narrows scope (document gaps).
 
-#### Scenario: Install resolves and extension loads
-
-- **WHEN** the operator runs **`npm install`** at the devopet package root
-- **THEN** **`pi-ask-user`** SHALL install without unrecoverable peer conflicts or the change SHALL document required pi version alignment
-
-#### Scenario: ask_user tool is available in session
+#### Scenario: Extension loads in session
 
 - **WHEN** a devopet session starts with the extension enabled
-- **THEN** the **`ask_user`** tool SHALL be registered per upstream behavior and SHALL be invocable by the model within normal pi tool policy
+- **THEN** the **`ask_user`** tool SHALL be registered and SHALL be invocable by the model within normal pi tool policy
 
-### Requirement: Bundled ask-user skill discoverability
+#### Scenario: Install and peers
 
-The system SHALL document that **pi-ask-user** ships a bundled **ask-user** skill (upstream path under the package) for decision-gating workflows, and SHALL not strip or hide that skill when bundling.
+- **WHEN** the devopet package is installed and built
+- **THEN** there SHALL be **no unrecoverable** peer conflicts for **`@mariozechner/pi-coding-agent`** / **`pi-tui`** attributable to this extension, or the change SHALL document required pi version alignment
+
+### Requirement: Ask-user skill discoverability
+
+The system SHALL document an **ask-user** skill (or equivalent) **consistent with** the reference **ask-user** skill for decision-gating workflows—whether **bundled under `skills/`**, shipped inside the extension, or linked—with a clear path for operators.
 
 #### Scenario: Documentation references skill
 
 - **WHEN** the operator reads devopet documentation for the ask-back module
-- **THEN** they SHALL find a pointer to the upstream **ask-user** skill and its intended use (handshake before high-impact choices)
+- **THEN** they SHALL find how to use the **ask-user** skill pattern (handshake before high-impact choices)
 
-### Requirement: Non-interactive fallback unchanged
+### Requirement: Non-interactive fallback
 
-The system SHALL rely on upstream **pi-ask-user** behavior for **graceful fallback** when interactive UI is unavailable; devopet SHALL not break that path in v1.
+When interactive UI is unavailable, behavior SHALL match the **reference model** for graceful fallback (no devopet-specific regression in v1 unless explicitly documented).
 
 #### Scenario: Headless or constrained UI
 
 - **WHEN** interactive TUI is not available for a prompt
-- **THEN** behavior SHALL match upstream documented fallback (no devopet-specific regression in v1)
+- **THEN** fallback SHALL match **pi-ask-user**–documented semantics for that case
 
 ## REMOVED Requirements
 

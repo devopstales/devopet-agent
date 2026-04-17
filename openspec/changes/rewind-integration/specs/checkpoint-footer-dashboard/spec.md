@@ -1,17 +1,20 @@
+> **OpenSpec change:** `rewind-integration`.  
+> **Implementation:** **dashboard** + **first-party rewind** extension. Footer merge avoids competing **`setFooter`** factories.
+
 ## ADDED Requirements
 
 ### Requirement: Single footer surface
 
-The system SHALL NOT present a **second independent footer** that competes with **`DashboardFooter`**; checkpoint status SHALL be integrated into the **dashboard** footer implementation or an equivalent **single** `setFooter` component.
+The system SHALL NOT present a **second independent footer** that competes with **`DashboardFooter`**; checkpoint status from the **rewind extension** SHALL be integrated into the **dashboard** footer implementation or an equivalent **single** `setFooter` component.
 
 #### Scenario: One footer component
 
-- **WHEN** dashboard extension registers `setFooter`
-- **THEN** pi-rewind SHALL not replace that registration with a separate full-width footer factory without merging behavior
+- **WHEN** the dashboard extension registers **`setFooter`**
+- **THEN** the rewind extension **SHALL NOT** replace that registration with a separate full-width footer factory without merged behavior
 
 ### Requirement: Checkpoint visibility
 
-The **dashboard** footer SHALL display **checkpoint count or status** (e.g. **`◆ N checkpoints`** or a documented abbreviated form) when pi-rewind has active checkpoint data, readable on typical terminal widths.
+The **dashboard** footer SHALL display **checkpoint count or status** (e.g. **`◆ N checkpoints`** or a documented abbreviated form) when the rewind extension has active checkpoint data, readable on typical terminal widths.
 
 #### Scenario: User sees checkpoint indicator
 
@@ -20,7 +23,7 @@ The **dashboard** footer SHALL display **checkpoint count or status** (e.g. **`�
 
 ### Requirement: Documentation
 
-User documentation SHALL explain how checkpoint status appears in the **unified dashboard footer** and SHALL distinguish **pi-rewind checkpoints** from **cleave preflight “checkpoint”** commits.
+User documentation SHALL explain how checkpoint status appears in the **unified dashboard footer** and SHALL distinguish **rewind checkpoints** from **cleave preflight “checkpoint”** commits.
 
 #### Scenario: Operator reads docs
 

@@ -1,31 +1,35 @@
-## 1. Upstream evaluation
+## 1. Reference spike (behavior only)
 
-- [ ] 1.1 Clone [ruizrica/agent-pi](https://github.com/ruizrica/agent-pi); confirm build, `package.json` entry point, peer deps, and whether npm publish exists or git install only.
-- [ ] 1.2 Map modules (**agent-team**, **agent-chain**, **pipeline-team**, **subagent-widget**, **toolkit-commands**) to files and verify YAML examples (`teams.yaml`, `agent-chain.yaml`, `pipeline-team.yaml`) match user-provided samples.
+- [ ] 1.1 Read [ruizrica/agent-pi](https://github.com/ruizrica/agent-pi) and map **YAML schemas**, **`dispatch_agent`** usage, widget/toolkit patterns—record as **compatibility baseline** in **`COMPAT.md`**, not as mandatory vendoring.
+- [ ] 1.2 Read [pi-messenger-swarm](https://github.com/monotykamary/pi-messenger-swarm) for channel/task/overlay semantics—same: **reference** for optional swarm implementation.
 
-## 2. Dependency and manifest
+## 2. First-party extension scaffold
 
-- [ ] 2.1 Add agent-pi (or split packages if upstream structure requires) to `package.json` with pin; register in `pi.extensions` with load order tested against cleave/bootstrap.
-- [ ] 2.2 Run `npm install`; fix peer warnings against `@mariozechner/pi-coding-agent` / `pi-tui`.
+- [ ] 2.1 Create **`extensions/<name>/`** (e.g. **`multi-agent-orchestration/`** or split modules) with **`ExtensionAPI`** entrypoints covering **teams**, **chains**, **pipelines**, **subagent widget**, **toolkit commands**, and **orchestration UX** per delta specs.
+- [ ] 2.2 Register in **`package.json` `pi.extensions`** with load order validated against **cleave**, **bootstrap**, **dashboard** (no keybinding/widget fights).
+- [ ] 2.3 Remove any **transitional** git/npm/submodule wiring to agent-pi once in-tree satisfies specs; **`package.json`** deps SHOULD NOT list **agent-pi** as permanent if avoidable.
 
-## 3. UX and keybindings
+## 3. YAML and validation
 
-- [ ] 3.1 Verify **`/agents-team`** registration; smoke-test team switching with a sample `agents/` tree in `examples/`.
-- [ ] 3.2 Audit **Ctrl+X** against current pi-tui keymaps; resolve conflicts or add configurable theme-cycle binding per design.
+- [ ] 3.1 Implement parsers/validators for **`agents/teams.yaml`**, **`agents/agent-chain.yaml`**, **`agents/pipeline-team.yaml`** with clear errors (file/line).
+- [ ] 3.2 Add **`examples/`** or **docs** sample **`agents/`** trees.
 
-## 4. Documentation
+## 4. UX and keybindings
 
-- [ ] 4.1 Add README section: multi-agent orchestration, link to agent-pi, `agents/` layout, chains (`$INPUT` / `$ORIGINAL`), pipeline phases, subagent widgets, toolkit Markdown.
-- [ ] 4.2 Document relationship to **cleave** (when to use teams vs cleave children).
+- [ ] 4.1 Implement **`/agents-team`** (or documented spelling) per **`orchestration-ux`** spec.
+- [ ] 4.2 Audit **Ctrl+X** vs **pi-tui** / devopet; resolve conflicts or make binding configurable per design.
 
-## 5. Verification
+## 5. Optional swarm (first-party)
 
-- [ ] 5.1 Run `npm run check` if TypeScript touched; add or extend tests for YAML validation if implemented in-repo.
-- [ ] 5.2 Manual smoke: one team dispatch, one chain run, optional pipeline; confirm subagent widget visibility if applicable.
+- [ ] 5.1 Implement optional messenger feature **per** **`specs/messenger-swarm/spec.md`** (reference: **pi-messenger-swarm**); **no** long-term requirement on **`pi-messenger-swarm`** npm once behavior matches spec.
+- [ ] 5.2 Document **`.pi/messenger/`**, **`PI_MESSENGER_*`**, **`/messenger`**; **when to use** swarm vs teams vs cleave.
 
-## 6. pi-messenger-swarm (optional messaging)
+## 6. Documentation
 
-- [ ] 6.1 Evaluate **[pi-messenger-swarm](https://www.npmjs.com/package/pi-messenger-swarm)** (peer deps, `pi-tui` / `@mariozechner/pi-coding-agent` alignment, bundle size); decide **bundled dependency + `pi.extensions`** vs **documented `pi install npm:pi-messenger-swarm` only** per design decision 6.
-- [ ] 6.2 If bundling: add pinned dependency and extension registration; if not: add **README / docs** snippet with `pi install` and optional `git:` pin.
-- [ ] 6.3 Document **`.pi/messenger/`** layout, **`PI_MESSENGER_DIR`** / **`PI_MESSENGER_GLOBAL`**, channel-first **`send` with `to:`**, and **`/messenger`** overlay; add a **when to use** subsection (swarm vs teams vs cleave).
-- [ ] 6.4 Manual smoke: join messenger, post to `#memory`, create/claim a task if applicable; confirm no regressions when extension is absent (optional install path).
+- [ ] 6.1 README / docs: multi-agent orchestration owned by **devopet extensions**; **agent-pi** and **pi-messenger-swarm** linked as **references**.
+- [ ] 6.2 Relationship to **cleave** (decision matrix).
+
+## 7. Verification
+
+- [ ] 7.1 **`npm run check`**; YAML/fixture tests if implemented in-repo.
+- [ ] 7.2 Manual: one team dispatch, one chain, optional pipeline; subagent widget visibility; optional **`/messenger`** smoke when swarm is enabled.

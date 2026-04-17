@@ -1,24 +1,25 @@
-## 1. Dependency and spike
+## 1. Reference baseline
 
-- [ ] 1.1 Add `pi-rewind` to `package.json` `dependencies`; run `npm install`; record peer warnings.
-- [ ] 1.2 Read pi-rewind `src/ui.ts`, `src/index.ts`, `src/state.ts`: determine how checkpoint count is tracked and whether **events**, **exports**, or **git refs** can drive **`DashboardFooter`** without forking `core.ts`.
+- [ ] 1.1 Read [pi-rewind](https://github.com/arpagon/pi-rewind) (`index`, `ui`, `core`, state)—record **git ref layout**, hooks, **`/rewind`**, **Esc+Esc** in **`COMPAT.md`** as **behavioral reference**, not as mandatory **npm** vendoring.
+- [ ] 1.2 Spike (optional): temporary **`pi-rewind`** install **only** to compare behavior—do **not** treat as final integration.
 
-## 2. Bundling
+## 2. First-party rewind extension
 
-- [ ] 2.1 Register pi-rewind in `pi.extensions` with load order **before** `./extensions/dashboard` (or as required after spike).
-- [ ] 2.2 Smoke-test: `/rewind`, create a checkpoint after a mutating tool, verify git refs under upstream layout.
+- [ ] 2.1 Scaffold **`extensions/<name>/`** implementing checkpoint scheduling, **`/rewind`**, redo, **Esc+Esc**, and git operations **per** **`specs/rewind-bundling/spec.md`** (reference: pi-rewind).
+- [ ] 2.2 Register in **`package.json` `pi.extensions`** with load order **before** **`./extensions/dashboard`** per design.
+- [ ] 2.3 Remove any transitional **`node_modules/pi-rewind`** loader; drop **`pi-rewind`** from **`dependencies`** when in-tree satisfies specs and tests.
 
 ## 3. Footer merge (option B)
 
-- [ ] 3.1 Implement **shared-state bridge** or **thin wrapper** so **`DashboardFooter`** receives checkpoint count; add rendering in `extensions/dashboard/footer.ts` (e.g. system card or dedicated line).
-- [ ] 3.2 Ensure pi-rewind’s **`ui.ts`** does not call **`setFooter`** in a way that overrides dashboard—or **disable** that path via upstream-supported option, patch, or wrapper **only if** necessary (document choice).
+- [ ] 3.1 Implement **shared-state bridge** (or equivalent) so **`DashboardFooter`** receives checkpoint count; render in **`extensions/dashboard/footer.ts`** (HUD line or badge).
+- [ ] 3.2 Ensure **no second `setFooter`** factory from rewind code—rewind extension **must not** override **dashboard** footer without merged behavior.
 
 ## 4. Keybindings and docs
 
-- [ ] 4.1 Test **Esc+Esc**; resolve conflicts with pi-tui/dashboard.
-- [ ] 4.2 README: install, `/rewind`, footer, cleave vs pi-rewind checkpoint wording; link [pi-rewind](https://github.com/arpagon/pi-rewind) and [site](https://arpagon.github.io/pi-rewind/).
+- [ ] 4.1 Test **Esc+Esc**; resolve pi-tui/dashboard conflicts; document overrides.
+- [ ] 4.2 README: **`/rewind`**, footer, **cleave** vs rewind terminology; **[pi-rewind](https://github.com/arpagon/pi-rewind)** as **reference**.
 
 ## 5. Verification
 
-- [ ] 5.1 `npm run check` if TS touched.
-- [ ] 5.2 Manual: footer shows ◆ or equivalent after checkpoints; rewind + redo smoke on a small repo.
+- [ ] 5.1 **`npm run check`** if TS touched.
+- [ ] 5.2 Manual: footer shows checkpoint indicator; **`/rewind`** + redo smoke on a small repo.
