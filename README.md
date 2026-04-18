@@ -194,25 +194,35 @@ Enable/disable tools and switch named profiles to keep the context window lean.
 - **Tool**: `manage_tools`
 - **Command**: `/profile [name|reset]`
 
-### Security (permissions, guard, connect)
+### Security
 
-**`extensions/ai-provider-connect`** implements **`/connect`** / **`/disconnect`** with behavior **aligned with** **[pi-connect](https://www.npmjs.com/package/pi-connect)** (reference); **[pi-permission-system](https://www.npmjs.com/package/pi-permission-system)**-compatible policy (`allow` / `deny` / `ask` in devopet **`permissions.jsonc`**) with **agent-pi–derived** helpers under **`extensions/security-engine/`** (vendored from [agent-pi security-guard](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts)). *OpenSpec:* **`/connect`** is specified under **`ai-provider-extensions`** (first-party extension, reference semantics); permissions + guard are **`add-permission-manager`**.
+devopet splits **provider auth**, **integrity + guard**, and **permission policy** across three extensions. Policy JSONC is [pi-permission-system](https://www.npmjs.com/package/pi-permission-system)-shaped, but enforcement is **first-party** in **`permission-manager`** (vendored runtime, devopet paths). **`security-engine`** does **not** install npm `pi-permission-system` for policy; hooks live in **`permission-manager`**.
 
-| Layer | Role | Typical artifacts / commands |
-|-------|------|--------------------------------|
-| **Permissions** | Your rules for tools, bash, MCP, skills | **`~/.devopet/permissions.jsonc`** (global), **`.devopet/permissions.jsonc`** (project); same JSONC schema as [pi-permission-system](https://github.com/MasuRii/pi-permission-system) (upstream often uses `~/.pi/agent/pi-permissions.jsonc`) |
-| **Security guard** | Baseline blocks (destructive bash, exfil patterns, injection in tool output) + audit log | `.pi/security-policy.yaml` (optional); `/security [status\|log\|policy\|reload]`; `.pi/security-audit.log` |
-| **Message integrity** | Repairs orphaned `tool_result` / `tool_use` pairs before API calls | (automatic `context` hook) |
-| **`/secure`** | Project AI security sweep and optional installer files | `/secure`, `/secure sweep`, `/secure install` |
-| **Connect** | Provider OAuth / API keys | `/connect`, `/disconnect` — **`ai-provider-connect`** (reference: [pi-connect](https://github.com/hk-vk/pi-connect)) |
+**Load order** (`package.json` → `pi.extensions`, relevant entries):
 
-**Precedence:** If both permission policy and the guard apply, **guard blocks win** for the same invocation when safety requires it.
+1. **`ai-provider-connect`** — `/connect`, `/disconnect` (aligned with [pi-connect](https://www.npmjs.com/package/pi-connect)).
+2. **`security-engine`** — message-integrity guard, bash **security guard** ([agent-pi](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts)–derived), `/secure`.
+3. **`permission-manager`** — tool/bash/MCP/skills/special policy, merged **`~/.devopet/permissions.effective.jsonc`**, optional **`toolPaths`**, `/yolo`.
 
-**Providers:** See [official pi provider docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md).
+Integrity and guard run **before** permission checks on tool calls. *OpenSpec:* connect work is **`ai-provider-extensions`**; permissions work is **`add-permission-manager`**.
 
-**Sandbox:** Optional **[pi-sandbox](https://www.npmjs.com/package/pi-sandbox)** is not bundled here; install separately if you want OS-level sandboxing. Global `~/.pi/agent/sandbox.json` and project `.pi/sandbox.json` follow upstream precedence; use **`--no-sandbox`** on the CLI when supported by pi to disable. Sandbox complements (does not replace) permission policy and security-guard.
+| Layer | What it does | Where / commands |
+|-------|----------------|------------------|
+| **Connect** | OAuth and API keys for providers | `/connect`, `/disconnect` |
+| **Message integrity** | Fixes orphaned `tool_use` / `tool_result` pairs before API calls | Automatic (context hook) |
+| **Security guard** | Blocks risky bash, exfil-style patterns, suspicious tool output; audit log | `/security` (`status`, `log`, `policy`, `reload`); policy YAML: **`.devopet/security-policy.yaml`** (then **`~/.devopet/security-policy.yaml`**, then legacy **`.pi/security-policy.yaml`**); `.pi/security-audit.log` |
+| **`/secure`** | Project AI security sweep and optional on-disk installer helpers | `/secure`, `/secure sweep`, `/secure install` |
+| **Permissions** | `allow` / `deny` / `ask` for tools, bash, MCP, skills; optional **`toolPaths`** for `read` / `write` / `edit`; prompts can persist **repo** or **global** rules | `~/.devopet/permissions.jsonc`, `.devopet/permissions.jsonc` → merged **`~/.devopet/permissions.effective.jsonc`**; `/yolo` (`status`, `enable`, `disable`) |
 
-**Examples:** `config/permissions.example.jsonc`, `config/security-policy.example.yaml` — copy into your agent dir / project as needed (not overwritten on upgrade).
+**Precedence:** When both policy and the guard apply to an invocation, **guard blocks take precedence** if safety requires it.
+
+**Default policy:** No permission files → built-in **ask everywhere** (not YOLO). **`yolo: true`** in JSONC opts out explicitly. Permissions: **[docs/permission-manager.md](docs/permission-manager.md)**. Security guard YAML (`security-policy.yaml`): **[docs/security-guard.md](docs/security-guard.md)**. Paths: [devopet-config.md](docs/devopet-config.md).
+
+**Providers:** [Pi provider docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md).
+
+**Sandbox:** [pi-sandbox](https://www.npmjs.com/package/pi-sandbox) is optional and not bundled. Use `~/.pi/agent/sandbox.json` / `.pi/sandbox.json` per upstream; **`--no-sandbox`** when the CLI supports it. Sandbox **adds** OS-level isolation; it does **not** replace permission policy or the guard.
+
+**Copy-paste examples:** `config/permissions.example.jsonc`, `config/security-policy.example.yaml` (not overwritten on upgrade).
 
 ### Other extensions
 
@@ -223,13 +233,14 @@ Enable/disable tools and switch named profiles to keep the context window lean.
 | `chronos` | Authoritative date/time from system clock — prevents AI date math errors |
 | `01-auth` | Auth status and diagnostics across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
 | `ai-provider-connect` | **`/connect`** / **`/disconnect`** (OAuth + API keys); behavior aligned with [pi-connect](https://www.npmjs.com/package/pi-connect); loads before `security-engine` |
+| `permission-manager` | Policy for tools/bash/MCP/skills; **`permissions.jsonc`**, **`toolPaths`**, **`/yolo`** — [docs/permission-manager.md](docs/permission-manager.md) (after `security-engine`) |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
 | `defaults` | Deploys `AGENTS.md` and theme on first install; content-hash guard prevents overwriting customizations |
 | `style` | Design system reference (`/style`) |
 | `vault` | Markdown viewport with wikilink navigation (`/vault`) |
 | `secrets` | Resolve secrets from env vars, shell commands, or system keychains |
 | `mcp-bridge` | Connect external MCP servers as native pi tools |
-| `security-engine` | **pi-permission-system** + message-integrity + security-guard + `/secure` — see **Security** above (`/connect` is **`ai-provider-connect`**) |
+| `security-engine` | Message-integrity + security-guard + **`/secure`** — see **Security** above (policy is **`permission-manager`**, `/connect` is **`ai-provider-connect`**) |
 
 ## Skills
 

@@ -4,6 +4,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { findDevopetProjectConfigDir, getDevopetGlobalConfigDir } from "../../lib/devopet-config-paths.ts";
 
 // ═══════════════════════════════════════════════════════════════════
 // Types
@@ -329,17 +330,26 @@ function safeTest(re: RegExp, text: string): boolean {
 }
 
 /**
- * Load security policy from the YAML file.
- * Searches: .pi/security-policy.yaml, then ~/.pi/agent/.pi/security-policy.yaml
+ * Load security policy from the first YAML file found (devopet-first, then legacy `.pi`).
+ *
+ * Search order:
+ * 1. `<project>/.devopet/security-policy.yaml` (nearest `.devopet` walking up from `projectRoot`)
+ * 2. `~/.devopet/security-policy.yaml` (or `DEVOPET_CONFIG_HOME/security-policy.yaml`)
+ * 3. `<projectRoot>/.pi/security-policy.yaml`
+ * 4. `~/.pi/agent/.pi/security-policy.yaml`
  */
 export function loadPolicy(projectRoot: string): SecurityPolicy {
 	// Clear regex cache on reload to drop stale compiled patterns
 	clearRegexCache();
 
-	const candidates = [
-		join(projectRoot, ".pi", "security-policy.yaml"),
-		join(homedir(), ".pi", "agent", ".pi", "security-policy.yaml"),
-	];
+	const devopetProjectDir = findDevopetProjectConfigDir(projectRoot);
+	const candidates: string[] = [];
+	if (devopetProjectDir) {
+		candidates.push(join(devopetProjectDir, "security-policy.yaml"));
+	}
+	candidates.push(join(getDevopetGlobalConfigDir(), "security-policy.yaml"));
+	candidates.push(join(projectRoot, ".pi", "security-policy.yaml"));
+	candidates.push(join(homedir(), ".pi", "agent", ".pi", "security-policy.yaml"));
 
 	for (const path of candidates) {
 		if (existsSync(path)) {

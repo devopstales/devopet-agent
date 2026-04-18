@@ -46,6 +46,7 @@
   "pi": {
     "extensions": [
       "./extensions/00-splash",
+      "./extensions/system-prompt-md/index.ts",
       "./extensions/bootstrap",
       "./extensions/00-secrets",
       "./extensions/01-auth",

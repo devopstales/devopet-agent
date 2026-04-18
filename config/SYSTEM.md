@@ -1,11 +1,11 @@
 <!--
-  Bundled template for file-based system prompt override (planned: pi-mono / devopet).
+  In-repo reference for file-based system prompt override (pi + devopet).
 
-  Intended resolution order when implemented (see openspec/changes/system-prompt-md-devopet):
-  - Replace: <project>/.devopet/SYSTEM.md → ~/.devopet/SYSTEM.md → .pi/SYSTEM.md → ~/.pi/agent/SYSTEM.md → built-in
-  - Append: APPEND_SYSTEM.md chains after the effective base (see design.md in that change).
+  Runtime resolution and append order: docs/devopet-config.md and
+  extensions/lib/system-prompt-md.ts. The short starter written to ~/.devopet/SYSTEM.md
+  on first run is defined in extensions/defaults.ts (not a full copy of this file).
 
-  Not yet wired into the agent runtime; safe to edit as the canonical in-repo source.
+  Safe to edit as the canonical in-repo source for operators who vendor or copy it.
 -->
 
 # System instructions (devopet)
@@ -100,3 +100,12 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - Match existing project conventions (formatting, imports, naming) unless a standard change is in scope.
 - If requirements are ambiguous, ask a focused question instead of assuming.
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

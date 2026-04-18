@@ -14,3 +14,12 @@ Key points for working on devopet itself:
 - The `.gitattributes` in this repo declares `merge=union` for `.pi/memory/facts.jsonl`
 - The `.pi/.gitignore` excludes `memory/*.db` files — only `facts.jsonl` is tracked
 - **Type checking**: `npx tsc --noEmit` must pass before committing TypeScript changes. Run `npm run typecheck` or `npm run check` (typecheck + tests).
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

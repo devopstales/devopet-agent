@@ -11,7 +11,29 @@ devopet uses two path layers for product-specific configuration, separate from p
 ## Project: `.devopet/`
 
 - Resolved by walking **from the current working directory upward** until a directory named **`.devopet`** is found, or the filesystem root is reached.
-- Precedence for future merged config: **project `.devopet` overrides or merges with `~/.devopet`** (exact rules per file type when those features land).
+- Precedence for merged JSON settings: **`~/.pi/agent/settings.json`** → **`<cwd>/.pi/settings.json`** → **`~/.devopet/settings.json`** → **`<project>/.devopet/settings.json`** (later layers win per key; nested objects merge like [pi settings](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md)). Helpers: `extensions/lib/devopet-settings-merge.ts`.
+
+## `SYSTEM.md` and `APPEND_SYSTEM.md` (system prompt)
+
+The extension builds a **merged system prompt**: packaged **`config/SYSTEM.md`** is the baseline (**layer 0**), then layers **1–5** concatenate in order; **`APPEND_SYSTEM.md`** files append **after** that base in the order shown in the second column.
+
+| Layer | Merged replace stack (`SYSTEM.md` + `AGENTS.md`) | Append (`APPEND_SYSTEM.md`) — concatenation order |
+|--------|--------------------------------------------------|---------------------------------------------------|
+| 0 | `config/SYSTEM.md` (packaged) | *Merge with all layers below* |
+| 1 (highest) | `<project>/.devopet/SYSTEM.md` | `~/.pi/agent/APPEND_SYSTEM.md` |
+| 2 | `~/.devopet/SYSTEM.md` | `<ancestor>/.pi/APPEND_SYSTEM.md` |
+| 3 | `<ancestor>/.pi/SYSTEM.md` | `~/.devopet/APPEND_SYSTEM.md` |
+| 4 | `~/.pi/agent/SYSTEM.md` | `<project>/.devopet/APPEND_SYSTEM.md` |
+| 5 | `<project>/AGENTS.md` | — |
+
+- **Layer 0** is always the shipped **`config/SYSTEM.md`** when present; layers **1–5** are concatenated after it (skip missing or empty files).
+- **Ancestor `.pi/`** is the nearest **`.pi`** directory walking **up** from `cwd` (not only `cwd/.pi`).
+- **`APPEND_SYSTEM.md`** segments apply after the merged replace text, in column order; missing files are skipped.
+- Implementation: `extensions/system-prompt-md/index.ts` (`before_agent_start`), `extensions/lib/system-prompt-md.ts`.
+
+### Bootstrap: `~/.devopet/SYSTEM.md`
+
+On startup, the defaults extension ensures **`~/.devopet/SYSTEM.md`** exists with a short starter body and **`<!-- managed by devopet -->`**, plus a hash file **`.system-md-hash`** for non-destructive updates (same pattern as global **`AGENTS.md`**).
 
 ## Debugging
 
@@ -26,8 +48,12 @@ These filenames are reserved for devopet-managed or coordinated configuration. P
 
 | Location | Examples (conventions) |
 |----------|-------------------------|
-| Global | **`permissions.jsonc`** (permission policy, pi-permission-system–compatible), `sandbox.json`, operator profiles not owned by upstream pi |
-| Project | Same basenames under **`.devopet/`** (e.g. **`permissions.jsonc`**) with local override semantics |
+| Global | **`settings.json`** (merged with pi per layer order above), **`SYSTEM.md`**, **`APPEND_SYSTEM.md`**, **`permissions.jsonc`** (permission policy, pi-permission-system–compatible), **`security-policy.yaml`** (security guard rules), `sandbox.json`, operator profiles not owned by upstream pi |
+| Project | Same basenames under **`.devopet/`** (e.g. **`settings.json`**, **`SYSTEM.md`**, **`permissions.jsonc`**, **`security-policy.yaml`**) with local override semantics; security guard loads **project `.devopet` first**, then **`~/.devopet`**, then legacy **`.pi/security-policy.yaml`** |
+
+Relative paths in **`settings.json`** arrays (**`extensions`**, **`skills`**, **`prompts`**, **`themes`**, **`packages`**) resolve against **`~/.devopet`** or **`<project>/.devopet`** (`resolveDevopetSettingsPathArrays` in `extensions/lib/devopet-settings-merge.ts`). Field semantics: [pi-mono settings.md](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md).
+
+Details: [permission-manager.md](./permission-manager.md) (`permissions.jsonc`, merge, `toolPaths`, YOLO); [security-guard.md](./security-guard.md) (`security-policy.yaml`, `/security`, guard vs permissions).
 
 Upstream pi and extensions may continue to document paths under **`~/.pi/agent`** until adapters read the devopet locations.
 

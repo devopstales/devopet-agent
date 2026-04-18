@@ -18,8 +18,9 @@
  * Commands:
  *   /security [status|log|policy|reload] — View/manage security state
  *
- * Configuration:
- *   .pi/security-policy.yaml — Tuneable rules (blocked commands, protected paths, etc.)
+ * Configuration (first match wins; devopet-first):
+ *   .devopet/security-policy.yaml — Project (walks up from cwd); then ~/.devopet/security-policy.yaml
+ *   Legacy: .pi/security-policy.yaml, ~/.pi/agent/.pi/security-policy.yaml
  *
  * Usage: Loaded via packages in agent/settings.json
  */

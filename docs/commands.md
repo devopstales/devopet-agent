@@ -145,4 +145,6 @@ These are registered by devopet’s bundled extensions (`package.json` → `pi.e
 ### See also
 
 - [devopet-config.md](./devopet-config.md) — `~/.devopet` and `.devopet/` paths  
+- [permission-manager.md](./permission-manager.md) — Permission policy files, `toolPaths`, `/yolo`  
+- [security-guard.md](./security-guard.md) — Security guard YAML, `/security`, precedence vs `permissions.jsonc`  
 - Feature docs: [cleave.md](./cleave.md), [project-memory.md](./project-memory.md), [dashboard.md](./dashboard.md), [openspec.md](./openspec.md), [README.md](../README.md) extension tables  

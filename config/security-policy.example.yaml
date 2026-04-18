@@ -1,5 +1,8 @@
-# Example only — optional project override at .pi/security-policy.yaml
-# (vendored from agent-pi security-guard; see extensions/security-engine/lib/security-engine.ts)
+# Example only — security guard policy (YAML). Prefer devopet paths:
+#   .devopet/security-policy.yaml (project, walks up from cwd)
+#   ~/.devopet/security-policy.yaml (global; honors DEVOPET_CONFIG_HOME)
+# Legacy: .pi/security-policy.yaml, ~/.pi/agent/.pi/security-policy.yaml
+# (vendored from agent-pi security-guard; see extensions/security-engine/lib/security-engine.ts loadPolicy)
 #
 # blocked_commands:
 #   - pattern: "example\\s+pattern"

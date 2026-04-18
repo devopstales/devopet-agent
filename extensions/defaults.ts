@@ -15,6 +15,7 @@ import * as crypto from "node:crypto";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import { getDevopetGlobalConfigDir } from "./lib/devopet-config-paths.ts";
+import { loadMergedSettingsLayers } from "./lib/devopet-settings-merge.ts";
 
 /**
  * Resolve the agent directory the same way pi's getAgentDir() does.
@@ -47,8 +48,24 @@ const PIKIT_MARKER_LEGACY = "<!-- managed by pi-kit -->"; // legacy — still tr
 /** Hash file tracks the last content we deployed, so we detect user edits */
 const HASH_PATH = path.join(AGENT_DIR, ".agents-md-hash");
 
+/** Same pattern for ~/.devopet/SYSTEM.md bootstrap */
+const SYSTEM_HASH_PATH = () => path.join(getDevopetGlobalConfigDir(), ".system-md-hash");
+
 /** Path to the template shipped with the devopet package */
 const TEMPLATE_PATH = path.join(import.meta.dirname, "..", "config", "AGENTS.md");
+
+/**
+ * Short starter written to ~/.devopet/SYSTEM.md when missing.
+ * The full reference template lives at config/SYSTEM.md in the package (not copied verbatim to avoid a huge home file).
+ */
+function devopetSystemBootstrapBody(): string {
+  return (
+    `# devopet system prompt\n\n` +
+    `Edit this file to **replace** the default coding-assistant system prompt. ` +
+    `Precedence and append files are documented in docs/devopet-config.md.\n\n` +
+    `${PIKIT_MARKER}\n`
+  );
+}
 
 function contentHash(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
@@ -153,6 +170,52 @@ export default function (pi: ExtensionAPI) {
       // Best effort — devopet-specific config root
     }
 
+    // --- Global ~/.devopet/SYSTEM.md bootstrap (marker + hash guard; same pattern as AGENTS.md) ---
+    try {
+      const devopetRoot = getDevopetGlobalConfigDir();
+      const globalSystemPath = path.join(devopetRoot, "SYSTEM.md");
+      const systemHashPath = SYSTEM_HASH_PATH();
+
+      const deployBody = devopetSystemBootstrapBody();
+
+      if (fs.existsSync(globalSystemPath)) {
+        const existing = fs.readFileSync(globalSystemPath, "utf8");
+        if (existing.includes(PIKIT_MARKER) || existing.includes(PIKIT_MARKER_LEGACY)) {
+          if (existing !== deployBody) {
+            const lastHash = fs.existsSync(systemHashPath) ? fs.readFileSync(systemHashPath, "utf8").trim() : null;
+            const existingHash = contentHash(existing);
+            if (!lastHash) {
+              fs.writeFileSync(systemHashPath, existingHash, "utf8");
+              if (ctx.hasUI) {
+                ctx.ui.notify(
+                  "devopet: ~/.devopet/SYSTEM.md template tracking enabled. Updates apply when the hash matches.",
+                  "info",
+                );
+              }
+            } else if (lastHash !== existingHash) {
+              if (ctx.hasUI) {
+                ctx.ui.notify(
+                  "devopet: ~/.devopet/SYSTEM.md has local edits — skipping template update",
+                  "warning",
+                );
+              }
+            } else {
+              fs.writeFileSync(globalSystemPath, deployBody, "utf8");
+              fs.writeFileSync(systemHashPath, contentHash(deployBody), "utf8");
+            }
+          }
+        }
+      } else {
+        fs.writeFileSync(globalSystemPath, deployBody, "utf8");
+        fs.writeFileSync(systemHashPath, contentHash(deployBody), "utf8");
+        if (ctx.hasUI) {
+          ctx.ui.notify("devopet: created ~/.devopet/SYSTEM.md (system prompt template)", "info");
+        }
+      }
+    } catch {
+      // Best effort
+    }
+
     // Belt-and-suspenders: if Kitty remote control is available, also push via @ set-colors.
     // This survives cases where OSC sequences are swallowed by multiplexers.
     try {
@@ -173,22 +236,25 @@ export default function (pi: ExtensionAPI) {
     // Do NOT set title here — it creates a startup flash before the dynamic
     // title takes over, and the branding prefix was inconsistent (Ω here vs π there).
 
-    // --- Theme default ---
+    // --- Theme default (effective theme = pi global + pi project + devopet layers) ---
     try {
-      const raw = fs.readFileSync(SETTINGS_PATH, "utf8");
-      const settings = JSON.parse(raw);
-
+      const merged = loadMergedSettingsLayers(ctx.cwd, AGENT_DIR) as { theme?: string };
+      let settings = merged;
       let changed = false;
 
       // Always enforce alpharius — devopet is opinionated about its own TUI.
       // Override "default" and absent theme; leave other explicit choices alone.
       if (!settings.theme || settings.theme === "default") {
-        settings.theme = "alpharius";
+        settings = { ...settings, theme: "alpharius" };
         changed = true;
       }
 
       if (changed) {
-        fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n", "utf8");
+        fs.mkdirSync(AGENT_DIR, { recursive: true });
+        const rawExisting = fs.existsSync(SETTINGS_PATH) ? fs.readFileSync(SETTINGS_PATH, "utf8") : "{}";
+        const diskGlobal = JSON.parse(rawExisting) as Record<string, unknown>;
+        diskGlobal.theme = settings.theme;
+        fs.writeFileSync(SETTINGS_PATH, JSON.stringify(diskGlobal, null, 2) + "\n", "utf8");
         if (ctx.hasUI) {
           ctx.ui.notify("devopet: activated alpharius theme (restart pi to apply)", "info");
         }

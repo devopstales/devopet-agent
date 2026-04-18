@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 
@@ -73,6 +73,59 @@ describe("security-engine bundle (add-permission-manager)", () => {
 			`{"defaultPolicy":{"tools":"ask"},"tools":{"write":"deny"},"bash":{},"mcp":{},"skills":{},"special":{}}`,
 		);
 		assert.equal(policy.tools.write, "deny");
+	});
+
+	it("loadPolicy reads project .devopet/security-policy.yaml before .pi", async () => {
+		const { loadPolicy } = await import(
+			pathToFileURL(join(root, "extensions/security-engine/lib/security-engine.ts")).href
+		);
+		const tmp = mkdtempSync(join(tmpdir(), "devopet-guard-pol-"));
+		try {
+			mkdirSync(join(tmp, ".devopet"), { recursive: true });
+			mkdirSync(join(tmp, ".pi"), { recursive: true });
+			writeFileSync(
+				join(tmp, ".devopet", "security-policy.yaml"),
+				[
+					"blocked_commands: []",
+					"exfiltration_patterns: []",
+					"protected_paths: []",
+					"prompt_injection_patterns: []",
+					"allowlist:",
+					"  commands: []",
+					"  paths: []",
+					"settings:",
+					"  enabled: false",
+					"  audit_log_max_bytes: 1048576",
+					"  strip_injections: true",
+					"  verbose_blocks: true",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+			writeFileSync(
+				join(tmp, ".pi", "security-policy.yaml"),
+				[
+					"blocked_commands: []",
+					"exfiltration_patterns: []",
+					"protected_paths: []",
+					"prompt_injection_patterns: []",
+					"allowlist:",
+					"  commands: []",
+					"  paths: []",
+					"settings:",
+					"  enabled: true",
+					"  audit_log_max_bytes: 1048576",
+					"  strip_injections: true",
+					"  verbose_blocks: true",
+					"",
+				].join("\n"),
+				"utf8",
+			);
+			const p = loadPolicy(tmp);
+			assert.equal(p.settings.enabled, false, "expected .devopet policy to win over .pi");
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
 	});
 
 	it("smoke: devopet --where exits 0 (no interactive session)", () => {
