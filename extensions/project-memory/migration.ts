@@ -101,7 +101,7 @@ function parseArchiveFile(content: string): { date: string; section: SectionName
 }
 
 /**
- * Migrate an entire .pi/memory directory into a FactStore.
+ * Migrate an entire legacy markdown memory tree (historically under `.pi/memory`) into a FactStore.
  */
 export function migrateToFactStore(memoryDir: string, store: FactStore): MigrationResult {
   const result: MigrationResult = {

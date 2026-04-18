@@ -9,7 +9,10 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-export const BUILTIN_VOLATILE_ALLOWLIST = [".pi/memory/facts.jsonl"] as const;
+export const BUILTIN_VOLATILE_ALLOWLIST = [
+	".devopet/memory/facts.jsonl",
+	".pi/memory/facts.jsonl",
+] as const;
 
 export type GitStatusCode =
 	| "modified"

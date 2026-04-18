@@ -159,5 +159,21 @@ describe("lifecycle-files", () => {
 				path: ".pi/memory/facts.jsonl",
 			});
 		});
+
+		it("classifies .devopet/memory facts.jsonl drift when present", () => {
+			fs.mkdirSync(path.join(tmpDir, ".devopet", "memory"), { recursive: true });
+			fs.writeFileSync(path.join(tmpDir, ".devopet", "memory", "facts.jsonl"), '{"_type":"fact"}\n');
+			execFileSync("git", ["add", ".devopet/memory/facts.jsonl"], { cwd: tmpDir, encoding: "utf-8" });
+			execFileSync("git", ["commit", "-m", "chore(test): add devopet facts"], { cwd: tmpDir, encoding: "utf-8" });
+			fs.writeFileSync(path.join(tmpDir, ".devopet", "memory", "facts.jsonl"), '{"_type":"fact","id":"y"}\n');
+
+			assert.doesNotThrow(() => assertTrackedLifecycleArtifacts(tmpDir));
+			assert.deepStrictEqual(detectMemoryTransportState(tmpDir), {
+				tracked: true,
+				dirty: true,
+				untracked: false,
+				path: ".devopet/memory/facts.jsonl",
+			});
+		});
 	});
 });

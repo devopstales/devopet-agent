@@ -600,6 +600,7 @@ export interface DirtyTreeClassificationOptions {
 }
 
 export const DEFAULT_VOLATILE_ALLOWLIST = [
+	".devopet/memory/facts.jsonl",
 	".pi/memory/facts.jsonl",
 	".pi/runtime/operator-profile.json",
 ];

@@ -11,7 +11,7 @@ Key points for working on devopet itself:
 - **Direct commits to `main`** for single-file fixes, typos, config tweaks
 - **Feature branches** (`feature/<name>`, `refactor/<name>`) for multi-file or multi-session work
 - **Conventional commits** required — see `skills/git/SKILL.md` for the spec
-- The `.gitattributes` in this repo declares `merge=union` for `.pi/memory/facts.jsonl`
+- The `.gitattributes` in this repo declares `merge=union` for `.devopet/memory/facts.jsonl` and legacy `.pi/memory/facts.jsonl`
 - The `.pi/.gitignore` excludes `memory/*.db` files — only `facts.jsonl` is tracked
 - **Type checking**: `npx tsc --noEmit` must pass before committing TypeScript changes. Run `npm run typecheck` or `npm run check` (typecheck + tests).
 

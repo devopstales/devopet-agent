@@ -23,3 +23,7 @@ sessions/
 .cleave-session.json
 npm/platform-packages/*/omegon-agent
 .pi/memory/facts.jsonl
+.devopet/memory/facts.jsonl
+
+# graphify
+graphify-out

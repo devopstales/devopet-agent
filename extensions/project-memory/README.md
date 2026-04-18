@@ -193,12 +193,13 @@ Tracked `facts.jsonl` is imported into the live SQLite store on startup, but it 
 ## File Layout
 
 ```
-.pi/memory/
+<project>/.devopet/memory/
 ├── facts.db           # SQLite database (gitignored)
 ├── facts.db-wal       # WAL journal (gitignored)
 ├── facts.jsonl        # Portable export (git-tracked)
+├── .session_log       # Append-only session summaries (gitignored)
 └── memory.md.migrated # Pre-migration backup (if migrated)
 
-~/.pi/memory/
-└── global.db          # Cross-project global knowledge
+~/.devopet/memory/
+└── global.db          # Cross-project global knowledge (legacy ~/.pi/memory copied on first run)
 ```

@@ -14,7 +14,7 @@ openspec_baselines:
   - memory/lifecycle.md
   - memory/models.md
   - project-memory/compaction.md
-last_updated: 2026-03-17
+last_updated: 2026-04-18
 ---
 
 # Project Memory
@@ -25,7 +25,7 @@ last_updated: 2026-03-17
 
 Project memory gives agents persistent knowledge across sessions. It operates at multiple levels:
 
-- **Fact store**: SQLite+WAL database (`.pi/memory/facts.db`) with atomic facts organized by section (Architecture, Decisions, Constraints, Known Issues, Patterns & Conventions, Specs, Recent Work). Facts are stored, superseded, archived, and connected in a knowledge graph.
+- **Fact store**: SQLite+WAL database (`<project>/.devopet/memory/facts.db`) with atomic facts organized by section (Architecture, Decisions, Constraints, Known Issues, Patterns & Conventions, Specs, Recent Work). Facts are stored, superseded, archived, and connected in a knowledge graph. On first run, an existing `.pi/memory/` tree is copied into `.devopet/memory/` if the new location is empty. **Session log** (append-only dev session summaries for context injection) is **`<project>/.devopet/memory/.session_log`** (gitignored by default via `.devopet/.gitignore`).
 - **Semantic retrieval**: Facts embedded for `memory_recall(query)` similarity search. Falls back to FTS5 keyword search if embeddings unavailable.
 - **Working memory**: 25-slot buffer of pinned facts that survive context compaction and get priority injection.
 - **Episodic memory**: Session narratives generated at shutdown via fallback chain (cloud → local → template floor), capturing goals, decisions, sequences, and outcomes.
@@ -34,7 +34,7 @@ Project memory gives agents persistent knowledge across sessions. It operates at
 - **Structural pruning ceiling**: `computeConfidence()` caps effective half-life at 90 days regardless of reinforcement count. Per-section LLM archival pass fires at session_start when any section exceeds 60 facts.
 - **Directive minds**: `implement` forks a scoped mind from `default`; all fact reads/writes auto-scope to the directive. `archive` ingests discoveries back to `default` and cleans up. Zero-copy fork with parent-chain inheritance — no fact duplication, parent embeddings and edges are reused.
 - **JSONL sync**: `facts.jsonl` exported for git tracking; `merge=union` gitattribute enables multi-branch fact merging. Volatile runtime scoring metadata (confidence, reinforcement counts, decay scores) omitted from exports for stable diffs.
-- **Global knowledge base**: Cross-project facts stored in `~/.pi/memory/global.db`.
+- **Global knowledge base**: Cross-project facts stored in `~/.devopet/memory/global.db` (migrated from `~/.pi/memory/global.db` when present).
 
 ## Key Files
 
@@ -78,7 +78,7 @@ See `openspec/baseline/memory.md`, `openspec/baseline/memory/lifecycle.md`, `ope
 - Working memory capped at 25 facts to control context injection size
 - Episode generation runs at session shutdown — abrupt kill (SIGKILL) skips episode; `/exit` uses the full fallback chain
 - JSONL merge=union can create duplicates if the same fact is modified on two branches
-- Global DB injection injects up to 15 facts from `~/.pi/memory/global.db`; global extraction is off by default so the global DB only receives manually stored facts and lifecycle-ingest candidates
+- Global DB injection injects up to 15 facts from `~/.devopet/memory/global.db`; global extraction is off by default so the global DB only receives manually stored facts and lifecycle-ingest candidates
 
 ## Related Subsystems
 

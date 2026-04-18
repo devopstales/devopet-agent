@@ -52,6 +52,17 @@ Sessions are stored under `~/.pi/agent/sessions/` by default (see [upstream sess
 
 **Input history (TUI):** the prompt editor keeps a history; use **Up** / **Down** to move through previous inputs (pi-tui). A bash-style **Ctrl+R** reverse-incremental search is **not** built into the main editor today. **Ctrl+R** is used elsewhere (e.g. **rename** in the `/resume` session list per [keybindings](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/keybindings.md) `app.session.rename`).
 
+### Interrupt and stop
+
+Behavior comes from upstream pi’s interactive mode; defaults below match **`@mariozechner/pi-coding-agent` 0.61.x** (see `openspec/changes/agent-interrupt-stop/COMPAT.md` in this repo for trace notes). Cancellation is **best-effort** for streaming and tools that honor `AbortSignal`; external subprocesses may not stop instantly.
+
+| Action | Default effect |
+|--------|----------------|
+| **Escape** | **Interrupt** — aborts the current model turn when the UI is in the working/streaming state (same class of cancel as **`/stop`**). Cancels a running bash invocation when applicable. Chords are configurable; see [keybindings](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/keybindings.md) (`app.interrupt`). |
+| **Ctrl+C** | **Clear** the input editor. Two presses within a short window **exit** the app (not the same as Escape). |
+| **New message (Enter)** while the model is working | Queued as **steering** from the TUI. How steering and follow-up queues are flushed is controlled by **`steeringMode`** and **`followUpMode`** (`one-at-a-time` vs `all`); see [pi settings — Message delivery](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md). Use **Alt+Enter** to queue a **follow-up** (`app.message.followUp`). |
+| **`/stop`** | devopet registers this command: **best-effort** abort of the in-flight turn, then wait until idle. Use when you want a slash command instead of Escape. |
+
 ## Architecture
 
 ![Architecture](docs/img/architecture.png)
@@ -116,7 +127,7 @@ Persistent, cross-session knowledge stored in SQLite. Accumulates architecture d
 - **Background extraction**: Auto-discovers facts from tool output without interrupting work
 - **Episodic memory**: Generates session narratives at shutdown
 - **Directive minds**: `implement` forks a scoped mind from `default`; reads/writes auto-scope to the directive. `archive` ingests discoveries back and cleans up. Zero-copy fork with parent-chain inheritance
-- **Global knowledge base**: Cross-project facts at `~/.pi/memory/global.db`
+- **Global knowledge base**: Cross-project facts at `~/.devopet/memory/global.db` (migrated from `~/.pi/memory/global.db` on first run)
 - **Git sync**: Exports to JSONL for version-controlled knowledge sharing; volatile runtime metadata omitted for stable diffs
 - **Auto-compact**: Context pressure monitoring with automatic compaction
 - **Session log**: Append-only structured session tracking

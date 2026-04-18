@@ -5,7 +5,7 @@
  * confidence-decay reinforcement, semantic retrieval via cloud-first embeddings,
  * episodic session narratives, and working memory.
  *
- * Storage: .pi/memory/facts.db (SQLite with WAL mode)
+ * Storage: <project>/.devopet/memory/facts.db (SQLite with WAL mode)
  * Vectors: facts_vec / episodes_vec tables (Float32 BLOBs via configured embeddings)
  * Rendering: Active facts → Markdown-KV for LLM context injection
  *
@@ -87,6 +87,81 @@ import {
   type ModelTier, 
   type RegistryModel 
 } from "../lib/model-routing.ts";
+import { findDevopetProjectConfigDir, getDevopetGlobalConfigDir } from "../lib/devopet-config-paths.ts";
+import fs from "node:fs";
+
+/** Nearest `<project>/.devopet` (walk-up), else `<cwd>/.devopet`. */
+function resolveDevopetProjectConfigRoot(cwd: string): string {
+  return findDevopetProjectConfigDir(cwd) ?? path.join(cwd, ".devopet");
+}
+
+function resolveProjectMemoryDir(cwd: string): string {
+  return path.join(resolveDevopetProjectConfigRoot(cwd), "memory");
+}
+
+function resolveSessionLogPath(cwd: string): string {
+  return path.join(resolveProjectMemoryDir(cwd), ".session_log");
+}
+
+/** Legacy pi layout beside the devopet project root. */
+function legacyPiMemoryDirForCwd(cwd: string): string {
+  const devRoot = resolveDevopetProjectConfigRoot(cwd);
+  const projectRoot = path.dirname(devRoot);
+  return path.join(projectRoot, ".pi", "memory");
+}
+
+function migrateLegacyProjectMemoryIfNeeded(cwd: string, targetMemoryDir: string): void {
+  try {
+    const hasDestDb = fs.existsSync(path.join(targetMemoryDir, "facts.db"));
+    const destJsonl = path.join(targetMemoryDir, "facts.jsonl");
+    const hasDestJsonl = fs.existsSync(destJsonl) && fs.statSync(destJsonl).size > 0;
+    if (hasDestDb || hasDestJsonl) return;
+    const legacy = legacyPiMemoryDirForCwd(cwd);
+    if (!fs.existsSync(legacy)) return;
+    if (fs.readdirSync(legacy).length === 0) return;
+    fs.mkdirSync(targetMemoryDir, { recursive: true });
+    fs.cpSync(legacy, targetMemoryDir, { recursive: true });
+  } catch {
+    /* best effort */
+  }
+}
+
+function migrateLegacyGlobalMemoryIfNeeded(targetDir: string): void {
+  try {
+    const legacyDir = path.join(os.homedir(), ".pi", "memory");
+    fs.mkdirSync(targetDir, { recursive: true });
+    const newDb = path.join(targetDir, "global.db");
+    if (fs.existsSync(newDb)) return;
+    const legacyDb = path.join(legacyDir, "global.db");
+    if (!fs.existsSync(legacyDb)) return;
+    fs.copyFileSync(legacyDb, newDb);
+    for (const ext of ["-wal", "-shm"] as const) {
+      const src = `${legacyDb}${ext}`;
+      if (fs.existsSync(src)) fs.copyFileSync(src, `${newDb}${ext}`);
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
+function migrateLegacySessionLogIfNeeded(cwd: string, newLogPath: string): void {
+  try {
+    if (fs.existsSync(newLogPath)) return;
+    fs.mkdirSync(path.dirname(newLogPath), { recursive: true });
+    const devRoot = resolveDevopetProjectConfigRoot(cwd);
+    const legacyInDevopet = path.join(devRoot, "session_log");
+    const legacyCwd = path.join(cwd, ".session_log");
+    if (fs.existsSync(legacyInDevopet)) {
+      fs.copyFileSync(legacyInDevopet, newLogPath);
+      return;
+    }
+    if (fs.existsSync(legacyCwd)) {
+      fs.copyFileSync(legacyCwd, newLogPath);
+    }
+  } catch {
+    /* best effort */
+  }
+}
 
 /** Map abstract effort model tiers to concrete cloud model IDs for extraction. */
 const EFFORT_EXTRACTION_MODELS: Record<string, string> = {
@@ -362,7 +437,6 @@ export default function (pi: ExtensionAPI) {
     const wrote = writeJsonlIfChanged(fsSync, jsonlPath, jsonl);
     return { wrote, path: jsonlPath };
   }
-  const globalMemoryDir = path.join(os.homedir(), ".pi", "memory");
 
   // --- Context Pressure State ---
   let compactionWarned = false;   // true after we've injected a warning this cycle
@@ -580,7 +654,8 @@ Append-only record of development sessions. Read recent entries for context.
 
     // --- Session log context injection (absorbed from session-log.ts) ---
     // Auto-read session log on session start for context
-    const logPath = path.join(ctx.cwd, ".session_log");
+    const logPath = resolveSessionLogPath(ctx.cwd);
+    migrateLegacySessionLogIfNeeded(ctx.cwd, logPath);
     if (require("node:fs").existsSync(logPath)) {
       try {
         const content = require("node:fs").readFileSync(logPath, "utf-8");
@@ -600,7 +675,8 @@ Append-only record of development sessions. Read recent entries for context.
 
     drainLifecycleCandidateQueue(ctx);
     drainFactArchiveQueue();
-    memoryDir = path.join(ctx.cwd, ".pi", "memory");
+    memoryDir = resolveProjectMemoryDir(ctx.cwd);
+    migrateLegacyProjectMemoryIfNeeded(ctx.cwd, memoryDir);
 
     // Initialize project store
     try {
@@ -627,8 +703,10 @@ Append-only record of development sessions. Read recent entries for context.
     }
 
     // Initialize global store (user-level, shared across projects)
-    // Uses global.db to avoid collision with project facts.db when CWD is ~/
+    // Uses global.db under ~/.devopet/memory (legacy ~/.pi/memory migrated on first run).
     try {
+      const globalMemoryDir = path.join(getDevopetGlobalConfigDir(), "memory");
+      migrateLegacyGlobalMemoryIfNeeded(globalMemoryDir);
       globalStore = new FactStore(globalMemoryDir, { decay: GLOBAL_DECAY, dbName: "global.db" });
     } catch (err: any) {
       const hint = /DLOPEN|NODE_MODULE_VERSION|compiled against/.test(err.message)
@@ -678,6 +756,10 @@ Append-only record of development sessions. Read recent entries for context.
       let changed = false;
       if (!existing.includes("memory/*.db")) {
         existing += (existing.endsWith("\n") || existing === "" ? "" : "\n") + "memory/*.db\nmemory/*.db-wal\nmemory/*.db-shm\n";
+        changed = true;
+      }
+      if (!existing.includes("memory/.session_log")) {
+        existing += "memory/.session_log\n";
         changed = true;
       }
       // Remove old blanket "memory/" ignore if present (we now want facts.jsonl tracked)
@@ -1067,7 +1149,7 @@ Append-only record of development sessions. Read recent entries for context.
 
     // --- Session log entry (absorbed from session-log.ts) ---
     // Append session summary to .session_log
-    const logPath = path.join(ctx.cwd, ".session_log");
+    const logPath = resolveSessionLogPath(ctx.cwd);
     try {
       const timestamp = new Date().toISOString();
       // Count file operations from session telemetry

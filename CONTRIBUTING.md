@@ -75,12 +75,13 @@ content_hash (SHA256) ← dedup key (idempotent import)
 ### .gitignore / .gitattributes
 
 ```
-# .pi/.gitignore — exclude runtime DB files
+# .devopet/.gitignore — exclude runtime DB files (written by project-memory on first use)
 memory/*.db
 memory/*.db-wal
 memory/*.db-shm
 
 # .gitattributes — union merge for append-log JSONL
+.devopet/memory/facts.jsonl merge=union
 .pi/memory/facts.jsonl merge=union
 ```
 
@@ -130,13 +131,13 @@ Files that should never cause merge conflicts due to their nature:
 
 | File | Strategy | Notes |
 |---|---|---|
-| `.pi/memory/facts.jsonl` | `merge=union` | Append-log, deduped at import |
+| `.devopet/memory/facts.jsonl` (preferred) or `.pi/memory/facts.jsonl` (legacy) | `merge=union` | Append-log, deduped at import |
 | `*.db`, `*.db-wal`, `*.db-shm` | `.gitignore` | Binary, machine-local |
-| `.pi/memory/` directory | Partial ignore | Only `facts.jsonl` tracked |
+| `.devopet/memory/` directory | Partial ignore | Only `facts.jsonl` tracked |
 
 ### What Gets Tracked
 
-See `.gitignore` (repo root) and `.pi/.gitignore` (memory directory) for the authoritative ignore rules. Key principle: `facts.jsonl` is tracked, `*.db` files are not.
+See `.gitignore` (repo root) and `.devopet/.gitignore` (memory directory; created by project-memory) for the authoritative ignore rules. Key principle: `facts.jsonl` is tracked, `*.db` files are not.
 
 Lifecycle artifacts under `docs/` and `openspec/` are also treated as durable project records and should be version controlled by default. These files are not scratch space — they are part of the human-readable design, planning, and verification history for the repo.
 

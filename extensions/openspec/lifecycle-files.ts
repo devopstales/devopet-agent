@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const DURABLE_ROOTS = ["docs", "openspec"] as const;
-const MEMORY_TRANSPORT_PATH = ".pi/memory/facts.jsonl";
+/** Prefer devopet layout; legacy `.pi/memory` still checked for existing repos. */
+const MEMORY_TRANSPORT_PATHS = [".devopet/memory/facts.jsonl", ".pi/memory/facts.jsonl"] as const;
 
 export interface LifecycleArtifactCheckResult {
 	untracked: string[];
@@ -47,24 +48,44 @@ export function detectUntrackedLifecycleArtifacts(repoPath: string): string[] {
 	}
 }
 
+function memoryStateFromPorcelain(stdout: string, relPath: string): MemoryTransportState | null {
+	const line = stdout
+		.split("\n")
+		.map((l) => l.replaceAll("\\", "/"))
+		.find((l) => l.trimEnd().endsWith(relPath));
+	if (!line) return null;
+	const normalized = line.trim();
+	if (normalized.startsWith("?? ")) {
+		return { tracked: false, dirty: true, untracked: true, path: relPath };
+	}
+	return { tracked: true, dirty: true, untracked: false, path: relPath };
+}
+
 export function detectMemoryTransportState(repoPath: string): MemoryTransportState {
+	const fallback: MemoryTransportState = {
+		tracked: true,
+		dirty: false,
+		untracked: false,
+		path: MEMORY_TRANSPORT_PATHS[0],
+	};
 	try {
 		const stdout = execFileSync(
 			"git",
-			["status", "--porcelain", "--untracked-files=all", "--", MEMORY_TRANSPORT_PATH],
+			["status", "--porcelain", "--untracked-files=all", "--", ...MEMORY_TRANSPORT_PATHS],
 			{ cwd: repoPath, encoding: "utf-8" },
 		).trim();
-		if (!stdout) {
-			return { tracked: true, dirty: false, untracked: false, path: MEMORY_TRANSPORT_PATH };
+		if (!stdout) return fallback;
+		for (const p of MEMORY_TRANSPORT_PATHS) {
+			const st = memoryStateFromPorcelain(stdout, p);
+			if (st?.untracked) return st;
 		}
-		const line = stdout.split("\n").find(Boolean) ?? "";
-		const normalized = line.replaceAll("\\", "/");
-		if (normalized.startsWith("?? ")) {
-			return { tracked: false, dirty: true, untracked: true, path: MEMORY_TRANSPORT_PATH };
+		for (const p of MEMORY_TRANSPORT_PATHS) {
+			const st = memoryStateFromPorcelain(stdout, p);
+			if (st?.dirty) return st;
 		}
-		return { tracked: true, dirty: true, untracked: false, path: MEMORY_TRANSPORT_PATH };
+		return fallback;
 	} catch {
-		return { tracked: true, dirty: false, untracked: false, path: MEMORY_TRANSPORT_PATH };
+		return fallback;
 	}
 }
 

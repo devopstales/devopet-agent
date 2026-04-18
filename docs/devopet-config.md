@@ -20,6 +20,7 @@ The extension builds a **merged system prompt**: packaged **`config/SYSTEM.md`**
 | Layer | Merged replace stack (`SYSTEM.md` + `AGENTS.md`) | Append (`APPEND_SYSTEM.md`) — concatenation order |
 |--------|--------------------------------------------------|---------------------------------------------------|
 | 0 | `config/SYSTEM.md` (packaged) | *Merge with all layers below* |
+| 0 |  | `~/.devopet/INSTINCT.md` |
 | 1 (highest) | `<project>/.devopet/SYSTEM.md` | `~/.pi/agent/APPEND_SYSTEM.md` |
 | 2 | `~/.devopet/SYSTEM.md` | `<ancestor>/.pi/APPEND_SYSTEM.md` |
 | 3 | `<ancestor>/.pi/SYSTEM.md` | `~/.devopet/APPEND_SYSTEM.md` |
@@ -49,7 +50,7 @@ These filenames are reserved for devopet-managed or coordinated configuration. P
 | Location | Examples (conventions) |
 |----------|-------------------------|
 | Global | **`settings.json`** (merged with pi per layer order above), **`SYSTEM.md`**, **`APPEND_SYSTEM.md`**, **`permissions.jsonc`** (permission policy, pi-permission-system–compatible), **`security-policy.yaml`** (security guard rules), `sandbox.json`, operator profiles not owned by upstream pi |
-| Project | Same basenames under **`.devopet/`** (e.g. **`settings.json`**, **`SYSTEM.md`**, **`permissions.jsonc`**, **`security-policy.yaml`**) with local override semantics; security guard loads **project `.devopet` first**, then **`~/.devopet`**, then legacy **`.pi/security-policy.yaml`** |
+| Project | Same basenames under **`.devopet/`** (e.g. **`settings.json`**, **`SYSTEM.md`**, **`permissions.jsonc`**, **`security-policy.yaml`**) with local override semantics; security guard loads **project `.devopet` first**, then **`~/.devopet`**, then legacy **`.pi/security-policy.yaml`**. **Project memory** (SQLite + `facts.jsonl`) lives under **`.devopet/memory/`**; the append-only session log is **`.devopet/memory/.session_log`** (see [project-memory.md](./project-memory.md)). |
 
 Relative paths in **`settings.json`** arrays (**`extensions`**, **`skills`**, **`prompts`**, **`themes`**, **`packages`**) resolve against **`~/.devopet`** or **`<project>/.devopet`** (`resolveDevopetSettingsPathArrays` in `extensions/lib/devopet-settings-merge.ts`). Field semantics: [pi-mono settings.md](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/settings.md).
 
