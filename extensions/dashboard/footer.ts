@@ -144,6 +144,43 @@ function composePrimaryMetaLine(
   ], separator);
 }
 
+/**
+ * Pack HUD segments (e.g. extension status badges) into multiple lines, each at most `maxWidth` visible columns.
+ * Avoids a single truncated row when the column is narrow (four-column footer).
+ */
+function wrapHudSegments(segments: string[], separator: string, maxWidth: number): string[] {
+  if (segments.length === 0 || maxWidth <= 0) {
+    return [];
+  }
+  const out: string[] = [];
+  let i = 0;
+  const sepW = visibleWidth(separator);
+  while (i < segments.length) {
+    let line = "";
+    let lineW = 0;
+    while (i < segments.length) {
+      const seg = segments[i]!;
+      const segW = visibleWidth(seg);
+      const needSep = line.length > 0 ? sepW : 0;
+      if (lineW + needSep + segW <= maxWidth) {
+        line = line ? line + separator + seg : seg;
+        lineW += needSep + segW;
+        i++;
+      } else {
+        break;
+      }
+    }
+    if (line.length > 0) {
+      out.push(line);
+    } else {
+      const seg = segments[i]!;
+      out.push(truncateToWidth(seg, maxWidth, "…"));
+      i++;
+    }
+  }
+  return out;
+}
+
 function normalizeLocalModelLabel(model: string): { canonical: string; alias?: string } {
   if (model === "devstral-small-2:24b") {
     return { canonical: "Devstral 24B", alias: "devstral-small-2:24b" };
@@ -651,9 +688,10 @@ export class DashboardFooter implements Component {
   }
 
   /**
-   * HUD system section — one or two lines:
+   * HUD system section — pwd line plus extension badge row(s):
    *   ⌂ ~/workspace/ai/devopet                       ◦ my-session
    *   ⚡ dispatch 3/8  ·  ◎ 2 active  ·  ↑ ok
+   * Badges wrap to extra lines when the column is too narrow (no single-line truncation).
    *
    * Extension badges reuse the established content-section glyphs so the
    * footer visually echoes the dashboard sections above it.
@@ -680,6 +718,15 @@ export class DashboardFooter implements Component {
     );
 
     // ── Extension badges ──────────────────────────────────────
+    /** Security stack keys: fixed order (integrity → guard → perms → secure), then other extensions A–Z. */
+    const SECURITY_STACK_KEYS = ["message-integrity", "security", "permission-manager", "secure"] as const;
+    const stackRank = (name: string): number => {
+      const i = (SECURITY_STACK_KEYS as readonly string[]).indexOf(name);
+      return i >= 0 ? i : 100;
+    };
+
+    // Single-column glyphs only: emoji (e.g. U+1F6E1 🛡) often occupy 2 terminal cells while
+    // pi-tui visibleWidth() counts 1 — same class of bug as branch markers in git.ts (●).
     const GLYPH: Record<string, string> = {
       "cleave":        "⚡",
       "openspec":      "◎",
@@ -687,22 +734,34 @@ export class DashboardFooter implements Component {
       "version":       "↑",
       "design-tree":   "◈",
       "dashboard":     "◐",
+      "message-integrity": "◇",
+      "security":      "*",
+      "permission-manager": "⁂",
+      "secure":        "✓",
     };
 
     const extStatuses = this.footerData.getExtensionStatuses();
     const badges = Array.from(extStatuses.entries())
       .filter(([name]) => name !== "memory")
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => {
+        const ra = stackRank(a);
+        const rb = stackRank(b);
+        if (ra !== rb) {
+          return ra - rb;
+        }
+        return a.localeCompare(b);
+      })
       .map(([name, text]) => {
         const glyph = GLYPH[name] ?? "▸";
         return theme.fg("accent", glyph) + " " + theme.fg("dim", sanitizeStatusText(text));
       });
 
     if (badges.length > 0) {
-      lines.push(truncateToWidth(
-        `  ${badges.join(theme.fg("dim", "  ·  "))}`,
-        width, "…",
-      ));
+      const sep = theme.fg("dim", "  ·  ");
+      const badgeRows = wrapHudSegments(badges, sep, width);
+      for (const row of badgeRows) {
+        lines.push(truncateToWidth(row, width, "…"));
+      }
     }
 
     return lines;

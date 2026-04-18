@@ -26,8 +26,8 @@ These filenames are reserved for devopet-managed or coordinated configuration. P
 
 | Location | Examples (conventions) |
 |----------|-------------------------|
-| Global | `permissions.jsonc`, `sandbox.json`, operator profiles not owned by upstream pi |
-| Project | Same basenames under `.devopet/` with local override semantics |
+| Global | **`permissions.jsonc`** (permission policy, pi-permission-system–compatible), `sandbox.json`, operator profiles not owned by upstream pi |
+| Project | Same basenames under **`.devopet/`** (e.g. **`permissions.jsonc`**) with local override semantics |
 
 Upstream pi and extensions may continue to document paths under **`~/.pi/agent`** until adapters read the devopet locations.
 

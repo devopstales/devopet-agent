@@ -2,7 +2,7 @@
 
 ## Purpose
 
-First-party **`extensions/permission-manager/`** implementing pi-permission-system–compatible **`permissions.jsonc`** policy with **`security-engine`** integration (single enforcement path), hooks-based gating, footer visibility, and YOLO when no config exists.
+First-party **`extensions/permission-manager/`** implementing pi-permission-system–compatible **`permissions.jsonc`** policy with **`security-engine`** integration (single enforcement path), hooks-based gating, footer visibility, built-in **default-ask** when no config exists, and optional **`yolo: true`** to disable enforcement.
 
 ## Requirements
 
@@ -12,7 +12,9 @@ The system SHALL load permission policy from a JSONC document at the **global** 
 
 The system SHALL support an optional **project-local** policy file at **`.devopet/permissions.jsonc`** (relative to the project root) that **overrides** global entries where both define the same rule key, with precedence **local over global** for conflicting keys.
 
-**YOLO mode**: When **neither** the global file nor the project-local file exists, the system SHALL operate in **YOLO mode** for the **permission layer** only: **`permission-manager` SHALL NOT** enforce **`permissions.jsonc`** permission rules (`allow` / `deny` / `ask`; same schema as upstream **pi-permission-system**). **message-integrity-guard**, **security-guard**, and **`/secure`** behavior in **`security-engine`** remain active and are **not** disabled by YOLO.
+**Default when no file**: When **neither** the global file nor the project-local file exists, the system SHALL apply a **built-in default policy** with **`defaultPolicy`** set to **`ask`** for tools, bash, mcp, skills, and special (same schema as upstream **pi-permission-system**). This is **not** YOLO mode.
+
+**YOLO mode** (explicit opt-in only): The policy document MAY include root key **`"yolo": true`**. When the effective merged policy has **`yolo: true`**, the **permission layer** SHALL NOT enforce allow/deny/ask rules (same relaxed behavior as legacy “no file” YOLO). Project-local `yolo` overrides global when both files exist and the project file specifies `yolo`. **message-integrity-guard**, **security-guard**, and **`/secure`** remain active regardless.
 
 #### Scenario: Global-only policy
 
@@ -24,10 +26,10 @@ The system SHALL support an optional **project-local** policy file at **`.devope
 - **WHEN** both global and project-local policy files exist and define the same rule key
 - **THEN** the project-local value SHALL win for that key
 
-#### Scenario: YOLO when no permission config
+#### Scenario: Default-ask when no permission config
 
 - **WHEN** neither `~/.devopet/permissions.jsonc` nor `.devopet/permissions.jsonc` exists
-- **THEN** the permission layer SHALL be in **YOLO mode** (no permission-policy enforcement) and other **security-engine** components SHALL continue to run unchanged
+- **THEN** the effective policy SHALL be the built-in **default-ask** rules (not YOLO) and other **security-engine** components SHALL continue to run unchanged
 
 #### Scenario: Project-local-only policy
 
@@ -63,10 +65,10 @@ The `permission-manager` extension SHALL register Pi extension hooks sufficient 
 - **WHEN** a tool call is made, a policy file is loaded, and the effective policy for that tool is `deny`
 - **THEN** the call SHALL NOT execute
 
-#### Scenario: YOLO does not apply deny from missing file
+#### Scenario: Default-ask applies deny from policy when file exists
 
-- **WHEN** the permission layer is in **YOLO mode** (no config files)
-- **THEN** `permission-manager` SHALL NOT block tool calls solely because a `deny` rule would apply if a policy file existed
+- **WHEN** a policy file is loaded (including built-in default-ask when no file) and the effective rule for an action is `deny`
+- **THEN** `permission-manager` SHALL enforce that denial per loaded policy
 
 #### Scenario: Bash gated by policy
 
@@ -111,7 +113,7 @@ Where OS sandboxing is used, it SHALL be **complementary** (e.g. additional isol
 
 ### Requirement: Interactive elevation (pi-sandbox-inspired)
 
-When a **valid policy file is loaded** and an action would be blocked by policy or is classified as `ask`, the system SHALL prompt the user with at least: **abort**, **allow for this attempt**, and **allow for the remainder of the session** for the same gate class (exact wording MAY match Pi UI conventions). In **YOLO mode**, this requirement does not apply to permission-policy **`ask`** (see scenarios above).
+When a **valid policy is in effect** (including built-in default-ask) and an action would be blocked by policy or is classified as `ask`, the system SHALL prompt the user with at least: **abort**, **allow for this attempt**, and **allow for the remainder of the session** for the same gate class (exact wording MAY match Pi UI conventions). In **YOLO mode** (`yolo: true`), this requirement does not apply to permission-policy **`ask`** (see scenarios above).
 
 The system MAY offer **persist allow rule** when safe and consistent with policy grammar (e.g. add/adjust an allow pattern).
 
@@ -127,8 +129,8 @@ The system MAY offer **persist allow rule** when safe and consistent with policy
 
 #### Scenario: YOLO does not trigger permission-manager ask prompts
 
-- **WHEN** the permission layer is in **YOLO mode**
-- **THEN** `permission-manager` SHALL NOT show interactive prompts that would only apply if a permission-policy **`ask`** rule existed
+- **WHEN** the permission layer is in **YOLO mode** (`yolo: true` in effective policy)
+- **THEN** `permission-manager` SHALL NOT show interactive prompts for permission-policy **`ask`** / **`deny`** enforcement
 
 #### Scenario: Session allow remembers for session
 
@@ -139,19 +141,24 @@ The system MAY offer **persist allow rule** when safe and consistent with policy
 
 When the session has a UI (`ctx.hasUI`), the change SHALL surface the **Security (devopet stack)** components in the **footer** area operators already use (Pi **`ctx.ui.setStatus`** and the **dashboard** HUD line that reads **`footerData.getExtensionStatuses()`** in **`extensions/dashboard/footer.ts`**).
 
-At minimum, **`permission-manager`** SHALL call **`ctx.ui.setStatus("permission-manager", …)`** (or the same mechanism other extensions use for footer text) so the status string includes **`YOLO`** when no permission config is loaded, and a clear **policy** indicator when a config is active.
+At minimum, **`permission-manager`** SHALL call **`ctx.ui.setStatus("permission-manager", …)`** so the status reflects **`YOLO`** when `yolo: true`, a clear **policy** / **`ask-default`** indicator when a file-backed or built-in default-ask policy is active, and **`ERR`** (or similar) when load failed after user-visible error handling.
 
 The change SHALL also ensure **message-integrity-guard**, **security-guard**, and **secure** are represented in that footer/status strip—either via **`security-engine`** publishing additional **`setStatus`** keys (e.g. short **`ok`** / **`active`** labels) or a **single aggregated** status line that lists **integrity · guard · perms · secure**, consistent with the table in **`proposal.md`**.
 
+#### Scenario: Default-ask visible in footer
+
+- **WHEN** the session UI is available and no permission config file exists (built-in default-ask)
+- **THEN** footer-visible status SHALL indicate **ask-default** (or an equally unambiguous label), not **YOLO**
+
 #### Scenario: YOLO visible in footer
 
-- **WHEN** the session UI is available and no permission config file exists
-- **THEN** footer-visible status SHALL include **`YOLO`** (or an equally unambiguous label) for the permission layer
+- **WHEN** the session UI is available and effective policy has **`yolo: true`**
+- **THEN** footer-visible status SHALL include **`YOLO`**
 
-#### Scenario: Policy visible in footer
+#### Scenario: Policy file visible in footer
 
-- **WHEN** the session UI is available and a valid permission policy file is loaded
-- **THEN** footer-visible status SHALL indicate that **policy** is active (not YOLO)
+- **WHEN** the session UI is available and a user-authored permission policy file is loaded
+- **THEN** footer-visible status SHALL indicate that **policy** is active (not YOLO unless `yolo: true`)
 
 #### Scenario: Stack components discoverable in footer
 

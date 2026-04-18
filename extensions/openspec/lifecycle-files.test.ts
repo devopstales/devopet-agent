@@ -91,7 +91,7 @@ describe("lifecycle-files", () => {
 			execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: tmpDir, encoding: "utf-8" });
 			fs.writeFileSync(path.join(tmpDir, "README.md"), "# test\n");
 			execFileSync("git", ["add", "README.md"], { cwd: tmpDir, encoding: "utf-8" });
-			execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, encoding: "utf-8" });
+			execFileSync("git", ["commit", "-m", "chore(test): init temp repo"], { cwd: tmpDir, encoding: "utf-8" });
 		});
 
 		afterEach(() => {
@@ -147,7 +147,7 @@ describe("lifecycle-files", () => {
 			fs.mkdirSync(path.join(tmpDir, ".pi", "memory"), { recursive: true });
 			fs.writeFileSync(path.join(tmpDir, ".pi", "memory", "facts.jsonl"), '{"_type":"fact"}\n');
 			execFileSync("git", ["add", ".pi/memory/facts.jsonl"], { cwd: tmpDir, encoding: "utf-8" });
-			execFileSync("git", ["commit", "-m", "add facts"], { cwd: tmpDir, encoding: "utf-8" });
+			execFileSync("git", ["commit", "-m", "chore(test): add facts"], { cwd: tmpDir, encoding: "utf-8" });
 			fs.writeFileSync(path.join(tmpDir, ".pi", "memory", "facts.jsonl"), '{"_type":"fact","id":"x"}\n');
 
 			assert.doesNotThrow(() => assertTrackedLifecycleArtifacts(tmpDir));

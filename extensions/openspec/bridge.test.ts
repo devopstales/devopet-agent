@@ -72,7 +72,7 @@ describe("openspec bridge", () => {
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: tmpDir, encoding: "utf-8" });
     fs.writeFileSync(path.join(tmpDir, "README.md"), "# test\n");
     execFileSync("git", ["add", "README.md"], { cwd: tmpDir, encoding: "utf-8" });
-    execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, encoding: "utf-8" });
+    execFileSync("git", ["commit", "-m", "chore(test): init temp repo"], { cwd: tmpDir, encoding: "utf-8" });
 
     pi = createFakePi();
     bridge = getSharedBridge();

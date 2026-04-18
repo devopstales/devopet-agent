@@ -90,7 +90,7 @@ describe("openspec lifecycle integration", () => {
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: tmpDir, encoding: "utf-8" });
     fs.writeFileSync(path.join(tmpDir, "README.md"), "# test\n");
     execFileSync("git", ["add", "README.md"], { cwd: tmpDir, encoding: "utf-8" });
-    execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, encoding: "utf-8" });
+    execFileSync("git", ["commit", "-m", "chore(test): init temp repo"], { cwd: tmpDir, encoding: "utf-8" });
 
     const change = createChange(tmpDir, "my-change", "My Change", "Intent");
     fs.mkdirSync(path.join(change.changePath, "specs"), { recursive: true });
@@ -102,7 +102,7 @@ describe("openspec lifecycle integration", () => {
     writeDesignDoc(docsDir, "my-change", "my-change");
 
     execFileSync("git", ["add", "."], { cwd: tmpDir, encoding: "utf-8" });
-    execFileSync("git", ["commit", "-m", "scaffold change"], { cwd: tmpDir, encoding: "utf-8" });
+    execFileSync("git", ["commit", "-m", "chore(test): scaffold change"], { cwd: tmpDir, encoding: "utf-8" });
 
     pi = createFakePi();
     openspecExtension(pi as any);

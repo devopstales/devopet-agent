@@ -1,0 +1,32 @@
+{
+  // Example only — copy to ~/.devopet/permissions.jsonc (global) and/or .devopet/permissions.jsonc (project).
+  // **No file**: devopet uses a built-in default (everything `ask`) — not YOLO.
+  // **YOLO**: set `"yolo": true` at the root to disable permission enforcement (explicit opt-in).
+  // Same JSONC shape as pi-permission-system (~/.pi/agent/pi-permissions.jsonc upstream). See upstream README for full schema.
+  "defaultPolicy": {
+    "tools": "ask",
+    "bash": "ask",
+    "mcp": "ask",
+    "skills": "ask",
+    "special": "ask"
+  },
+  "tools": {
+    "read": "allow",
+    "write": "ask"
+  },
+  "bash": {
+    "git status": "allow",
+    "git *": "ask"
+  },
+  "mcp": {},
+  "skills": {
+    "*": "ask"
+  },
+  "special": {},
+  // Path-scoped rules for built-in read/write/edit (globs use * like pi bash rules).
+  // "toolPaths": {
+  //   "write": {
+  //     "/tmp/*.txt": "allow"
+  //   }
+  // }
+}

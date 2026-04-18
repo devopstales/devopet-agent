@@ -1,0 +1,19 @@
+{
+  "defaultPolicy": {
+    "tools": "ask",
+    "bash": "ask",
+    "mcp": "ask",
+    "skills": "ask",
+    "special": "ask"
+  },
+  "tools": {},
+  "bash": {},
+  "mcp": {},
+  "skills": {},
+  "special": {},
+  "toolPaths": {
+    "write": {
+      "/tmp/*.txt": "allow"
+    }
+  }
+}

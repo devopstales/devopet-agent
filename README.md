@@ -39,6 +39,19 @@ devopet-agent        # start in any project directory
 
 devopet-agent depends on upstream `@mariozechner/pi-coding-agent` from npm. To pick up a new pi release, bump the version in `package.json`.
 
+## Sessions
+
+Sessions are stored under `~/.pi/agent/sessions/` by default (see [upstream session docs](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/session.md)). devopet does not disable persistence.
+
+| Goal | How |
+|------|-----|
+| Continue last session in this cwd | `devopet -c` / `pi -c` (or start `devopet` and use the TUI) |
+| Pick a past session | `/resume` in the TUI, or `devopet -r` / `pi -r` |
+| Open a specific session | `devopet --resume <session-id>` (alias for `pi --session <id>`) |
+| Session id after exit | On normal shutdown, devopet prints **session id** and a **resume** line to **stderr** |
+
+**Input history (TUI):** the prompt editor keeps a history; use **Up** / **Down** to move through previous inputs (pi-tui). A bash-style **Ctrl+R** reverse-incremental search is **not** built into the main editor today. **Ctrl+R** is used elsewhere (e.g. **rename** in the `/resume` session list per [keybindings](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/keybindings.md) `app.session.rename`).
+
 ## Architecture
 
 ![Architecture](docs/img/architecture.png)
@@ -183,15 +196,15 @@ Enable/disable tools and switch named profiles to keep the context window lean.
 
 ### Security (permissions, guard, connect)
 
-devopet bundles **[pi-connect](https://www.npmjs.com/package/pi-connect)** (`/connect`, `/disconnect`), **[pi-permission-system](https://www.npmjs.com/package/pi-permission-system)** (policy `allow` / `deny` / `ask` in `pi-permissions.jsonc`), and **agent-pi–derived** extensions under `extensions/agent-pi-security/` (vendored from [agent-pi security-guard](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts)).
+**`extensions/ai-provider-connect`** implements **`/connect`** / **`/disconnect`** with behavior **aligned with** **[pi-connect](https://www.npmjs.com/package/pi-connect)** (reference); **[pi-permission-system](https://www.npmjs.com/package/pi-permission-system)**-compatible policy (`allow` / `deny` / `ask` in devopet **`permissions.jsonc`**) with **agent-pi–derived** helpers under **`extensions/security-engine/`** (vendored from [agent-pi security-guard](https://github.com/ruizrica/agent-pi/blob/main/extensions/security-guard.ts)). *OpenSpec:* **`/connect`** is specified under **`ai-provider-extensions`** (first-party extension, reference semantics); permissions + guard are **`add-permission-manager`**.
 
 | Layer | Role | Typical artifacts / commands |
 |-------|------|--------------------------------|
-| **Permissions** | Your rules for tools, bash, MCP, skills | `~/.pi/agent/pi-permissions.jsonc` (or `PI_CODING_AGENT_DIR`); see [pi-permission-system](https://github.com/MasuRii/pi-permission-system) |
+| **Permissions** | Your rules for tools, bash, MCP, skills | **`~/.devopet/permissions.jsonc`** (global), **`.devopet/permissions.jsonc`** (project); same JSONC schema as [pi-permission-system](https://github.com/MasuRii/pi-permission-system) (upstream often uses `~/.pi/agent/pi-permissions.jsonc`) |
 | **Security guard** | Baseline blocks (destructive bash, exfil patterns, injection in tool output) + audit log | `.pi/security-policy.yaml` (optional); `/security [status\|log\|policy\|reload]`; `.pi/security-audit.log` |
 | **Message integrity** | Repairs orphaned `tool_result` / `tool_use` pairs before API calls | (automatic `context` hook) |
 | **`/secure`** | Project AI security sweep and optional installer files | `/secure`, `/secure sweep`, `/secure install` |
-| **Connect** | Provider OAuth / API keys | `/connect`, `/disconnect` — unified picker ([pi-connect](https://github.com/hk-vk/pi-connect)) |
+| **Connect** | Provider OAuth / API keys | `/connect`, `/disconnect` — **`ai-provider-connect`** (reference: [pi-connect](https://github.com/hk-vk/pi-connect)) |
 
 **Precedence:** If both permission policy and the guard apply, **guard blocks win** for the same invocation when safety requires it.
 
@@ -199,7 +212,7 @@ devopet bundles **[pi-connect](https://www.npmjs.com/package/pi-connect)** (`/co
 
 **Sandbox:** Optional **[pi-sandbox](https://www.npmjs.com/package/pi-sandbox)** is not bundled here; install separately if you want OS-level sandboxing. Global `~/.pi/agent/sandbox.json` and project `.pi/sandbox.json` follow upstream precedence; use **`--no-sandbox`** on the CLI when supported by pi to disable. Sandbox complements (does not replace) permission policy and security-guard.
 
-**Examples:** `config/pi-permissions.example.jsonc`, `config/security-policy.example.yaml` — copy into your agent dir / project as needed (not overwritten on upgrade).
+**Examples:** `config/permissions.example.jsonc`, `config/security-policy.example.yaml` — copy into your agent dir / project as needed (not overwritten on upgrade).
 
 ### Other extensions
 
@@ -209,13 +222,14 @@ devopet bundles **[pi-connect](https://www.npmjs.com/package/pi-connect)** (`/co
 | `bootstrap` | First-time setup, dependency checking, version checking (`/bootstrap`, `/refresh`, `/update`) |
 | `chronos` | Authoritative date/time from system clock — prevents AI date math errors |
 | `01-auth` | Auth status and diagnostics across git, GitHub, GitLab, AWS, k8s, OCI (`/auth`, `/whoami`) |
+| `ai-provider-connect` | **`/connect`** / **`/disconnect`** (OAuth + API keys); behavior aligned with [pi-connect](https://www.npmjs.com/package/pi-connect); loads before `security-engine` |
 | `view` | Inline file viewer — images, PDFs, docs, syntax-highlighted code |
 | `defaults` | Deploys `AGENTS.md` and theme on first install; content-hash guard prevents overwriting customizations |
 | `style` | Design system reference (`/style`) |
 | `vault` | Markdown viewport with wikilink navigation (`/vault`) |
 | `secrets` | Resolve secrets from env vars, shell commands, or system keychains |
 | `mcp-bridge` | Connect external MCP servers as native pi tools |
-| `agent-pi-security` | Message integrity guard, security-guard (`/security`), secure (`/secure`) — see **Security** above |
+| `security-engine` | **pi-permission-system** + message-integrity + security-guard + `/secure` — see **Security** above (`/connect` is **`ai-provider-connect`**) |
 
 ## Skills
 

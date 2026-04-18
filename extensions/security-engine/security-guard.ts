@@ -679,7 +679,7 @@ export default function securityGuard(pi: ExtensionAPI) {
 		budgetCounters = { turn: 0, session: 0, bashTurn: 0 };
 
 		if (ctx?.ui?.setStatus) {
-			ctx.ui.setStatus("security", "🛡️ Security Guard");
+			ctx.ui.setStatus("security", "on");
 		}
 	});
 
@@ -812,9 +812,9 @@ export default function securityGuard(pi: ExtensionAPI) {
 
 		const total = stats.blocked + stats.warned + stats.redacted;
 		if (total > 0) {
-			ctx.ui.setStatus("security", `🛡️ Security (${stats.blocked}🛑 ${stats.warned}⚠️)`);
+			ctx.ui.setStatus("security", `${stats.blocked}🛑 ${stats.warned}⚠️`);
 		} else {
-			ctx.ui.setStatus("security", "🛡️ Security Guard");
+			ctx.ui.setStatus("security", "on");
 		}
 	}
 }

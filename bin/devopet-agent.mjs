@@ -31,6 +31,27 @@ function cliExecutableName() {
   return name || "devopet";
 }
 
+/** Exposed to extensions so shutdown hints match the binary name (devopet vs devopet-agent). */
+process.env.DEVOPET_CLI_NAME = cliExecutableName();
+
+/**
+ * Map devopet-specific flags to pi CLI before resource injection.
+ * `--resume <id>` → `--session <id>` (same as `pi --session`; see upstream session docs).
+ */
+function mapDevopetFlagsToPi(argv) {
+  const a = [...argv];
+  const out = [];
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === "--resume" && a[i + 1] && !String(a[i + 1]).startsWith("-")) {
+      out.push("--session", a[i + 1]);
+      i++;
+      continue;
+    }
+    out.push(a[i]);
+  }
+  return out;
+}
+
 /** Mirrors extensions/lib/devopet-config-paths.ts — keep in sync (bin must not depend on TS build). */
 function getDevopetGlobalConfigDirFromEnv() {
   const raw = process.env.DEVOPET_CONFIG_HOME?.trim();
@@ -200,7 +221,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 
 const RESTART_EXIT_CODE = 75;
 
-const cliArgs = injectBundledResourceArgs(process.argv).slice(2);
+const cliArgs = injectBundledResourceArgs(mapDevopetFlagsToPi(process.argv)).slice(2);
 
 const isInteractive = process.stdout.isTTY &&
   !process.argv.includes("-p") &&
