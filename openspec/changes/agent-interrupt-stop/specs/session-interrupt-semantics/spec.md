@@ -2,21 +2,21 @@
 
 ### Requirement: Documented interrupt and steering matrix
 
-The system SHALL document, in primary user-facing documentation, how operators can **interrupt ongoing work** or **steer** the session using: **Ctrl+C** (terminal interrupt), **sending a new user message** while output is streaming, and **`/stop`** or the **documented equivalent** command when available.
+The system SHALL document, in primary user-facing documentation, how operators can **interrupt ongoing work** or **steer** the session using: the **default interrupt chord** (**Escape** / `app.interrupt`, configurable), **Ctrl+C** (default: clear editor / double-press exit — not the primary stream abort), **sending a new user message** while output is streaming, and **`/stop`** (devopet-registered) or the **documented equivalent** when applicable.
 
 #### Scenario: Operator finds the matrix
 
 - **WHEN** an operator reads devopet documentation for stopping or interrupting the agent
-- **THEN** they SHALL find an explicit description of Ctrl+C, new-message behavior, and /stop (or equivalent), including references to upstream pi settings where steering/follow-up modes apply
+- **THEN** they SHALL find an explicit description of Escape (interrupt), Ctrl+C (clear/exit defaults), new-message behavior, and `/stop`, including references to upstream pi settings where steering/follow-up modes apply
 
-### Requirement: Ctrl+C abort semantics
+### Requirement: Interrupt during an active agent turn
 
-The system SHALL handle terminal **Ctrl+C** (SIGINT) during an active agent turn without leaving the session in an undefined corrupt state. In-flight LLM streaming and cancellable work SHALL honor **best-effort** cancellation via the runtime’s **abort** mechanism where exposed.
+The system SHALL support **best-effort** cancellation of an active model turn (streaming and cancellable in-process work) without leaving the session in an undefined corrupt state, using the same abort mechanism the runtime exposes (e.g. `AgentSession.abort` / extension `abort()`). External subprocesses and non-cancellable operations remain **best-effort** only.
 
 #### Scenario: Interrupt during streaming
 
-- **WHEN** the user presses Ctrl+C while the model is streaming a response
-- **THEN** streaming SHALL stop and the session SHALL remain usable for further input without requiring a full process restart, subject to upstream pi limitations
+- **WHEN** the user triggers the **interrupt** action (default **Escape** while the UI indicates an active turn, per upstream keybindings)
+- **THEN** streaming SHALL stop in a best-effort manner and the session SHALL remain usable for further input without requiring a full process restart, subject to upstream pi limitations
 
 ### Requirement: New message during in-flight work
 
@@ -29,12 +29,12 @@ When the operator sends a **new user message** while a turn is in progress, beha
 
 ### Requirement: Stop command when supported
 
-If the agent runtime exposes a **stop** or **cancel** command suitable for operators (e.g. **`/stop`**), the system SHALL document it alongside Ctrl+C and new-message steering. If no first-class command exists, documentation SHALL state the **supported alternatives** explicitly.
+The system SHALL expose a **`/stop`** slash command that invokes the extension **abort** path (best-effort), and SHALL document it alongside Escape, Ctrl+C defaults, and new-message steering. Documentation SHALL NOT imply **`/stop`** exists in stock pi alone.
 
 #### Scenario: No silent omission of /stop
 
-- **WHEN** `/stop` is not available in the running build
-- **THEN** documentation SHALL not imply it exists; it SHALL list working alternatives
+- **WHEN** an operator relies on devopet documentation
+- **THEN** **`/stop`** SHALL be listed as a devopet-provided command with best-effort semantics, and stock-pi-only installs SHALL be distinguished if mentioned
 
 ### Requirement: Tool and subprocess cancellation best-effort
 

@@ -59,6 +59,7 @@
       "./extensions/defaults.ts",
       "./extensions/karpathy-guidelines.ts",
       "./extensions/session-exit-line.ts",
+      "./extensions/stop-command.ts",
       "./extensions/render",
       "./extensions/mcp-bridge",
       "./extensions/project-memory",
